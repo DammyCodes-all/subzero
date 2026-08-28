@@ -1,0 +1,116 @@
+import { authTables } from "@convex-dev/auth/server";
+import { defineSchema, defineTable } from "convex/server";
+import { v } from "convex/values";
+
+export default defineSchema({
+  ...authTables,
+
+  connections: defineTable({
+    userId: v.id("users"),
+    provider: v.union(v.literal("google"), v.literal("agentmail")),
+    gmailRefreshToken: v.optional(v.string()),
+    status: v.union(v.literal("connected"), v.literal("disconnected")),
+  }).index("by_user", ["userId"]),
+
+  subscriptions: defineTable({
+    userId: v.id("users"),
+    merchant: v.string(),
+    product: v.optional(v.string()),
+    price: v.number(),
+    currency: v.string(),
+    billingInterval: v.union(
+      v.literal("monthly"),
+      v.literal("yearly"),
+      v.literal("weekly"),
+      v.literal("unknown"),
+    ),
+    status: v.union(
+      v.literal("active"),
+      v.literal("action_ready"),
+      v.literal("user_started"),
+      v.literal("pending"),
+      v.literal("cancelled"),
+      v.literal("failed"),
+    ),
+    trialEndsAt: v.optional(v.number()),
+    nextRenewalAt: v.optional(v.number()),
+    cancellationDifficulty: v.optional(
+      v.union(
+        v.literal("low"),
+        v.literal("medium"),
+        v.literal("high"),
+        v.literal("very_high"),
+      ),
+    ),
+    cancellationMethod: v.optional(
+      v.union(
+        v.literal("open_web"),
+        v.literal("open_provider"),
+        v.literal("send_email"),
+        v.literal("contact_support"),
+        v.literal("manual"),
+        v.literal("unknown"),
+      ),
+    ),
+    cancellationUrl: v.optional(v.string()),
+    billingProvider: v.optional(v.string()),
+    dedupKey: v.optional(v.string()),
+  })
+    .index("by_user", ["userId"])
+    .index("by_merchant", ["merchant"])
+    .index("by_renewal", ["nextRenewalAt"]),
+
+  evidence: defineTable({
+    subscriptionId: v.id("subscriptions"),
+    source: v.string(),
+    sourceType: v.union(
+      v.literal("email"),
+      v.literal("firecrawl"),
+      v.literal("manual"),
+    ),
+    excerpt: v.string(),
+    url: v.optional(v.string()),
+    confidence: v.number(),
+    retrievedAt: v.number(),
+  }).index("by_subscription", ["subscriptionId"]),
+
+  cancellationActions: defineTable({
+    subscriptionId: v.id("subscriptions"),
+    type: v.union(
+      v.literal("open_web"),
+      v.literal("open_provider"),
+      v.literal("send_email"),
+      v.literal("contact_support"),
+      v.literal("manual"),
+      v.literal("unknown"),
+    ),
+    status: v.union(
+      v.literal("ready"),
+      v.literal("started"),
+      v.literal("pending"),
+      v.literal("done"),
+      v.literal("failed"),
+    ),
+    instructions: v.optional(v.array(v.string())),
+    draft: v.optional(v.string()),
+  }).index("by_subscription", ["subscriptionId"]),
+
+  notifications: defineTable({
+    userId: v.id("users"),
+    subscriptionId: v.id("subscriptions"),
+    scheduledAt: v.number(),
+    type: v.union(
+      v.literal("7d"),
+      v.literal("3d"),
+      v.literal("24h"),
+      v.literal("confirmed"),
+    ),
+    status: v.union(
+      v.literal("pending"),
+      v.literal("sent"),
+      v.literal("failed"),
+    ),
+  })
+    .index("by_user", ["userId"])
+    .index("by_scheduled", ["scheduledAt"]),
+});
