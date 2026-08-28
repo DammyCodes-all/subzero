@@ -27,13 +27,15 @@ export const add = mutation({
     confidence: v.number(),
   },
   handler: async (ctx, args) => {
+    const confidence = Math.max(0, Math.min(1, args.confidence));
+    const excerpt = args.excerpt.slice(0, 10000);
     return await ctx.db.insert("evidence", {
       subscriptionId: args.subscriptionId,
       source: args.source,
       sourceType: args.sourceType,
-      excerpt: args.excerpt,
+      excerpt,
       url: args.url,
-      confidence: args.confidence,
+      confidence,
       retrievedAt: Date.now(),
     });
   },

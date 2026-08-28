@@ -28,11 +28,15 @@ export const needsAttention = query({
     const horizon = now + (args.days ?? 7) * 24 * 60 * 60 * 1000;
     const subs = await ctx.db
       .query("subscriptions")
-      .withIndex("by_user", (q) => q.eq("userId", userId as never))
-      .take(100);
-    return subs.filter(
-      (s) => s.nextRenewalAt !== undefined && s.nextRenewalAt <= horizon,
-    );
+      .withIndex("by_user_and_renewal", (q) =>
+        q
+          .eq("userId", userId as never)
+          .gte("nextRenewalAt", now)
+          .lte("nextRenewalAt", horizon),
+      )
+      .order("asc")
+      .take(20);
+    return subs;
   },
 });
 

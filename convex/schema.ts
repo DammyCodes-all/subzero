@@ -11,6 +11,8 @@ export default defineSchema({
     gmailRefreshToken: v.optional(v.string()),
     status: v.union(v.literal("connected"), v.literal("disconnected")),
     gmailScopeGranted: v.optional(v.boolean()),
+    accountEmail: v.optional(v.string()),
+    agentmailInbox: v.optional(v.string()),
   }).index("by_user", ["userId"]),
 
   subscriptions: defineTable({
@@ -29,7 +31,7 @@ export default defineSchema({
       v.literal("active"),
       v.literal("action_ready"),
       v.literal("user_started"),
-      v.literal("pending"),
+      v.literal("cancellation_pending"),
       v.literal("cancelled"),
       v.literal("failed"),
     ),
@@ -55,10 +57,11 @@ export default defineSchema({
     ),
     cancellationUrl: v.optional(v.string()),
     billingProvider: v.optional(v.string()),
-    dedupKey: v.optional(v.string()),
+    dedupKey: v.string(),
   })
     .index("by_user", ["userId"])
     .index("by_user_and_dedup", ["userId", "dedupKey"])
+    .index("by_user_and_renewal", ["userId", "nextRenewalAt"])
     .index("by_merchant", ["merchant"])
     .index("by_renewal", ["nextRenewalAt"]),
 
@@ -113,7 +116,9 @@ export default defineSchema({
       v.literal("failed"),
     ),
     attemptedAt: v.optional(v.number()),
+    error: v.optional(v.string()),
   })
     .index("by_user", ["userId"])
-    .index("by_scheduled", ["scheduledAt"]),
+    .index("by_scheduled", ["scheduledAt"])
+    .index("by_subscription_and_type", ["subscriptionId", "type"]),
 });
