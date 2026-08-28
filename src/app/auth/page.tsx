@@ -14,7 +14,16 @@ export default function AuthPage() {
   }, [isAuthenticated, isLoading, router]);
 
   if (isLoading)
-    return <p className="p-8 text-sm text-muted-foreground">Loading...</p>;
+    return (
+      <main className="min-h-screen flex flex-col items-center justify-center p-8 gap-6 bg-background">
+        <div className="text-center space-y-3 max-w-md">
+          <div className="mx-auto h-7 w-48 animate-pulse rounded bg-border/60" />
+          <div className="mx-auto h-4 w-72 animate-pulse rounded bg-border/60" />
+          <div className="mx-auto h-4 w-56 animate-pulse rounded bg-border/60" />
+          <div className="mx-auto mt-4 h-9 w-44 animate-pulse rounded-md bg-border/60" />
+        </div>
+      </main>
+    );
   if (isAuthenticated) return null;
 
   return (

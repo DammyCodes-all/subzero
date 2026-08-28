@@ -12,7 +12,11 @@ export function AuthGuard({ children }: { children: ReactNode }) {
     if (!isLoading && !isAuthenticated) router.replace("/auth");
   }, [isAuthenticated, isLoading, router]);
   if (isLoading)
-    return <p className="p-8 text-sm text-muted-foreground">Loading...</p>;
+    return (
+      <div className="flex h-screen w-screen items-center justify-center">
+        <div className="size-3 animate-pulse rounded-full bg-primary/60" />
+      </div>
+    );
   if (!isAuthenticated) return null;
   return <>{children}</>;
 }

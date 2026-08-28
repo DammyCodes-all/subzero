@@ -7,12 +7,12 @@ import { AuthGuard } from "@/components/AuthGuard";
 import { CompactAttentionRow } from "@/components/CompactAttentionRow";
 import {
   NoSubscriptionsState,
-  ScanningState,
   ZeroAttentionState,
 } from "@/components/EmptyState";
 import { Header } from "@/components/Header";
 import { SubscriptionRow } from "@/components/SubscriptionRow";
 import { SummaryStrip } from "@/components/SummaryStrip";
+import { DashboardSkeleton } from "@/components/Skeleton";
 import { Button } from "@/components/ui/button";
 import { api } from "../../../convex/_generated/api";
 
@@ -56,7 +56,7 @@ function DashboardInner() {
       <Header />
       <main className="mx-auto max-w-[680px] px-6 py-10">
         {isLoading ? (
-          <ScanningState />
+          <DashboardSkeleton />
         ) : count === 0 ? (
           <div className="space-y-8">
             <SummaryStrip count={0} total={0} attentionCount={0} />
