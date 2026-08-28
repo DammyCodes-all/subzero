@@ -39,6 +39,18 @@ export const needsAttention = query({
   },
 });
 
+export const get = query({
+  args: { id: v.id("subscriptions") },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) return null;
+    const userId = identity.tokenIdentifier;
+    const sub = await ctx.db.get(args.id);
+    if (!sub || sub.userId !== userId) return null;
+    return sub;
+  },
+});
+
 export const upsert = mutation({
   args: {
     merchant: v.string(),
