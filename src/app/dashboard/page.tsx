@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useMutation, useQuery } from "convex/react";
 import { ActionCard } from "@/components/ActionCard";
 import { AuthGuard } from "@/components/AuthGuard";
@@ -99,7 +100,12 @@ function DashboardInner() {
                     const rest = list.slice(1);
                     return (
                       <>
-                        <ActionCard key={hero._id} sub={hero} />
+                        <Link
+                          href={`/subscriptions/${hero._id}`}
+                          className="block rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                        >
+                          <ActionCard key={hero._id} sub={hero} />
+                        </Link>
                         {rest.length > 0 && (
                           <div className="space-y-2 pt-1">
                             <p className="text-xs text-muted-foreground">
@@ -107,7 +113,13 @@ function DashboardInner() {
                             </p>
                             <div className="space-y-2">
                               {rest.map((sub) => (
-                                <CompactAttentionRow key={sub._id} sub={sub} />
+                                <Link
+                                  key={sub._id}
+                                  href={`/subscriptions/${sub._id}`}
+                                  className="block rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                                >
+                                  <CompactAttentionRow sub={sub} />
+                                </Link>
                               ))}
                             </div>
                           </div>
@@ -129,7 +141,13 @@ function DashboardInner() {
               </h2>
               <div>
                 {sortedAll.map((sub) => (
-                  <SubscriptionRow key={sub._id} sub={sub} />
+                  <Link
+                    key={sub._id}
+                    href={`/subscriptions/${sub._id}`}
+                    className="block focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                  >
+                    <SubscriptionRow sub={sub} />
+                  </Link>
                 ))}
               </div>
             </section>
