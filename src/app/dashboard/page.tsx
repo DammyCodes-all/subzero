@@ -2,6 +2,7 @@
 
 import { useQuery } from "convex/react";
 import { AuthGuard } from "@/components/AuthGuard";
+import { UserMenu } from "@/components/UserMenu";
 import { api } from "../../../convex/_generated/api";
 
 export default function Dashboard() {
@@ -11,9 +12,10 @@ export default function Dashboard() {
   return (
     <AuthGuard>
       <main className="min-h-screen p-8 space-y-8 bg-background">
-        <h1 className="text-2xl font-heading font-bold">
-          What needs your attention
-        </h1>
+        <div className="flex justify-end">
+          <UserMenu />
+        </div>
+        <h1 className="text-2xl font-heading font-bold">What needs your attention</h1>
         <section className="space-y-3">
           {attention === undefined ? (
             <p className="text-sm text-muted-foreground">Loading...</p>
