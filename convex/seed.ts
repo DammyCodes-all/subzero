@@ -2,7 +2,6 @@ import { mutation } from "./_generated/server";
 import { dedupKey } from "./lib/dedup";
 import { getDifficulty } from "./lib/difficulty";
 
-const now = Date.now();
 const day = 24 * 60 * 60 * 1000;
 
 const mocks = [
@@ -12,7 +11,7 @@ const mocks = [
     price: 54.99,
     currency: "USD",
     billingInterval: "monthly" as const,
-    nextRenewalAt: now + 2 * day,
+    renewInDays: 2,
     billingProvider: undefined,
     cancellationMethod: "open_web" as const,
     cancellationUrl: "https://account.adobe.com/plans",
@@ -40,7 +39,7 @@ const mocks = [
     price: 15,
     currency: "USD",
     billingInterval: "monthly" as const,
-    nextRenewalAt: now + 6 * day,
+    renewInDays: 6,
     cancellationMethod: "open_web" as const,
     steps: 4,
   },
@@ -50,7 +49,7 @@ const mocks = [
     price: 11.99,
     currency: "USD",
     billingInterval: "monthly" as const,
-    nextRenewalAt: now + 12 * day,
+    renewInDays: 12,
     cancellationMethod: "open_web" as const,
     steps: 3,
   },
@@ -60,7 +59,7 @@ const mocks = [
     price: 10,
     currency: "USD",
     billingInterval: "monthly" as const,
-    nextRenewalAt: now + 20 * day,
+    renewInDays: 20,
     cancellationMethod: "open_web" as const,
     steps: 3,
   },
@@ -70,7 +69,7 @@ const mocks = [
     price: 15.49,
     currency: "USD",
     billingInterval: "monthly" as const,
-    nextRenewalAt: now + 25 * day,
+    renewInDays: 25,
     cancellationMethod: "open_web" as const,
     steps: 3,
   },
@@ -80,7 +79,7 @@ const mocks = [
     price: 20,
     currency: "USD",
     billingInterval: "monthly" as const,
-    nextRenewalAt: now + 6 * day,
+    renewInDays: 6,
     billingProvider: "Google Play",
     cancellationMethod: "open_provider" as const,
     steps: 0,
@@ -91,7 +90,7 @@ const mocks = [
     price: 15,
     currency: "USD",
     billingInterval: "monthly" as const,
-    nextRenewalAt: now + 18 * day,
+    renewInDays: 18,
     cancellationMethod: "open_web" as const,
     steps: 4,
   },
@@ -101,7 +100,7 @@ const mocks = [
     price: 8,
     currency: "USD",
     billingInterval: "monthly" as const,
-    nextRenewalAt: now + 30 * day,
+    renewInDays: 30,
     cancellationMethod: "open_web" as const,
     steps: 3,
   },
@@ -112,15 +111,22 @@ export const seed = mutation({
   handler: async (ctx) => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new Error("Not authenticated — sign in first");
-    const userId = identity.subject as string;
+    const userId = identity.tokenIdentifier;
+    const now = Date.now();
 
     let inserted = 0;
     for (const m of mocks) {
-      const key = dedupKey(m);
+      const key = dedupKey({
+        merchant: m.merchant,
+        product: m.product,
+        billingProvider: m.billingProvider,
+        price: m.price,
+        currency: m.currency,
+      });
       const existing = await ctx.db
         .query("subscriptions")
         .withIndex("by_user_and_dedup", (q) =>
-          q.eq("userId", userId as never).eq("dedupKey", key),
+          q.eq("userId", userId).eq("dedupKey", key),
         )
         .unique();
       if (existing) continue;
@@ -132,14 +138,14 @@ export const seed = mutation({
       );
 
       const id = await ctx.db.insert("subscriptions", {
-        userId: userId as never,
+        userId,
         merchant: m.merchant,
         product: m.product,
         price: m.price,
         currency: m.currency,
         billingInterval: m.billingInterval,
         status: "active",
-        nextRenewalAt: m.nextRenewalAt,
+        nextRenewalAt: now + m.renewInDays * day,
         cancellationMethod: m.cancellationMethod,
         cancellationDifficulty: difficulty,
         cancellationUrl: m.cancellationUrl,

@@ -6,7 +6,7 @@ export default defineSchema({
   ...authTables,
 
   connections: defineTable({
-    userId: v.id("users"),
+    userId: v.string(),
     provider: v.union(v.literal("google"), v.literal("agentmail")),
     gmailRefreshToken: v.optional(v.string()),
     status: v.union(v.literal("connected"), v.literal("disconnected")),
@@ -16,7 +16,7 @@ export default defineSchema({
   }).index("by_user", ["userId"]),
 
   subscriptions: defineTable({
-    userId: v.id("users"),
+    userId: v.string(),
     merchant: v.string(),
     product: v.optional(v.string()),
     price: v.number(),
@@ -101,7 +101,7 @@ export default defineSchema({
   }).index("by_subscription", ["subscriptionId"]),
 
   notifications: defineTable({
-    userId: v.id("users"),
+    userId: v.string(),
     subscriptionId: v.id("subscriptions"),
     scheduledAt: v.number(),
     type: v.union(

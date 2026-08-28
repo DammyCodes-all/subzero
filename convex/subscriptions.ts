@@ -8,11 +8,10 @@ export const list = query({
   handler: async (ctx) => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) return [];
-    const userId = identity.subject as string;
-    // Use by_user index; cast needed because auth subject is string not Id
+    const userId = identity.tokenIdentifier;
     const subs = await ctx.db
       .query("subscriptions")
-      .withIndex("by_user", (q) => q.eq("userId", userId as never))
+      .withIndex("by_user", (q) => q.eq("userId", userId))
       .take(100);
     return subs;
   },
@@ -23,14 +22,14 @@ export const needsAttention = query({
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) return [];
-    const userId = identity.subject as string;
+    const userId = identity.tokenIdentifier;
     const now = Date.now();
     const horizon = now + (args.days ?? 7) * 24 * 60 * 60 * 1000;
     const subs = await ctx.db
       .query("subscriptions")
       .withIndex("by_user_and_renewal", (q) =>
         q
-          .eq("userId", userId as never)
+          .eq("userId", userId)
           .gte("nextRenewalAt", now)
           .lte("nextRenewalAt", horizon),
       )
@@ -71,12 +70,12 @@ export const upsert = mutation({
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new Error("Not authenticated");
-    const userId = identity.subject as string;
+    const userId = identity.tokenIdentifier;
     const key = dedupKey(args);
     const existing = await ctx.db
       .query("subscriptions")
       .withIndex("by_user_and_dedup", (q) =>
-        q.eq("userId", userId as never).eq("dedupKey", key),
+        q.eq("userId", userId).eq("dedupKey", key),
       )
       .unique();
 
@@ -105,7 +104,7 @@ export const upsert = mutation({
     }
 
     return await ctx.db.insert("subscriptions", {
-      userId: userId as never,
+      userId,
       merchant: args.merchant,
       product: args.product,
       price: args.price,
