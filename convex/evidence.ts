@@ -13,6 +13,18 @@ export const listBySubscription = query({
   },
 });
 
+export const getBySubscription = query({
+  args: { subscriptionId: v.id("subscriptions") },
+  handler: async (ctx, args) => {
+    return await ctx.db
+      .query("evidence")
+      .withIndex("by_subscription", (q) =>
+        q.eq("subscriptionId", args.subscriptionId),
+      )
+      .collect();
+  },
+});
+
 export const add = mutation({
   args: {
     subscriptionId: v.id("subscriptions"),

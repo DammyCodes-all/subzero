@@ -117,22 +117,29 @@ export function ActionCard({ sub, evidence }: { sub: Sub; evidence?: string }) {
             {urgent ? "Action needed" : "Due soon"}
           </span>
           {cta.href ? (
-            <a href={cta.href} target="_blank" rel="noopener noreferrer">
-              <Button
-                variant={cta.variant}
-                size="sm"
-                className="gap-1.5 font-medium"
-              >
-                {cta.label}
-                <ExternalLink className="size-3.5 opacity-70" />
-              </Button>
-            </a>
+            <Button
+              variant={cta.variant}
+              size="sm"
+              className="gap-1.5 font-medium"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                window.open(cta.href, "_blank", "noopener,noreferrer");
+              }}
+            >
+              {cta.label}
+              <ExternalLink className="size-3.5 opacity-70" />
+            </Button>
           ) : (
             <Button
               variant={cta.variant}
               size="sm"
               disabled={(cta as { disabled?: boolean }).disabled}
               className="gap-1.5 font-medium"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+              }}
             >
               {cta.label}
             </Button>
