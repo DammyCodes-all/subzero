@@ -12,7 +12,7 @@
 - **Auth:** Convex Auth
 - **AI models:** none
 - **Started:** 2026-08-28T08:01:06Z
-- **Last updated:** 2026-08-28T09:41:45Z
+- **Last updated:** 2026-08-28T10:10:46Z
 
 ## Log
 
@@ -24,3 +24,6 @@ Provisioned Convex dev deployment aromatic-quail-684, pushed schema (connections
 
 ### 2026-08-28 - working tree
 Refined data model per grill: added `by_user_and_dedup` index and `gmailScopeGranted`/`attemptedAt` fields, and implemented lean modules `lib/dedup.ts` (dedupKey), `lib/difficulty.ts` (getDifficulty), `subscriptions.ts` (list, needsAttention, upsert), `evidence.ts`, and `seed.ts` (8 mocks: Adobe 2d high, Canva 6d etc). Convex features: queries, mutations, indexes (`convex/schema.ts`, `convex/lib/dedup.ts`, `convex/subscriptions.ts`).
+
+### 2026-08-28 - working tree
+Wired design system (Ink #0A1420, Frost #E7F1FA, Glacier #5FB8E0, Ember #F2664B — Frost 60%/15% for text/borders, 8-10px radius restraint, status dots circular) with Space Grotesk/Inter/Plex Mono via next/font and dark-only `globals.css` backed by shadcn `button.tsx`. Built auth flow: `ConvexClientProvider`, `SignInButton` (google), `UserMenu`, `AuthGuard` and `/dashboard` reading `subscriptions.needsAttention`/`list` live. Convex features: auth, queries (`src/app/globals.css`, `src/app/layout.tsx`, `src/components/ui/button.tsx`, `src/components/SignInButton.tsx`).
