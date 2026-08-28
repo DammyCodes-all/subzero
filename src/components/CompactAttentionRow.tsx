@@ -55,22 +55,29 @@ export function CompactAttentionRow({ sub }: { sub: Sub }) {
           {countdown}
         </span>
         {cta.href ? (
-          <a href={cta.href} target="_blank" rel="noopener noreferrer">
-            <Button
-              variant="outline"
-              size="xs"
-              className="h-6 gap-1 px-2 text-xs font-medium"
-            >
-              {cta.label}
-              <ExternalLink className="size-3 opacity-60" />
-            </Button>
-          </a>
+          <Button
+            variant="outline"
+            size="xs"
+            className="h-6 gap-1 px-2 text-xs font-medium"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              window.open(cta.href!, "_blank", "noopener,noreferrer");
+            }}
+          >
+            {cta.label}
+            <ExternalLink className="size-3 opacity-60" />
+          </Button>
         ) : (
           <Button
             variant="outline"
             size="xs"
             disabled={cta.disabled}
             className="h-6 gap-1 px-2 text-xs font-medium"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+            }}
           >
             {cta.label}
           </Button>
