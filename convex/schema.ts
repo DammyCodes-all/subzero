@@ -10,6 +10,7 @@ export default defineSchema({
     provider: v.union(v.literal("google"), v.literal("agentmail")),
     gmailRefreshToken: v.optional(v.string()),
     status: v.union(v.literal("connected"), v.literal("disconnected")),
+    gmailScopeGranted: v.optional(v.boolean()),
   }).index("by_user", ["userId"]),
 
   subscriptions: defineTable({
@@ -57,6 +58,7 @@ export default defineSchema({
     dedupKey: v.optional(v.string()),
   })
     .index("by_user", ["userId"])
+    .index("by_user_and_dedup", ["userId", "dedupKey"])
     .index("by_merchant", ["merchant"])
     .index("by_renewal", ["nextRenewalAt"]),
 
@@ -110,6 +112,7 @@ export default defineSchema({
       v.literal("sent"),
       v.literal("failed"),
     ),
+    attemptedAt: v.optional(v.number()),
   })
     .index("by_user", ["userId"])
     .index("by_scheduled", ["scheduledAt"]),
