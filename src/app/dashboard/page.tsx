@@ -30,10 +30,16 @@ function DashboardInner() {
 
   const isLoading = all === undefined || attention === undefined;
 
-  // Compute summary only when loaded
+  // Compute summary only when loaded — total filtered to next 30d (Stripe pattern)
   const count = all?.length ?? 0;
   const attentionCount = attention?.length ?? 0;
-  const total = all ? all.reduce((sum, s) => sum + s.price, 0) : 0;
+  const now = Date.now();
+  const thirtyDays = 30 * 24 * 60 * 60 * 1000;
+  const total = all
+    ? all
+        .filter((s) => s.nextRenewalAt && s.nextRenewalAt <= now + thirtyDays)
+        .reduce((sum, s) => sum + s.price, 0)
+    : 0;
 
   // Sort all by nextRenewalAt ascending (nulls last)
   const sortedAll = all
@@ -47,7 +53,7 @@ function DashboardInner() {
   return (
     <div className="min-h-screen bg-background">
       <Header />
-      <main className="mx-auto max-w-[680px] px-6 py-8">
+      <main className="mx-auto max-w-[680px] px-6 py-10">
         {isLoading ? (
           <ScanningState />
         ) : count === 0 ? (
@@ -68,7 +74,7 @@ function DashboardInner() {
             )}
           </div>
         ) : (
-          <div className="space-y-7">
+          <div className="space-y-8">
             <SummaryStrip
               count={count}
               total={total}
@@ -76,20 +82,15 @@ function DashboardInner() {
             />
 
             {/* Needs Attention — hero zone */}
-            <section className="space-y-4">
-              <div>
-                <h1 className="font-heading text-[28px] font-bold leading-none tracking-tight md:text-[30px]">
-                  What needs your attention
-                </h1>
-                <p className="mt-2 text-sm text-muted-foreground">
-                  Renewals in the next 7 days
-                </p>
-              </div>
+            <section className="space-y-6">
+              <h1 className="font-heading text-[28px] font-bold leading-none tracking-tight md:text-[30px]">
+                What needs your attention
+              </h1>
 
               {attentionCount === 0 ? (
                 <ZeroAttentionState />
               ) : (
-                <div className="space-y-3">
+                <div className="space-y-4">
                   {/* Hero — most urgent, full detail, sole solid chartreuse CTA */}
                   {(() => {
                     const list = attention ?? [];
@@ -98,18 +99,10 @@ function DashboardInner() {
                     const rest = list.slice(1);
                     return (
                       <>
-                        <ActionCard
-                          key={hero._id}
-                          sub={hero}
-                          evidence={
-                            hero.merchant === "Adobe"
-                              ? "Renews Sep 3 — Source: Adobe email “Your trial ends September 3, 2026…”"
-                              : undefined
-                          }
-                        />
+                        <ActionCard key={hero._id} sub={hero} />
                         {rest.length > 0 && (
                           <div className="space-y-2 pt-1">
-                            <p className="text-xs font-mono text-muted-foreground">
+                            <p className="text-xs text-muted-foreground">
                               Also due this week
                             </p>
                             <div className="space-y-2">
@@ -126,15 +119,15 @@ function DashboardInner() {
               )}
             </section>
 
-            {/* 48px breathing gap */}
-            <div className="pt-5" />
+            {/* 48px breathing gap — editorial whitespace */}
+            <div className="pt-3" />
 
-            {/* All Subscriptions — dense quiet list */}
-            <section className="space-y-4">
-              <h2 className="font-heading text-lg font-semibold tracking-tight">
+            {/* All Subscriptions — plain list, no card */}
+            <section className="space-y-3">
+              <h2 className="font-heading text-base font-semibold tracking-tight">
                 All subscriptions
               </h2>
-              <div className="space-y-2">
+              <div>
                 {sortedAll.map((sub) => (
                   <SubscriptionRow key={sub._id} sub={sub} />
                 ))}
