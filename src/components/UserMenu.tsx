@@ -9,14 +9,15 @@ export function UserMenu() {
   const { signOut } = useAuthActions();
 
   if (isLoading)
-    return <span className="text-sm text-muted-foreground">...</span>;
+    return <span className="text-xs font-mono text-muted-foreground">...</span>;
   if (!isAuthenticated) return null;
 
   return (
     <Button
       variant="ghost"
+      size="sm"
       onClick={() => void signOut()}
-      className="rounded-lg"
+      className="rounded-lg font-mono text-xs"
     >
       Sign out
     </Button>
