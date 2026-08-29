@@ -50,13 +50,26 @@ export const persistExtracted = internalMutation({
     isDuplicate: v.boolean(),
   }),
   handler: async (ctx, args) => {
-    // Atomic idempotency: if this svixId was already processed, return duplicate
+    // Atomic idempotency: check svixId (AgentMail) and messageId (Gmail)
     if (args.svixId) {
       const dup = await ctx.db
         .query("evidence")
         .withIndex("by_svixId", (q) => q.eq("svixId", args.svixId))
         .first();
       if (dup)
+        return {
+          subscriptionId: null,
+          evidenceId: null,
+          isNew: false,
+          isDuplicate: true,
+        };
+    }
+    if (args.messageId) {
+      const dup2 = await ctx.db
+        .query("evidence")
+        .withIndex("by_messageId", (q) => q.eq("messageId", args.messageId))
+        .first();
+      if (dup2)
         return {
           subscriptionId: null,
           evidenceId: null,
