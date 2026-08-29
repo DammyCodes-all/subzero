@@ -1,5 +1,3 @@
-"use node";
-
 import { v } from "convex/values";
 import { internalAction } from "./_generated/server";
 import { internal } from "./_generated/api";
@@ -11,9 +9,9 @@ export const researchCancellationRoute = internalAction({
     const sub = await ctx.runQuery(internal.subscriptions.getInternal, { id: args.subscriptionId });
     if (!sub) throw new Error("Subscription not found");
 
-    const firecrawlKey = (env as unknown as { FIRECRAWL_API_KEY?: string }).FIRECRAWL_API_KEY ?? process.env.FIRECRAWL_API_KEY;
-    const groqKey = (env as unknown as { GROQ_API_KEY?: string }).GROQ_API_KEY ?? process.env.GROQ_API_KEY;
-    const openaiKey = (env as unknown as { OPENAI_API_KEY?: string }).OPENAI_API_KEY ?? process.env.OPENAI_API_KEY;
+    const firecrawlKey = (env as unknown as { FIRECRAWL_API_KEY?: string }).FIRECRAWL_API_KEY;
+    const groqKey = (env as unknown as { GROQ_API_KEY?: string }).GROQ_API_KEY;
+    const openaiKey = (env as unknown as { OPENAI_API_KEY?: string }).OPENAI_API_KEY;
 
     // Fallback if missing keys
     if (!firecrawlKey || (!groqKey && !openaiKey)) {
