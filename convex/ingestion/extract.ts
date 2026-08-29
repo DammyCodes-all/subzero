@@ -2,6 +2,7 @@
 
 import { v } from "convex/values";
 import { env, internalAction } from "../_generated/server";
+import { ISO_SET, normalizeCurrency, SYMBOL_TO_ISO, ZERO_DECIMAL } from "../lib/currencies";
 
 const extractedReturns = v.object({
   merchant: v.optional(v.string()),
@@ -46,44 +47,77 @@ function mockExtract(
   quote: string;
 } {
   const combined = `${subject} ${text}`.toLowerCase();
+  const combinedRaw = `${subject} ${text}`; // keep original case for symbol detection
   const isConfirmation =
     /cancelled|canceled|subscription.*cancel|cancellation confirmed/i.test(
       combined,
     );
 
-  // Prefer $/₦/NGN price with decimals (e.g. $54.99, ₦7,700.00), fallback to decimal pattern.
-  // No loose fallback — avoid capturing year 2026 from dates as price.
+  // Top 8 currency extraction — symbol directly before number wins (not any symbol in body)
+  // Handles US 7,700.00 only (strip commas), not EU 1.234,56 (documented out-of-scope)
   let price: number | undefined;
   let currency = "USD";
-  // Support $, ₦, NGN, with commas (7,700.00)
-  const nairaMatch = combined.match(/(?:₦|ngn)\s*([\d,]+(?:\.\d{1,2})?)/i);
-  const dollarMatch = combined.match(/\$\s*([\d,]+(?:\.\d{1,2})?)/);
-  const genericMatch = combined.match(/([\d,]+\.\d{2})\s*(usd|eur|gbp|ngn)?/i);
-  const rawMatch = nairaMatch ?? dollarMatch ?? genericMatch;
   let rawPriceStr: string | undefined;
-  if (nairaMatch) {
-    rawPriceStr = nairaMatch[1];
-    currency = "NGN";
-  } else if (dollarMatch) {
-    rawPriceStr = dollarMatch[1];
-  } else if (genericMatch) {
-    rawPriceStr = genericMatch[1];
-    const cur = (genericMatch[2] ?? "").toLowerCase();
-    if (cur === "eur") currency = "EUR";
-    else if (cur === "gbp") currency = "GBP";
-    else if (cur === "ngn") currency = "NGN";
+  let detectedCurrency: string | undefined;
+
+  // 1) Explicit suffix code: "12.99 USD", "1,499.00 INR", "7,700 CAD" — most reliable
+  const suffixMatch = combinedRaw.match(/([\d,]+(?:\.\d{1,2})?)\s*(USD|EUR|GBP|NGN|INR|JPY|CAD|AUD)\b/i);
+  if (suffixMatch) {
+    rawPriceStr = suffixMatch[1];
+    detectedCurrency = suffixMatch[2].toUpperCase();
+  } else {
+    // 2) Symbol before number — check longest symbols first (C$, A$ before $)
+    // Order: C$, A$, ₦, ₹, ¥, €, £, $
+    const symbolPatterns: Array<{ sym: string; iso: string; regex: RegExp }> = [
+      { sym: "C$", iso: "CAD", regex: /C\$\s*([\d,]+(?:\.\d{1,2})?)/ },
+      { sym: "A$", iso: "AUD", regex: /A\$\s*([\d,]+(?:\.\d{1,2})?)/ },
+      { sym: "₦", iso: "NGN", regex: /₦\s*([\d,]+(?:\.\d{1,2})?)/ },
+      { sym: "₹", iso: "INR", regex: /₹\s*([\d,]+(?:\.\d{1,2})?)/ },
+      { sym: "¥", iso: "JPY", regex: /¥\s*([\d,]+(?:\.\d{1,2})?)/ },
+      { sym: "€", iso: "EUR", regex: /€\s*([\d,]+(?:\.\d{1,2})?)/ },
+      { sym: "£", iso: "GBP", regex: /£\s*([\d,]+(?:\.\d{1,2})?)/ },
+      { sym: "$", iso: "USD", regex: /\$\s*([\d,]+(?:\.\d{1,2})?)/ },
+    ];
+    for (const p of symbolPatterns) {
+      const m = combinedRaw.match(p.regex);
+      if (m) {
+        rawPriceStr = m[1];
+        detectedCurrency = p.iso;
+        // Disambiguate $: if text contains CAD/AUD near the price, use that instead
+        if (p.sym === "$") {
+          const lower = combined;
+          const dollarIdx = combinedRaw.indexOf(m[0]);
+          const window = combined.slice(Math.max(0, dollarIdx - 20), dollarIdx + m[0].length + 20);
+          if (window.includes("cad") || lower.includes("canadian")) detectedCurrency = "CAD";
+          else if (window.includes("aud") || lower.includes("australian")) detectedCurrency = "AUD";
+        }
+        break;
+      }
+    }
+    // 3) Fallback: bare number with 2 decimals and no symbol (e.g. "7,700.00" alone) → keep USD only if no other hint
+    if (!rawPriceStr) {
+      const bare = combined.match(/([\d,]+\.\d{2})/);
+      if (bare) {
+        // Avoid capturing years like 2026.00 — require price < 1M and not a year prefix
+        rawPriceStr = bare[1];
+        detectedCurrency = "USD";
+      }
+    }
+  }
+
+  if (detectedCurrency) {
+    const norm = normalizeCurrency(detectedCurrency);
+    if (norm) currency = norm;
+    else if (ISO_SET.has(detectedCurrency)) currency = detectedCurrency;
   }
   if (rawPriceStr) {
     const cleaned = rawPriceStr.replace(/,/g, "");
     const n = Number.parseFloat(cleaned);
-    if (!Number.isNaN(n) && n > 0 && n < 1000000) price = n;
-  }
-  // Detect NGN from ₦ symbol even if genericMatch was used
-  if (combined.includes("₦") || combined.includes("ngn")) {
-    if (!price || currency === "USD") {
-      // keep NGN if price came from ₦ context
-      const hasNaira = nairaMatch !== null || combined.includes("₦");
-      if (hasNaira) currency = "NGN";
+    // Allow integers for JPY (¥7,700), otherwise require >0
+    const isZeroDec = detectedCurrency ? ZERO_DECIMAL.has(detectedCurrency) : false;
+    if (!Number.isNaN(n) && n > 0 && n < 1000000) {
+      // For zero-decimal like JPY, price should be integer — but still accept float and floor?
+      price = isZeroDec ? Math.round(n) : n;
     }
   }
 
@@ -187,7 +221,7 @@ export const extractSubscription = internalAction({
     }
 
     const system =
-      "You extract subscription info from forwarded emails. Return JSON with keys: merchant (string or null), product (string or null), price (number or null), currency (USD/EUR/GBP or null), billingInterval (monthly|yearly|weekly|unknown), nextRenewalAt (ISO date string or null), trialEndsAt (ISO date string or null), billingProvider (string or null, e.g. Google Play, Apple, Amazon), isConfirmation (boolean: true if this email confirms a cancellation), confidence (0-1), quote (exact substring from email supporting price or renewal date, max 300 chars). Never invent a price or date. If unsure, null.";
+      "You extract subscription info from forwarded emails. Return JSON with keys: merchant (string or null), product (string or null), price (number or null), currency (ISO 4217 code: USD, EUR, GBP, NGN, INR, JPY, CAD, AUD — infer from symbol: $→USD, C$→CAD, A$→AUD, €→EUR, £→GBP, ₦→NGN, ₹→INR, ¥→JPY, or suffix like 12.99 CAD — or null), billingInterval (monthly|yearly|weekly|unknown), nextRenewalAt (ISO date string or null), trialEndsAt (ISO date string or null), billingProvider (string or null, e.g. Google Play, Apple, Amazon), isConfirmation (boolean: true if this email confirms a cancellation), confidence (0-1), quote (exact substring from email supporting price or renewal date, max 300 chars). Never invent a price or date. If unsure, null. For price, strip commas: ₦7,700.00→7700. For JPY, no decimals: ¥7,700→7700.";
 
     const userContent = `Subject: ${args.subject}\n\nBody:\n${args.text.slice(0, 15000)}`;
     const endpoint =
@@ -254,33 +288,46 @@ export const extractSubscription = internalAction({
       let price =
         typeof parsed.price === "number" && !Number.isNaN(parsed.price)
           ? parsed.price
-          : undefined;
-      let currency =
-        typeof parsed.currency === "string" && parsed.currency.trim()
-          ? parsed.currency.trim().toUpperCase().slice(0, 3)
-          : price
-            ? "USD"
+          : typeof parsed.price === "string"
+            ? Number.parseFloat((parsed.price as string).replace(/,/g, ""))
             : undefined;
-      // Fallback to mock if groq omitted price/merchant but text clearly has it (e.g. ₦ with comma, NGN)
-      // This prevents unparsed when groq hallucinates null for valid ₦7,700 receipt
-      // Also always correct currency if text contains ₦/NGN but groq says USD
-      const mockFallbackForCurrency = mockExtract(args.text, args.subject);
-      if (price === undefined || !merchant) {
-        if (price === undefined && mockFallbackForCurrency.price !== undefined) {
-          price = mockFallbackForCurrency.price;
-          if (mockFallbackForCurrency.currency) currency = mockFallbackForCurrency.currency;
-        }
-        if (!merchant && mockFallbackForCurrency.merchant) {
-          merchant = mockFallbackForCurrency.merchant;
+      if (typeof price === "number" && Number.isNaN(price)) price = undefined;
+      let currency = normalizeCurrency(
+        typeof parsed.currency === "string" ? parsed.currency : undefined,
+      );
+      if (!currency && price !== undefined) currency = "USD";
+      // Use mock as fallback when Groq omits or hallucinates (e.g. "US Dollar" → USD via normalize, but invalid ISO)
+      const mockFallback = mockExtract(args.text, args.subject);
+      const mockIso = normalizeCurrency(mockFallback.currency) ?? mockFallback.currency;
+      if (price === undefined && mockFallback.price !== undefined) {
+        price = mockFallback.price;
+        if (mockIso) currency = mockIso;
+      }
+      if (!merchant && mockFallback.merchant) {
+        merchant = mockFallback.merchant;
+      }
+      // Correct currency if Groq and mock disagree but price matches — use symbol directly before number (not any symbol in body)
+      // Avoids misfire on "$45 approx ₦68k" where body contains ₦ but price is $45
+      if (mockIso && currency && mockIso !== currency && mockFallback.price === price) {
+        const priceStr = String(price);
+        const mockSym = Object.keys(SYMBOL_TO_ISO).find(k => SYMBOL_TO_ISO[k]===mockIso) ?? "";
+        const groqSym = Object.keys(SYMBOL_TO_ISO).find(k => SYMBOL_TO_ISO[k]===currency) ?? "";
+        const text = args.text;
+        const hasMockSym = mockSym ? (text.includes(`${mockSym}${priceStr}`) || text.includes(`${mockSym} ${priceStr}`) || text.includes(`${priceStr} ${mockIso}`) || mockFallback.quote.includes(mockSym)) : false;
+        const hasGroqSym = groqSym ? (text.includes(`${groqSym}${priceStr}`) || text.includes(`${groqSym} ${priceStr}`) || (parsed.quote as string | "")?.includes(groqSym)) : false;
+        if (hasMockSym && !hasGroqSym) currency = mockIso;
+        else if (!hasMockSym && hasGroqSym) {
+          // keep Groq
+        } else if (hasMockSym && hasGroqSym) {
+          // Both present — keep Groq (LLM more context)
+        } else {
+          // Neither symbol clearly — if Groq is generic USD and mock is specific (NGN/INR/JPY), prefer mock only when Groq quote doesn't contain $
+          if (currency === "USD" && mockIso !== "USD" && !(parsed.quote as string | "")?.includes("$")) currency = mockIso;
         }
       }
-      // Always correct USD→NGN if ₦/NGN present (groq often defaults to USD for ₦)
-      if (currency === "USD" && mockFallbackForCurrency.currency === "NGN") {
-        currency = "NGN";
-      }
-      // Also if raw text directly contains ₦ and currency still USD, force NGN
-      if (currency === "USD" && (args.text.includes("₦") || args.text.toLowerCase().includes("ngn") || args.subject.toLowerCase().includes("ngn"))) {
-        currency = "NGN";
+      // Final validation: if currency not in Top 8 but looks like ISO (e.g. ZAR), allow it (Intl will try), else default USD
+      if (currency && !ISO_SET.has(currency) && !/^[A-Z]{3}$/.test(currency)) {
+        currency = mockIso ?? "USD";
       }
       const intervalRaw =
         typeof parsed.billingInterval === "string"

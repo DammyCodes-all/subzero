@@ -1,14 +1,24 @@
+const ZERO_DECIMAL = new Set(["JPY", "KRW", "VND", "CLP", "BIF", "PYG", "GNF", "MGA"]);
+
 export function formatPrice(
   price: number,
   currency: string,
   interval?: string,
 ) {
-  const formatted = new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: currency || "USD",
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(price);
+  const code = (currency || "USD").toUpperCase();
+  const isZero = ZERO_DECIMAL.has(code);
+  let formatted: string;
+  try {
+    formatted = new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency: code,
+      minimumFractionDigits: isZero ? 0 : 2,
+      maximumFractionDigits: isZero ? 0 : 2,
+    }).format(price);
+  } catch {
+    // Invalid ISO (e.g. "US Dollar") — fallback to code + number
+    formatted = `${code} ${price.toFixed(isZero ? 0 : 2)}`;
+  }
   if (interval === "monthly") return `${formatted}/mo`;
   if (interval === "yearly") return `${formatted}/yr`;
   if (interval === "weekly") return `${formatted}/wk`;
