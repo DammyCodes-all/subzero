@@ -41,8 +41,17 @@ export const getOrCreateInbox = mutation({
     const existing = rows.find(
       (c) => c.provider === "agentmail" && c.agentmailInbox,
     );
-    if (existing?.agentmailInbox)
+    const accountEmail = (
+      identity.email ?? rows.find((c) => c.accountEmail)?.accountEmail
+    )
+      ?.trim()
+      .toLowerCase();
+    if (existing?.agentmailInbox) {
+      if (!existing.accountEmail && accountEmail) {
+        await ctx.db.patch(existing._id, { accountEmail });
+      }
       return { inbox: existing.agentmailInbox.toLowerCase() };
+    }
 
     // Single shared inbox strategy (3-inbox free limit).
     // All users forward to subzero-agent@agentmail.to; routing is via
@@ -55,7 +64,7 @@ export const getOrCreateInbox = mutation({
       provider: "agentmail",
       status: "connected",
       agentmailInbox: sharedInbox,
-      accountEmail: identity.email?.toLowerCase(),
+      accountEmail,
     });
 
     return { inbox: sharedInbox };
@@ -141,13 +150,9 @@ export const resolveUserByInbox = internalQuery({
           .query("connections")
           .withIndex("by_accountEmail", (q) => q.eq("accountEmail", norm))
           .first();
-        if (byEmail && byEmail.provider === "agentmail") return byEmail.userId;
+        if (byEmail) return byEmail.userId;
         const all = await ctx.db.query("connections").take(100);
-        const hit = all.find(
-          (c) =>
-            c.accountEmail?.toLowerCase() === norm &&
-            c.provider === "agentmail",
-        );
+        const hit = all.find((c) => c.accountEmail?.toLowerCase() === norm);
         if (hit) return hit.userId;
       }
     }

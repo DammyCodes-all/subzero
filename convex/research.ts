@@ -2,6 +2,7 @@ import { v } from "convex/values";
 import { internalAction } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { env } from "./_generated/server";
+import { GROQ_EXTRACTION_MODEL } from "./lib/aiModels";
 
 export const researchCancellationRoute = internalAction({
   args: { subscriptionId: v.id("subscriptions") },
@@ -73,7 +74,7 @@ ${markdownContent.slice(0, 8000)}`;
     const apiKey = groqKey ?? openaiKey;
     const endpoint = provider === "groq" ? "https://api.groq.com/openai/v1/chat/completions" : "https://api.openai.com/v1/chat/completions";
     // standard fast model for structured extraction
-    const model = provider === "groq" ? "llama3-8b-8192" : "gpt-4o-mini"; 
+    const model = provider === "groq" ? GROQ_EXTRACTION_MODEL : "gpt-4o-mini";
 
     const res = await fetch(endpoint, {
       method: "POST",

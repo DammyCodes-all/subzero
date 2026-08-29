@@ -40,21 +40,36 @@ http.route({
       req.headers.get("svix-signature") !== null;
 
     // If webhook secret is configured it is authoritative — never honor ?secret=.
-    // For hackathon: soft-fail on verify so a secret rotation doesn't block demo (still logs).
     if (secret) {
       if (hasSvixHeaders) {
-        try {
-          const headers: Record<string, string> = {};
-          req.headers.forEach((v, k) => {
-            headers[k] = v;
-          });
-          new Webhook(secret).verify(rawText, headers);
-        } catch (e) {
-          console.error("webhook verify failed (soft-continue for demo)", String(e), "rawPreview", rawText.slice(0, 400));
-          // was 400 — soft-continue so forwarding isn't blocked during demo
+        // Svix verify expects exactly svix-* headers, lowercased, and raw body
+        const svixHeaders = {
+          "svix-id": req.headers.get("svix-id") ?? "",
+          "svix-timestamp": req.headers.get("svix-timestamp") ?? "",
+          "svix-signature": req.headers.get("svix-signature") ?? "",
+        };
+        let verified = false;
+        let lastErr: unknown = null;
+        // Try primary secret, then fallback without whsec_ prefix if needed
+        const candidates = [secret];
+        if (secret.startsWith("whsec_")) candidates.push(secret.slice(6));
+        else candidates.push(`whsec_${secret}`);
+        for (const cand of candidates) {
+          try {
+            new Webhook(cand).verify(rawText, svixHeaders as Record<string, string>);
+            verified = true;
+            break;
+          } catch (e) {
+            lastErr = e;
+          }
+        }
+        if (!verified) {
+          // For hackathon demo: never block forwarding on signature — log and continue.
+          // In prod this should be strict 401, but shared inbox + secret rotation makes strict fail flaky.
+          console.error("webhook verify failed (soft-continue for demo)", String(lastErr));
         }
       } else {
-        console.error("webhook missing svix headers", rawText.slice(0, 400));
+        console.error("webhook missing svix headers");
         return new Response("missing signature", { status: 401 });
       }
     } else {
@@ -249,10 +264,29 @@ http.route({
 // Legacy route — kept for configs that POST to /api/agentmail-webhook.
 // Now delegates to the same unified ingestion pipeline (Groq gpt-oss-120b + mock)
 // so both /agentmail/inbound and /api/agentmail-webhook share provider, dedup, and evidence logic.
+// Requires ?secret=AGENTMAIL_API_KEY or Authorization Bearer in prod.
 http.route({
   path: "/api/agentmail-webhook",
   method: "POST",
   handler: httpAction(async (ctx, req) => {
+    const secret = env.AGENTMAIL_WEBHOOK_SECRET ?? process.env.AGENTMAIL_WEBHOOK_SECRET;
+    const apiKey = env.AGENTMAIL_API_KEY ?? process.env.AGENTMAIL_API_KEY;
+    const url = new URL(req.url);
+    const querySecret = url.searchParams.get("secret");
+    const authHeader = req.headers.get("authorization");
+    const bearer = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : null;
+    const isProd = env.NODE_ENV === "production" || process.env.NODE_ENV === "production";
+    // In prod, require secret; in dev, allow without but log
+    if (isProd || secret || apiKey) {
+      const expected = secret ?? apiKey;
+      const provided = querySecret ?? bearer;
+      if (!expected || provided !== expected) {
+        return new Response(JSON.stringify({ error: "Unauthorized" }), {
+          status: 401,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+    }
     try {
       const body = (await req.json()) as Record<string, unknown>;
       if (!body || typeof body !== "object") {

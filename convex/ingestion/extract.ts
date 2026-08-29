@@ -2,6 +2,7 @@
 
 import { v } from "convex/values";
 import { env, internalAction } from "../_generated/server";
+import { GROQ_EXTRACTION_MODEL } from "../lib/aiModels";
 import { ISO_SET, normalizeCurrency, SYMBOL_TO_ISO, ZERO_DECIMAL } from "../lib/currencies";
 
 const extractedReturns = v.object({
@@ -228,7 +229,7 @@ export const extractSubscription = internalAction({
       provider === "groq"
         ? "https://api.groq.com/openai/v1/chat/completions"
         : "https://api.openai.com/v1/chat/completions";
-    const model = provider === "groq" ? "openai/gpt-oss-120b" : "gpt-4o-mini";
+    const model = provider === "groq" ? GROQ_EXTRACTION_MODEL : "gpt-4o-mini";
 
     try {
       const res = await fetch(endpoint, {

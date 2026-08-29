@@ -1,4 +1,5 @@
 import { v } from "convex/values";
+import { internal } from "./_generated/api";
 import { internalMutation, internalQuery, mutation, query } from "./_generated/server";
 import { dedupKey } from "./lib/dedup";
 import { getDifficulty } from "./lib/difficulty";
