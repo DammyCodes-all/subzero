@@ -1,5 +1,7 @@
 import { v } from "convex/values";
+import { internal } from "./_generated/api";
 import {
+  action,
   internalMutation,
   internalQuery,
   mutation,
@@ -165,6 +167,7 @@ export const checkSvixId = internalQuery({
       .query("evidence")
       .withIndex("by_svixId", (q) => q.eq("svixId", args.svixId))
       .first();
+    return !!hit;
   },
 });
 

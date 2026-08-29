@@ -26,9 +26,11 @@ export const getMyConnections = query({
   handler: async (ctx) => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) return [];
-    return await ctx.db
+    const rows = await ctx.db
       .query("connections")
       .withIndex("by_user", (q) => q.eq("userId", identity.tokenIdentifier))
       .collect();
+    // Never leak gmailRefreshToken to client
+    return rows.map(({ gmailRefreshToken, ...rest }) => rest);
   },
 });
