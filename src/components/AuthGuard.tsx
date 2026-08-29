@@ -4,6 +4,7 @@ import { useConvexAuth } from "convex/react";
 import { useRouter } from "next/navigation";
 import type { ReactNode } from "react";
 import { useEffect } from "react";
+import { DashboardSkeleton } from "@/components/Skeleton";
 
 export function AuthGuard({ children }: { children: ReactNode }) {
   const { isAuthenticated, isLoading } = useConvexAuth();
@@ -13,8 +14,9 @@ export function AuthGuard({ children }: { children: ReactNode }) {
   }, [isAuthenticated, isLoading, router]);
   if (isLoading)
     return (
-      <div className="flex h-screen w-screen items-center justify-center">
-        <div className="size-3 animate-pulse rounded-full bg-primary/60" />
+      <div className="min-h-screen bg-background">
+        <div className="h-14 border-b border-border bg-background" />
+        <DashboardSkeleton />
       </div>
     );
   if (!isAuthenticated) return null;
