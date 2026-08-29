@@ -27,7 +27,7 @@ importers:
         specifier: ^2.1.1
         version: 2.1.1
       convex:
-        specifier: ^1.27.0
+        specifier: ^1.45.0
         version: 1.45.0(react@19.2.4)
       framer-motion:
         specifier: ^13.1.1
@@ -44,6 +44,9 @@ importers:
       next-themes:
         specifier: ^0.4.6
         version: 0.4.6(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
+      openai:
+        specifier: ^7.8.0
+        version: 7.8.0(undici@7.29.0)(ws@8.21.0)(zod@4.4.3)
       react:
         specifier: 19.2.4
         version: 19.2.4
@@ -53,6 +56,9 @@ importers:
       sileo:
         specifier: ^0.1.5
         version: 0.1.5(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
+      svix:
+        specifier: ^2.1.0
+        version: 2.1.0
       tailwind-merge:
         specifier: ^3.6.0
         version: 3.6.0
@@ -794,6 +800,9 @@ packages:
     resolution: {integrity: sha512-tlqY9xq5ukxTUZBmoOp+m61cqwQD5pHJtFY3Mn8CA8ps6yghLH/Hw8UPdqg4OLmFW3IFlcXnQNmo/dh8HzXYIQ==}
     engines: {node: '>=18'}
 
+  '@stablelib/base64@1.0.1':
+    resolution: {integrity: sha512-1bnPQqSxSuc3Ii6MhBysoWCg58j97aUjuCSZrGSmDxNqtytIi0k8utUenAwTZN4V5mXXYGsVUI9zeBqy+jBOSQ==}
+
   '@swc/helpers@0.5.15':
     resolution: {integrity: sha512-JQ5TuMi45Owi4/BIMAJBoSQoOJu12oOk/gADqlcUL9JEdHB8vyjUSsxqeNXnmXHjYKMi2WcYtezGEEhqUI/E2g==}
 
@@ -1308,6 +1317,9 @@ packages:
   fast-glob@3.3.3:
     resolution: {integrity: sha512-7MptL8U0cqcFdzIzwOTHoilX9x5BrNqye7Z/LuC7kCMRio1EMSyqRK3BEAUD7sXRq4iT4AzTVuZdhgQ2TCvYLg==}
     engines: {node: '>=8.6.0'}
+
+  fast-sha256@1.3.0:
+    resolution: {integrity: sha512-n11RGP/lrWEFI/bWdygLxhI+pVeo1ZYIVwvvPkW7azl/rOy+F3HYRZ2K5zeE9mmkhQppyv9sQFx0JM9UabnpPQ==}
 
   fast-uri@3.1.6:
     resolution: {integrity: sha512-7Ical1vFEMr0onbVzEDIreM22I4khW+fzyQPwvAFWBp1iwdshSZRsL4jjRvPG9JP1uiqMHRto+YU6R2/CzDz5Q==}
@@ -1891,6 +1903,30 @@ packages:
     resolution: {integrity: sha512-7x81NCL719oNbsq/3mh+hVrAWmFuEYUqrq/Iw3kUzH8ReypT9QQ0BLoJS7/G9k6N81XjW4qHWtjWwe/9eLy1EQ==}
     engines: {node: '>=12'}
 
+  openai@7.8.0:
+    resolution: {integrity: sha512-/2g9JzdnXNcjX1W/UlSNu+OdSFDAaAVt0n9Onom0kPenH54o59G2WrX/xjTnr26UHNSh6hxcAf58doGYRme2rw==}
+    engines: {node: '>=22.0.0'}
+    peerDependencies:
+      '@aws-sdk/credential-provider-node': '>=3.972.0 <4'
+      '@smithy/hash-node': '>=4.3.0 <5'
+      '@smithy/signature-v4': '>=5.4.0 <6'
+      undici: '>=5 <9'
+      ws: ^8.21.0
+      zod: ^3.25 || ^4.0
+    peerDependenciesMeta:
+      '@aws-sdk/credential-provider-node':
+        optional: true
+      '@smithy/hash-node':
+        optional: true
+      '@smithy/signature-v4':
+        optional: true
+      undici:
+        optional: true
+      ws:
+        optional: true
+      zod:
+        optional: true
+
   ora@8.2.0:
     resolution: {integrity: sha512-weP+BZ8MVNnlCm8c0Qdc1WSWq4Qn7I+9CJGm7Qali6g44e/PUzbjNqJX5NJ9ljlNMosfJvg1fKEGILklK9cwnw==}
     engines: {node: '>=18'}
@@ -2163,6 +2199,9 @@ packages:
     resolution: {integrity: sha512-UjgapumWlbMhkBgzT7Ykc5YXUT46F0iKu8SGXq0bcwP5dz/h0Plj6enJqjz1Zbq2l5WaqYnrVbwWOWMyF3F47g==}
     engines: {node: '>=0.10.0'}
 
+  standardwebhooks@1.0.0:
+    resolution: {integrity: sha512-BbHGOQK9olHPMvQNHWul6MYlrRTAOKn03rOe4A8O3CLWhNf4YHBqq2HJKKC+sfqpxiBY52pNeesD6jIiLDz8jg==}
+
   statuses@2.0.2:
     resolution: {integrity: sha512-DvEy55V3DB7uknRo+4iOGT5fP1slR8wQohVdknigZPMpMstaKJQWhwiYBACJE3Ul2pTnATihhBYnRhZQHGBiRw==}
     engines: {node: '>= 0.8'}
@@ -2211,6 +2250,10 @@ packages:
         optional: true
       babel-plugin-macros:
         optional: true
+
+  svix@2.1.0:
+    resolution: {integrity: sha512-ZhZ33DLseN3yBRZxKR6GPIut52kVv5xiCCWiO2AzabhgVZwyitcmw+rRsDsGwDJIw9vCUfAiHt9iZTmlxRDk8Q==}
+    engines: {node: '>=22'}
 
   systeminformation@5.33.5:
     resolution: {integrity: sha512-0v8l1CwFOAjfkv6ynpMrv3YGjH0M7PWCpZwusr8J1TEoQFPK7WXO6gbeAiandaWoh7vbMdnFtDqVotJVnLJtIg==}
@@ -2950,6 +2993,8 @@ snapshots:
 
   '@sindresorhus/merge-streams@4.0.0': {}
 
+  '@stablelib/base64@1.0.1': {}
+
   '@swc/helpers@0.5.15':
     dependencies:
       tslib: 2.8.1
@@ -3425,6 +3470,8 @@ snapshots:
       merge2: 1.4.1
       micromatch: 4.0.8
 
+  fast-sha256@1.3.0: {}
+
   fast-uri@3.1.6: {}
 
   fastq@1.20.2:
@@ -3882,6 +3929,12 @@ snapshots:
       is-docker: 2.2.1
       is-wsl: 2.2.0
 
+  openai@7.8.0(undici@7.29.0)(ws@8.21.0)(zod@4.4.3):
+    optionalDependencies:
+      undici: 7.29.0
+      ws: 8.21.0
+      zod: 4.4.3
+
   ora@8.2.0:
     dependencies:
       chalk: 5.6.2
@@ -4218,6 +4271,11 @@ snapshots:
 
   source-map@0.6.1: {}
 
+  standardwebhooks@1.0.0:
+    dependencies:
+      '@stablelib/base64': 1.0.1
+      fast-sha256: 1.3.0
+
   statuses@2.0.2: {}
 
   stdin-discarder@0.2.2: {}
@@ -4254,6 +4312,10 @@ snapshots:
       react: 19.2.4
     optionalDependencies:
       '@babel/core': 7.29.7
+
+  svix@2.1.0:
+    dependencies:
+      standardwebhooks: 1.0.0
 
   systeminformation@5.33.5: {}
 
