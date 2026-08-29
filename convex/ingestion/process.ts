@@ -91,8 +91,11 @@ export const processForwardedEmail = internalAction({
 
     // 4. Normalize
     const normalized = normalizeEmail({ text, html, subject: args.subject });
+    console.log("processForwardedEmail args", JSON.stringify({ inboxId, to, from, subject: args.subject, textLen: text.length, htmlLen: html.length, svixId: args.svixId, messageId: args.messageId }));
+    console.log("normalized preview", normalized.text.slice(0, 400), "subject", normalized.subject.slice(0, 100));
     const bodyForKeyword = `${normalized.text} ${normalized.subject}`.trim();
     if (!KEYWORDS.test(bodyForKeyword)) {
+      console.log("process skipped no keywords", bodyForKeyword.slice(0, 200));
       // Still allow confirmation emails that might not have keywords? Already covered by regex above (cancelled)
       // If no keyword match, treat as unparsed — no LLM call to save cost
       return { subscriptionId: null, evidenceId: null, status: "skipped" };
@@ -120,11 +123,13 @@ export const processForwardedEmail = internalAction({
     const excerpt =
       extracted.quote || normalized.text.slice(0, 500) || args.subject;
 
+    console.log("extracted result", JSON.stringify(extracted));
     // 6. Handle missing merchant/price for normal receipts
     if (
       !extracted.isConfirmation &&
       (!extracted.merchant || extracted.price === undefined)
     ) {
+      console.log("unparsed missing merchant/price", JSON.stringify({ merchant: extracted.merchant, price: extracted.price }));
       // Don't create subscription, but we still want traceability — persistUnparsed is no-op for now, just return unparsed
       return { subscriptionId: null, evidenceId: null, status: "unparsed" };
     }
@@ -146,6 +151,7 @@ export const processForwardedEmail = internalAction({
       isDuplicate: boolean;
     };
 
+    console.log("persist result", JSON.stringify(result));
     if (result.isDuplicate) {
       return {
         subscriptionId: null,

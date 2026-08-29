@@ -51,19 +51,40 @@ function mockExtract(
       combined,
     );
 
-  // Prefer $ price with decimals (e.g. $54.99), fallback to decimal pattern.
+  // Prefer $/₦/NGN price with decimals (e.g. $54.99, ₦7,700.00), fallback to decimal pattern.
   // No loose fallback — avoid capturing year 2026 from dates as price.
   let price: number | undefined;
   let currency = "USD";
-  const dollarMatch = combined.match(/\$\s*(\d+(?:\.\d{1,2})?)/);
-  const genericMatch = combined.match(/(\d+\.\d{2})\s*(usd|eur|gbp)?/i);
-  const rawMatch = dollarMatch ?? genericMatch;
-  if (rawMatch) {
-    const n = Number.parseFloat(rawMatch[1]);
-    if (!Number.isNaN(n) && n > 0 && n < 10000) price = n;
-    const cur = (rawMatch[2] ?? "").toLowerCase();
+  // Support $, ₦, NGN, with commas (7,700.00)
+  const nairaMatch = combined.match(/(?:₦|ngn)\s*([\d,]+(?:\.\d{1,2})?)/i);
+  const dollarMatch = combined.match(/\$\s*([\d,]+(?:\.\d{1,2})?)/);
+  const genericMatch = combined.match(/([\d,]+\.\d{2})\s*(usd|eur|gbp|ngn)?/i);
+  const rawMatch = nairaMatch ?? dollarMatch ?? genericMatch;
+  let rawPriceStr: string | undefined;
+  if (nairaMatch) {
+    rawPriceStr = nairaMatch[1];
+    currency = "NGN";
+  } else if (dollarMatch) {
+    rawPriceStr = dollarMatch[1];
+  } else if (genericMatch) {
+    rawPriceStr = genericMatch[1];
+    const cur = (genericMatch[2] ?? "").toLowerCase();
     if (cur === "eur") currency = "EUR";
     else if (cur === "gbp") currency = "GBP";
+    else if (cur === "ngn") currency = "NGN";
+  }
+  if (rawPriceStr) {
+    const cleaned = rawPriceStr.replace(/,/g, "");
+    const n = Number.parseFloat(cleaned);
+    if (!Number.isNaN(n) && n > 0 && n < 1000000) price = n;
+  }
+  // Detect NGN from ₦ symbol even if genericMatch was used
+  if (combined.includes("₦") || combined.includes("ngn")) {
+    if (!price || currency === "USD") {
+      // keep NGN if price came from ₦ context
+      const hasNaira = nairaMatch !== null || combined.includes("₦");
+      if (hasNaira) currency = "NGN";
+    }
   }
 
   // Merchant from subject or common names
@@ -222,24 +243,45 @@ export const extractSubscription = internalAction({
       const content = json.choices?.[0]?.message?.content ?? "{}";
       const parsed = JSON.parse(content) as Record<string, unknown>;
 
-      const merchant =
+      let merchant =
         typeof parsed.merchant === "string" && parsed.merchant.trim()
           ? parsed.merchant.trim()
           : undefined;
-      const product =
+      let product =
         typeof parsed.product === "string" && parsed.product.trim()
           ? parsed.product.trim()
           : undefined;
-      const price =
+      let price =
         typeof parsed.price === "number" && !Number.isNaN(parsed.price)
           ? parsed.price
           : undefined;
-      const currency =
+      let currency =
         typeof parsed.currency === "string" && parsed.currency.trim()
           ? parsed.currency.trim().toUpperCase().slice(0, 3)
           : price
             ? "USD"
             : undefined;
+      // Fallback to mock if groq omitted price/merchant but text clearly has it (e.g. ₦ with comma, NGN)
+      // This prevents unparsed when groq hallucinates null for valid ₦7,700 receipt
+      // Also always correct currency if text contains ₦/NGN but groq says USD
+      const mockFallbackForCurrency = mockExtract(args.text, args.subject);
+      if (price === undefined || !merchant) {
+        if (price === undefined && mockFallbackForCurrency.price !== undefined) {
+          price = mockFallbackForCurrency.price;
+          if (mockFallbackForCurrency.currency) currency = mockFallbackForCurrency.currency;
+        }
+        if (!merchant && mockFallbackForCurrency.merchant) {
+          merchant = mockFallbackForCurrency.merchant;
+        }
+      }
+      // Always correct USD→NGN if ₦/NGN present (groq often defaults to USD for ₦)
+      if (currency === "USD" && mockFallbackForCurrency.currency === "NGN") {
+        currency = "NGN";
+      }
+      // Also if raw text directly contains ₦ and currency still USD, force NGN
+      if (currency === "USD" && (args.text.includes("₦") || args.text.toLowerCase().includes("ngn") || args.subject.toLowerCase().includes("ngn"))) {
+        currency = "NGN";
+      }
       const intervalRaw =
         typeof parsed.billingInterval === "string"
           ? parsed.billingInterval.toLowerCase()

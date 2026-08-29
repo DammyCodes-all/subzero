@@ -120,21 +120,34 @@ export const resolveUserByInbox = internalQuery({
     }
 
     // Primary for shared inbox: match envelope `from` to accountEmail.
+    // `from` often is "Display Name <email@...>" — extract email address.
     if (args.fallbackFrom) {
-      const fromNorm = args.fallbackFrom.trim().toLowerCase();
-      if (!fromNorm) return null;
-      const byEmail = await ctx.db
-        .query("connections")
-        .withIndex("by_accountEmail", (q) => q.eq("accountEmail", fromNorm))
-        .first();
-      if (byEmail && byEmail.provider === "agentmail") return byEmail.userId;
-      const all = await ctx.db.query("connections").take(100);
-      const hit = all.find(
-        (c) =>
-          c.accountEmail?.toLowerCase() === fromNorm &&
-          c.provider === "agentmail",
-      );
-      if (hit) return hit.userId;
+      const raw = args.fallbackFrom.trim();
+      if (!raw) return null;
+      const emailMatch = raw.match(/<([^>]+)>/);
+      const extracted = emailMatch ? emailMatch[1] : raw;
+      // Also handle "email (Name)" or bare email with commas
+      const emailOnly = extracted.split(",")[0].trim().split(" ")[0].trim();
+      const fromNorm = emailOnly.toLowerCase();
+      // Also try to find @ in raw if above failed (e.g. "Name <a@b> (via gmail)")
+      const atMatch = raw.match(/([A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,})/);
+      const fallbackNorm = atMatch ? atMatch[1].toLowerCase() : fromNorm;
+      if (!fromNorm && !fallbackNorm) return null;
+      for (const norm of [fromNorm, fallbackNorm]) {
+        if (!norm || !norm.includes("@")) continue;
+        const byEmail = await ctx.db
+          .query("connections")
+          .withIndex("by_accountEmail", (q) => q.eq("accountEmail", norm))
+          .first();
+        if (byEmail && byEmail.provider === "agentmail") return byEmail.userId;
+        const all = await ctx.db.query("connections").take(100);
+        const hit = all.find(
+          (c) =>
+            c.accountEmail?.toLowerCase() === norm &&
+            c.provider === "agentmail",
+        );
+        if (hit) return hit.userId;
+      }
     }
 
     // Last fallback: if we are on shared inbox and no `from` match, return null
