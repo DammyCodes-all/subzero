@@ -7,7 +7,7 @@ export const getUserIdForEmail = internalQuery({
     // 1. Try by agentmail inbox
     const connByInbox = await ctx.db
       .query("connections")
-      .withIndex("by_agentmail_inbox", (q) => q.eq("agentmailInbox", args.email))
+      .withIndex("by_agentmailInbox", (q) => q.eq("agentmailInbox", args.email))
       .first();
 
     if (connByInbox) return connByInbox.userId;
@@ -15,7 +15,7 @@ export const getUserIdForEmail = internalQuery({
     // 2. Try by account email
     const connByAccount = await ctx.db
       .query("connections")
-      .withIndex("by_account_email", (q) => q.eq("accountEmail", args.email))
+      .withIndex("by_accountEmail", (q) => q.eq("accountEmail", args.email))
       .first();
 
     if (connByAccount) return connByAccount.userId;

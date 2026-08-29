@@ -15,8 +15,8 @@ export default defineSchema({
     agentmailInbox: v.optional(v.string()),
   })
     .index("by_user", ["userId"])
-    .index("by_agentmail_inbox", ["agentmailInbox"])
-    .index("by_account_email", ["accountEmail"]),
+    .index("by_agentmailInbox", ["agentmailInbox"])
+    .index("by_accountEmail", ["accountEmail"]),
 
   subscriptions: defineTable({
     userId: v.string(),
@@ -80,7 +80,11 @@ export default defineSchema({
     url: v.optional(v.string()),
     confidence: v.number(),
     retrievedAt: v.number(),
-  }).index("by_subscription", ["subscriptionId"]),
+    svixId: v.optional(v.string()),
+    messageId: v.optional(v.string()),
+  })
+    .index("by_subscription", ["subscriptionId"])
+    .index("by_svixId", ["svixId"]),
 
   cancellationActions: defineTable({
     subscriptionId: v.id("subscriptions"),

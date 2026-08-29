@@ -1,14 +1,8 @@
 "use client";
 
-function SkeletonLine({
-  className,
-}: {
-  className?: string;
-}) {
+function SkeletonLine({ className }: { className?: string }) {
   return (
-    <div
-      className={`animate-pulse rounded bg-border/60 ${className ?? ""}`}
-    />
+    <div className={`animate-pulse rounded bg-border/60 ${className ?? ""}`} />
   );
 }
 

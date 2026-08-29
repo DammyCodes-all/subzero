@@ -1,7 +1,7 @@
 "use client";
 
-import Link from "next/link";
 import { useMutation, useQuery } from "convex/react";
+import Link from "next/link";
 import { ActionCard } from "@/components/ActionCard";
 import { AuthGuard } from "@/components/AuthGuard";
 import { CompactAttentionRow } from "@/components/CompactAttentionRow";
@@ -9,10 +9,11 @@ import {
   NoSubscriptionsState,
   ZeroAttentionState,
 } from "@/components/EmptyState";
+import { ForwardingCard } from "@/components/ForwardingCard";
 import { Header } from "@/components/Header";
+import { DashboardSkeleton } from "@/components/Skeleton";
 import { SubscriptionRow } from "@/components/SubscriptionRow";
 import { SummaryStrip } from "@/components/SummaryStrip";
-import { DashboardSkeleton } from "@/components/Skeleton";
 import { Button } from "@/components/ui/button";
 import { api } from "../../../convex/_generated/api";
 import type { Doc } from "../../../convex/_generated/dataModel";
@@ -68,6 +69,7 @@ function DashboardInner() {
           <div className="space-y-8">
             <SummaryStrip count={0} total={0} attentionCount={0} />
             <NoSubscriptionsState />
+            <ForwardingCard />
             {process.env.NODE_ENV !== "production" && (
               <div className="flex justify-center pt-4">
                 <Button
@@ -158,6 +160,8 @@ function DashboardInner() {
                 ))}
               </div>
             </section>
+
+            <ForwardingCard />
 
             {process.env.NODE_ENV !== "production" && (
               <div className="flex justify-center pt-6">
