@@ -1,64 +1,14 @@
 "use node";
 
 import { v } from "convex/values";
-import { internalAction, internalMutation, internalQuery } from "./_generated/server";
+import { internalAction } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { env } from "./_generated/server";
-
-export const getSubscription = internalQuery({
-  args: { id: v.id("subscriptions") },
-  handler: async (ctx, args) => {
-    return await ctx.db.get(args.id);
-  },
-});
-
-export const saveResearch = internalMutation({
-  args: {
-    subscriptionId: v.id("subscriptions"),
-    cancellationMethod: v.string(),
-    cancellationUrl: v.optional(v.string()),
-    instructions: v.array(v.string()),
-    difficulty: v.string(),
-    evidenceUrl: v.optional(v.string()),
-    evidenceExcerpt: v.string(),
-  },
-  handler: async (ctx, args) => {
-    const sub = await ctx.db.get(args.subscriptionId);
-    if (!sub) return;
-
-    // 1. Update subscription
-    await ctx.db.patch(args.subscriptionId, {
-      cancellationMethod: args.cancellationMethod as any,
-      cancellationUrl: args.cancellationUrl ?? undefined,
-      cancellationDifficulty: args.difficulty as any,
-      status: "action_ready", 
-    });
-
-    // 2. Insert into cancellationActions
-    await ctx.db.insert("cancellationActions", {
-      subscriptionId: args.subscriptionId,
-      type: args.cancellationMethod as any,
-      status: "ready",
-      instructions: args.instructions,
-    });
-
-    // 3. Insert into evidence
-    await ctx.db.insert("evidence", {
-      subscriptionId: args.subscriptionId,
-      source: "Firecrawl Search",
-      sourceType: "firecrawl",
-      url: args.evidenceUrl ?? undefined,
-      excerpt: args.evidenceExcerpt,
-      confidence: 0.85,
-      retrievedAt: Date.now(),
-    });
-  },
-});
 
 export const researchCancellationRoute = internalAction({
   args: { subscriptionId: v.id("subscriptions") },
   handler: async (ctx, args) => {
-    const sub = await ctx.runQuery(internal.research.getSubscription, { id: args.subscriptionId });
+    const sub = await ctx.runQuery(internal.subscriptions.getInternal, { id: args.subscriptionId });
     if (!sub) throw new Error("Subscription not found");
 
     const firecrawlKey = (env as unknown as { FIRECRAWL_API_KEY?: string }).FIRECRAWL_API_KEY ?? process.env.FIRECRAWL_API_KEY;
@@ -67,7 +17,7 @@ export const researchCancellationRoute = internalAction({
 
     // Fallback if missing keys
     if (!firecrawlKey || (!groqKey && !openaiKey)) {
-      await ctx.runMutation(internal.research.saveResearch, {
+      await ctx.runMutation(internal.subscriptions.saveResearchResult, {
         subscriptionId: args.subscriptionId,
         cancellationMethod: "open_web",
         cancellationUrl: `https://www.${sub.merchant.toLowerCase().replace(/\s/g, "")}.com/settings/billing`,
@@ -149,7 +99,7 @@ ${markdownContent.slice(0, 8000)}`;
     const content = data.choices?.[0]?.message?.content ?? "{}";
     const parsed = JSON.parse(content);
 
-    await ctx.runMutation(internal.research.saveResearch, {
+    await ctx.runMutation(internal.subscriptions.saveResearchResult, {
       subscriptionId: args.subscriptionId,
       cancellationMethod: parsed.cancellationMethod ?? "open_web",
       cancellationUrl: parsed.cancellationUrl ?? undefined,

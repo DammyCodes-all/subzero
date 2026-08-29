@@ -180,7 +180,16 @@ export function HowToCancel({
               </li>
             ))}
           </ol>
-          <Button variant="default" size="sm" className="mt-5 font-medium">
+          <Button 
+            variant="default" 
+            size="sm" 
+            className="mt-5 font-medium"
+            onClick={() => {
+               // Use standard browser DOM event to trigger modal open from parent,
+               // or better yet we can convert HowToCancel to use a local state.
+               document.dispatchEvent(new CustomEvent("open-email-modal"));
+            }}
+          >
             Review &amp; send
           </Button>
         </div>

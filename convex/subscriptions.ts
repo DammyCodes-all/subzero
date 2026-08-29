@@ -1,5 +1,5 @@
 import { v } from "convex/values";
-import { internalMutation, mutation, query } from "./_generated/server";
+import { internalMutation, internalQuery, mutation, query } from "./_generated/server";
 import { dedupKey } from "./lib/dedup";
 import { getDifficulty } from "./lib/difficulty";
 
@@ -212,6 +212,53 @@ export const upsertInternal = internalMutation({
       cancellationDifficulty: difficulty,
       billingProvider: args.billingProvider,
       dedupKey: key,
+    });
+  },
+});
+
+export const getInternal = internalQuery({
+  args: { id: v.id("subscriptions") },
+  handler: async (ctx, args) => {
+    return await ctx.db.get(args.id);
+  },
+});
+
+export const saveResearchResult = internalMutation({
+  args: {
+    subscriptionId: v.id("subscriptions"),
+    cancellationMethod: v.string(),
+    cancellationUrl: v.optional(v.string()),
+    instructions: v.array(v.string()),
+    difficulty: v.string(),
+    evidenceUrl: v.optional(v.string()),
+    evidenceExcerpt: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const sub = await ctx.db.get(args.subscriptionId);
+    if (!sub) return;
+
+    await ctx.db.patch(args.subscriptionId, {
+      cancellationMethod: args.cancellationMethod as any,
+      cancellationUrl: args.cancellationUrl ?? undefined,
+      cancellationDifficulty: args.difficulty as any,
+      status: "action_ready", 
+    });
+
+    await ctx.db.insert("cancellationActions", {
+      subscriptionId: args.subscriptionId,
+      type: args.cancellationMethod as any,
+      status: "ready",
+      instructions: args.instructions,
+    });
+
+    await ctx.db.insert("evidence", {
+      subscriptionId: args.subscriptionId,
+      source: "Firecrawl Search",
+      sourceType: "firecrawl",
+      url: args.evidenceUrl ?? undefined,
+      excerpt: args.evidenceExcerpt,
+      confidence: 0.85,
+      retrievedAt: Date.now(),
     });
   },
 });

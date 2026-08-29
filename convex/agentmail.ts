@@ -165,6 +165,63 @@ export const checkSvixId = internalQuery({
       .query("evidence")
       .withIndex("by_svixId", (q) => q.eq("svixId", args.svixId))
       .first();
-    return !!hit;
+  },
+});
+
+export const sendCancellationEmail = action({
+  args: {
+    subscriptionId: v.id("subscriptions"),
+    merchant: v.string(),
+    body: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Not authenticated");
+
+    const apiKey = process.env.AGENTMAIL_API_KEY;
+    if (apiKey) {
+      try {
+        const res = await fetch("https://api.agentmail.to/v1/messages/send", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${apiKey}`,
+          },
+          body: JSON.stringify({
+            to: `support@${args.merchant.toLowerCase().replace(/\s/g, "")}.com`,
+            subject: `Cancellation Request: ${args.merchant} Subscription`,
+            text: args.body,
+          }),
+        });
+        if (!res.ok) {
+          console.error("AgentMail send failed:", await res.text());
+        }
+      } catch (err) {
+        console.error("AgentMail send error:", err);
+      }
+    } else {
+      console.log(`[Mock AgentMail] Sent to ${args.merchant}:\n${args.body}`);
+    }
+
+    // Update status in the DB using an internal mutation
+    await ctx.runMutation(internal.agentmail.markCancellationSent, {
+      subscriptionId: args.subscriptionId,
+    });
+  },
+});
+
+export const markCancellationSent = internalMutation({
+  args: { subscriptionId: v.id("subscriptions") },
+  handler: async (ctx, args) => {
+    await ctx.db.patch(args.subscriptionId, {
+      status: "cancellation_pending",
+    });
+    const actionRec = await ctx.db
+      .query("cancellationActions")
+      .withIndex("by_subscription", (q) => q.eq("subscriptionId", args.subscriptionId))
+      .first();
+    if (actionRec) {
+      await ctx.db.patch(actionRec._id, { status: "pending" });
+    }
   },
 });

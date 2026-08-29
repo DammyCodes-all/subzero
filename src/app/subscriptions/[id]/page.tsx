@@ -10,10 +10,19 @@ import { HowToCancel } from "@/components/detail/HowToCancel";
 import { Header } from "@/components/Header";
 import { Button } from "@/components/ui/button";
 import { formatPrice, formatRenewalDate, isUrgent, needsAttention } from "@/lib/format";
+import { useEffect, useState } from "react";
+import { ReviewAndSendModal } from "@/components/detail/ReviewAndSendModal";
 import { api } from "../../../../convex/_generated/api";
 import type { Id } from "../../../../convex/_generated/dataModel";
 
 function DetailInner() {
+  const [isModalOpen, setIsModalOpen] = useState(false);
+
+  useEffect(() => {
+    const handleOpen = () => setIsModalOpen(true);
+    document.addEventListener("open-email-modal", handleOpen);
+    return () => document.removeEventListener("open-email-modal", handleOpen);
+  }, []);
   const params = useParams<{ id: string }>();
   const id = params.id as Id<"subscriptions">;
 
@@ -131,6 +140,11 @@ function DetailInner() {
               variant={cta.variant}
               disabled={cta.disabled}
               className="font-medium"
+              onClick={() => {
+                if (sub.cancellationMethod === "send_email") {
+                  document.dispatchEvent(new CustomEvent("open-email-modal"));
+                }
+              }}
             >
               {cta.label}
             </Button>
@@ -170,6 +184,14 @@ function DetailInner() {
           Back to dashboard →
         </Link>
       </div>
+
+      {isModalOpen && (
+        <ReviewAndSendModal
+          subscriptionId={sub._id}
+          merchant={sub.merchant}
+          onClose={() => setIsModalOpen(false)}
+        />
+      )}
     </div>
   );
 }
