@@ -42,45 +42,21 @@ export const getOrCreateInbox = mutation({
     if (existing?.agentmailInbox)
       return { inbox: existing.agentmailInbox.toLowerCase() };
 
-    // Synthesize a per-user inbox alias that routes to the real shared inbox
-    // via plus-addressing: subzero-agent+<hash>@agentmail.to. This ensures
-    // AgentMail actually delivers it (shared inbox exists) while `to` stays
-    // unique per user for routing.
-    const baseShort =
-      userId.replace(/[^a-zA-Z0-9]/g, "").slice(-8).toLowerCase() || "user";
-    let inbox = `subzero-agent+${baseShort}@agentmail.to`.toLowerCase();
-    let attempt = 0;
-    let collision = null;
-    while (attempt < 5) {
-      collision = await ctx.db
-        .query("connections")
-        .withIndex("by_agentmailInbox", (q) => q.eq("agentmailInbox", inbox))
-        .first();
-      if (!collision) break;
-      if (collision.userId === userId) {
-        return { inbox: collision.agentmailInbox!.toLowerCase() };
-      }
-      const suffix = Math.random().toString(36).slice(2, 6).toLowerCase();
-      inbox = `subzero-agent+${baseShort}-${suffix}@agentmail.to`.toLowerCase();
-      attempt++;
-    }
-    if (collision) {
-      const finalCheck = await ctx.db
-        .query("connections")
-        .withIndex("by_agentmailInbox", (q) => q.eq("agentmailInbox", inbox))
-        .first();
-      if (finalCheck) throw new Error("Inbox collision: retry getOrCreateInbox");
-    }
+    // Single shared inbox strategy (3-inbox free limit).
+    // All users forward to subzero-agent@agentmail.to; routing is via
+    // envelope `from` → accountEmail (see resolveUserByInbox fallback).
+    // We store the shared address per user so the card is consistent.
+    const sharedInbox = "subzero-agent@agentmail.to".toLowerCase();
 
     await ctx.db.insert("connections", {
       userId,
       provider: "agentmail",
       status: "connected",
-      agentmailInbox: inbox,
+      agentmailInbox: sharedInbox,
       accountEmail: identity.email?.toLowerCase(),
     });
 
-    return { inbox };
+    return { inbox: sharedInbox };
   },
 });
 
@@ -118,28 +94,32 @@ export const resolveUserByInbox = internalQuery({
   },
   returns: v.union(v.string(), v.null()),
   handler: async (ctx, args) => {
+    // Shared inbox mode: `subzero-agent@agentmail.to` is same for all users,
+    // so `by_agentmailInbox` would return an arbitrary first user. Prefer
+    // routing via `from` (forwarder's Gmail) → accountEmail.
+    const sharedInbox = "subzero-agent@agentmail.to";
     const inboxNorm = args.inboxId.trim().toLowerCase();
-    const byInbox = await ctx.db
-      .query("connections")
-      .withIndex("by_agentmailInbox", (q) => q.eq("agentmailInbox", inboxNorm))
-      .first();
-    if (byInbox) return byInbox.userId;
+    const isShared = inboxNorm === sharedInbox;
 
-    // Try fallback `to` address (personal alias) before `from`.
-    // In shared-inbox mode, inboxId is the shared inbox (same for all users)
-    // while `to` carries the personal alias — that's the routing identity.
-    if (args.fallbackTo) {
-      const toNorm = args.fallbackTo.trim().toLowerCase();
-      if (toNorm && toNorm !== inboxNorm) {
-        const byTo = await ctx.db
-          .query("connections")
-          .withIndex("by_agentmailInbox", (q) => q.eq("agentmailInbox", toNorm))
-          .first();
-        if (byTo) return byTo.userId;
+    if (!isShared) {
+      const byInbox = await ctx.db
+        .query("connections")
+        .withIndex("by_agentmailInbox", (q) => q.eq("agentmailInbox", inboxNorm))
+        .first();
+      if (byInbox) return byInbox.userId;
+      if (args.fallbackTo) {
+        const toNorm = args.fallbackTo.trim().toLowerCase();
+        if (toNorm && toNorm !== inboxNorm) {
+          const byTo = await ctx.db
+            .query("connections")
+            .withIndex("by_agentmailInbox", (q) => q.eq("agentmailInbox", toNorm))
+            .first();
+          if (byTo) return byTo.userId;
+        }
       }
     }
 
-    // Last resort: match `from` (sender) to user's accountEmail via index.
+    // Primary for shared inbox: match envelope `from` to accountEmail.
     if (args.fallbackFrom) {
       const fromNorm = args.fallbackFrom.trim().toLowerCase();
       if (!fromNorm) return null;
@@ -148,7 +128,6 @@ export const resolveUserByInbox = internalQuery({
         .withIndex("by_accountEmail", (q) => q.eq("accountEmail", fromNorm))
         .first();
       if (byEmail && byEmail.provider === "agentmail") return byEmail.userId;
-      // Fallback bounded scan for legacy rows where accountEmail may be mixed case
       const all = await ctx.db.query("connections").take(100);
       const hit = all.find(
         (c) =>
@@ -158,6 +137,8 @@ export const resolveUserByInbox = internalQuery({
       if (hit) return hit.userId;
     }
 
+    // Last fallback: if we are on shared inbox and no `from` match, return null
+    // (don't return arbitrary first user — would route to wrong person).
     return null;
   },
 });

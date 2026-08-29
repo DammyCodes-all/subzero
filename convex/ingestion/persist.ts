@@ -157,8 +157,9 @@ export const persistExtracted = internalMutation({
       return { subscriptionId: null, evidenceId: null, isNew: false, isDuplicate: false };
     }
 
-    // Normal receipt / trial branch — require merchant + price
-    const merchant = ex.merchant?.trim();
+    // Normal receipt / trial branch — require merchant (or product as fallback) + price
+    let merchant = ex.merchant?.trim();
+    if (!merchant && ex.product?.trim()) merchant = ex.product.trim();
     if (!merchant || ex.price === undefined || ex.price === null) {
       return { subscriptionId: null, evidenceId: null, isNew: false, isDuplicate: false };
     }
