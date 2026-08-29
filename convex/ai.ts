@@ -194,5 +194,12 @@ async function processExtraction(
     }
   }
 
+  // Trigger Firecrawl cancellation research if we don't have a direct cancellation link
+  if (!extracted.cancellationUrl) {
+    await ctx.scheduler.runAfter(0, internal.research.researchCancellationRoute, {
+      subscriptionId,
+    });
+  }
+
   return { success: true, subscriptionId, merchant: extracted.merchant };
 }

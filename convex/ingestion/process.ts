@@ -173,6 +173,12 @@ export const processForwardedEmail = internalAction({
       return { subscriptionId: null, evidenceId: null, status: "unparsed" };
     }
 
+    if (result.isNew) {
+      await ctx.scheduler.runAfter(0, internal.research.researchCancellationRoute, {
+        subscriptionId: result.subscriptionId,
+      });
+    }
+
     return {
       subscriptionId: result.subscriptionId,
       evidenceId: result.evidenceId,
