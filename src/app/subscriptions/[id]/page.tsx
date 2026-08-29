@@ -9,7 +9,7 @@ import { EvidenceBlock } from "@/components/detail/EvidenceBlock";
 import { HowToCancel } from "@/components/detail/HowToCancel";
 import { Header } from "@/components/Header";
 import { Button } from "@/components/ui/button";
-import { formatPrice, formatRenewalDate, isUrgent } from "@/lib/format";
+import { formatPrice, formatRenewalDate, isUrgent, needsAttention } from "@/lib/format";
 import { api } from "../../../../convex/_generated/api";
 import type { Id } from "../../../../convex/_generated/dataModel";
 
@@ -58,7 +58,8 @@ function DetailInner() {
     );
   }
 
-  const urgent = isUrgent(sub.nextRenewalAt);
+  const urgent = isUrgent(sub.nextRenewalAt) || isUrgent(sub.trialEndsAt);
+  const attention = needsAttention(sub.nextRenewalAt) || needsAttention(sub.trialEndsAt);
   const cta = getDetailCTA(sub);
 
   return (
@@ -109,9 +110,11 @@ function DetailInner() {
             )}
           </p>
           {/* Single signal: urgency as muted mono, not red fill (calm until urgent) */}
-          <p className="mt-3 font-mono text-xs font-medium tabular-nums tracking-wide text-muted-foreground">
-            {urgent ? "Action needed" : "Due soon"}
-          </p>
+          {attention && (
+            <p className="mt-3 font-mono text-xs font-medium tabular-nums tracking-wide text-muted-foreground">
+              {urgent ? "Action needed" : "Due soon"}
+            </p>
+          )}
         </div>
 
         {/* Primary action — sole solid chartreuse (restraint) */}
