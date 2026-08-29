@@ -2,6 +2,8 @@
 
 import { useMutation, useQuery } from "convex/react";
 import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useEffect } from "react";
 import { ActionCard } from "@/components/ActionCard";
 import { AuthGuard } from "@/components/AuthGuard";
 import { CompactAttentionRow } from "@/components/CompactAttentionRow";
@@ -59,10 +61,53 @@ function DashboardInner() {
       })
     : [];
 
+  // Friendly banner for Gmail OAuth errors (covers both empty and non-empty states)
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const gmailError = searchParams.get("gmail_error");
+  const gmailConnected = searchParams.get("gmail_connected");
+
+  useEffect(() => {
+    if (gmailError || gmailConnected) {
+      const t = setTimeout(() => {
+        const url = new URL(window.location.href);
+        url.searchParams.delete("gmail_error");
+        url.searchParams.delete("gmail_connected");
+        router.replace(url.pathname + (url.search ? `?${url.searchParams}` : "") + url.hash, { scroll: false });
+      }, 8000);
+      return () => clearTimeout(t);
+    }
+  }, [gmailError, gmailConnected, router]);
+
   return (
     <div className="min-h-screen bg-background">
       <Header />
       <main className="mx-auto max-w-[680px] px-6 py-10">
+        {gmailError && (
+          <div className="mb-6 rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3">
+            <p className="text-sm font-medium text-destructive">Couldn&apos;t connect Gmail</p>
+            <p className="mt-1 text-sm leading-relaxed text-muted-foreground">{gmailError}</p>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="mt-2 h-7 text-xs"
+              onClick={() => {
+                const url = new URL(window.location.href);
+                url.searchParams.delete("gmail_error");
+                url.searchParams.delete("gmail_connected");
+                router.replace(url.pathname + (url.search ? `?${url.searchParams}` : "") + url.hash, { scroll: false });
+              }}
+            >
+              Dismiss
+            </Button>
+          </div>
+        )}
+        {gmailConnected && !gmailError && (
+          <div className="mb-6 rounded-lg border border-green-500/20 bg-green-500/10 px-4 py-3">
+            <p className="text-sm font-medium text-green-700 dark:text-green-300">Gmail connected</p>
+            <p className="mt-1 text-sm text-muted-foreground">Scanning your inbox for receipts and trials…</p>
+          </div>
+        )}
         {isLoading ? (
           <DashboardSkeleton />
         ) : count === 0 ? (

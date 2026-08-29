@@ -1,87 +1,49 @@
 "use client";
 
-import { useMutation, useQuery } from "convex/react";
 import { Check, Copy } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useMutation, useQuery } from "convex/react";
 import { Button } from "@/components/ui/button";
 import { api } from "../../convex/_generated/api";
+
+const SHARED_INBOX = "subzero-agent@agentmail.to";
 
 export function ForwardingCard() {
   const inbox = useQuery(api.agentmail.getInbox);
   const getOrCreate = useMutation(api.agentmail.getOrCreateInbox);
   const [copied, setCopied] = useState(false);
-  const [creating, setCreating] = useState(false);
 
-  async function handleCopy(addr: string) {
+  // Shared inbox — no generation step. Just ensure the DB row exists so
+  // resolveUserByInbox can route via `from` → accountEmail.
+  useEffect(() => {
+    if (inbox === null) void getOrCreate({});
+  }, [inbox, getOrCreate]);
+
+  async function handleCopy() {
     try {
-      await navigator.clipboard.writeText(addr);
+      await navigator.clipboard.writeText(SHARED_INBOX);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {
-      // fallback: select
       setCopied(false);
     }
   }
 
-  async function handleCreate() {
-    setCreating(true);
-    try {
-      await getOrCreate({});
-    } finally {
-      setCreating(false);
-    }
-  }
-
-  if (inbox === undefined) {
-    return (
-      <div className="rounded-md border border-dashed border-border/60 bg-transparent p-5">
-        <div className="h-4 w-32 animate-pulse rounded bg-border/60" />
-        <div className="mt-3 h-8 w-full animate-pulse rounded bg-border/60" />
-      </div>
-    );
-  }
-
-  if (inbox === null) {
-    return (
-      <div className="rounded-md border border-dashed border-border/60 bg-transparent p-5">
-        <h3 className="text-sm font-medium text-foreground">
-          Forward any receipt
-        </h3>
-        <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">
-          Don&apos;t want Gmail connected? Forward to your SubZero address and
-          it appears here with evidence.
-        </p>
-        <Button
-          variant="outline"
-          size="sm"
-          className="mt-4 font-mono text-xs"
-          onClick={() => void handleCreate()}
-          disabled={creating}
-        >
-          {creating ? "Creating..." : "Generate your address"}
-        </Button>
-      </div>
-    );
-  }
-
   return (
     <div className="rounded-md border border-dashed border-border/60 bg-transparent p-5">
-      <h3 className="text-sm font-medium text-foreground">
-        Forward any receipt
-      </h3>
+      <h3 className="text-sm font-medium text-foreground">Forward any receipt</h3>
       <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">
-        Forward any subscription receipt or trial email to your personal
-        address. SubZero extracts it and adds evidence.
+        Forward any subscription receipt or trial email to your personal address. SubZero extracts it and adds evidence.
       </p>
       <div className="mt-4 flex items-center gap-2">
         <code className="flex-1 truncate rounded bg-secondary px-2.5 py-2 font-mono text-xs tabular-nums text-foreground">
-          {inbox}
+          {SHARED_INBOX}
         </code>
         <Button
           variant="outline"
           size="sm"
           className="h-8 gap-1.5 font-mono text-xs shrink-0"
-          onClick={() => void handleCopy(inbox)}
+          onClick={() => void handleCopy()}
         >
           {copied ? (
             <>

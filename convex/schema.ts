@@ -13,6 +13,8 @@ export default defineSchema({
     gmailScopeGranted: v.optional(v.boolean()),
     accountEmail: v.optional(v.string()),
     agentmailInbox: v.optional(v.string()),
+    lastGmailScanAt: v.optional(v.number()),
+    gmailHistoryId: v.optional(v.string()),
   })
     .index("by_user", ["userId"])
     .index("by_agentmailInbox", ["agentmailInbox"])
@@ -84,7 +86,8 @@ export default defineSchema({
     messageId: v.optional(v.string()),
   })
     .index("by_subscription", ["subscriptionId"])
-    .index("by_svixId", ["svixId"]),
+    .index("by_svixId", ["svixId"])
+    .index("by_messageId", ["messageId"]),
 
   cancellationActions: defineTable({
     subscriptionId: v.id("subscriptions"),
