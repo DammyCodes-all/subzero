@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { ScanEmailDialog } from "./ScanEmailDialog";
 import { UserMenu } from "./UserMenu";
 
 export function Header() {
@@ -13,8 +14,12 @@ export function Header() {
         >
           SubZero
         </Link>
-        <UserMenu />
+        <div className="flex items-center gap-3">
+          <ScanEmailDialog />
+          <UserMenu />
+        </div>
       </div>
     </header>
   );
 }
+
