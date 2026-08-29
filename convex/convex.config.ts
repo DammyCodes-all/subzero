@@ -9,6 +9,9 @@ const app = defineApp({
     GROQ_API_KEY: v.optional(v.string()),
     FIRECRAWL_API_KEY: v.optional(v.string()),
     NODE_ENV: v.optional(v.string()),
+    GOOGLE_CLIENT_ID: v.optional(v.string()),
+    GOOGLE_CLIENT_SECRET: v.optional(v.string()),
+    FIXTURE_GMAIL: v.optional(v.string()),
   },
 });
 
