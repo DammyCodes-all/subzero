@@ -197,7 +197,7 @@ export const upsertInternal = internalMutation({
       return existing._id;
     }
 
-    return await ctx.db.insert("subscriptions", {
+    const subId = await ctx.db.insert("subscriptions", {
       userId,
       merchant: args.merchant,
       product: args.product,
@@ -213,6 +213,12 @@ export const upsertInternal = internalMutation({
       billingProvider: args.billingProvider,
       dedupKey: key,
     });
+
+    await ctx.scheduler.runAfter(0, internal.notifications.scheduleNudgesForSubscription, {
+      subscriptionId: subId,
+    });
+
+    return subId;
   },
 });
 
@@ -220,6 +226,20 @@ export const getInternal = internalQuery({
   args: { id: v.id("subscriptions") },
   handler: async (ctx, args) => {
     return await ctx.db.get(args.id);
+  },
+});
+
+export const getUpcomingForSweep = internalQuery({
+  args: {},
+  handler: async (ctx) => {
+    const now = Date.now();
+    const nextWeek = now + 7 * 24 * 60 * 60 * 1000;
+    return await ctx.db
+      .query("subscriptions")
+      .withIndex("by_renewal", (q) =>
+        q.gte("nextRenewalAt", now).lte("nextRenewalAt", nextWeek),
+      )
+      .collect();
   },
 });
 
