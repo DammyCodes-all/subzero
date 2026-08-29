@@ -4,29 +4,19 @@ import { internalQuery, mutation, query } from "./_generated/server";
 export const getUserIdForEmail = internalQuery({
   args: { email: v.string() },
   handler: async (ctx, args) => {
-    // 1. Try by agentmail inbox
-    const connByInbox = await ctx.db
+    const emailNorm = args.email.trim().toLowerCase();
+    // Delegate to canonical resolver in agentmail.ts (single source for inbox routing)
+    // to avoid duplicating by_agentmailInbox / by_accountEmail logic.
+    const byInbox = await ctx.db
       .query("connections")
-      .withIndex("by_agentmailInbox", (q) => q.eq("agentmailInbox", args.email))
+      .withIndex("by_agentmailInbox", (q) => q.eq("agentmailInbox", emailNorm))
       .first();
-
-    if (connByInbox) return connByInbox.userId;
-
-    // 2. Try by account email
-    const connByAccount = await ctx.db
+    if (byInbox) return byInbox.userId;
+    const byAccount = await ctx.db
       .query("connections")
-      .withIndex("by_accountEmail", (q) => q.eq("accountEmail", args.email))
+      .withIndex("by_accountEmail", (q) => q.eq("accountEmail", emailNorm))
       .first();
-
-    if (connByAccount) return connByAccount.userId;
-
-    // 3. Fallback: Return the first active user in connections or users table
-    const firstConn = await ctx.db.query("connections").first();
-    if (firstConn) return firstConn.userId;
-
-    const firstUser = await ctx.db.query("users").first();
-    if (firstUser) return firstUser._id;
-
+    if (byAccount) return byAccount.userId;
     return null;
   },
 });

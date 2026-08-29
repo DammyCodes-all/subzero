@@ -135,10 +135,16 @@ export const extractSubscription = internalAction({
   },
   returns: extractedReturns,
   handler: async (_ctx, args) => {
-    const apiKey =
+    const groqKey =
+      (env as unknown as { GROQ_API_KEY?: string }).GROQ_API_KEY ??
+      process.env.GROQ_API_KEY;
+    const openaiKey =
       (env as unknown as { OPENAI_API_KEY?: string }).OPENAI_API_KEY ??
       process.env.OPENAI_API_KEY;
-    if (!apiKey) {
+    // Prefer Groq (free tier) if set, else OpenAI, else mock
+    const provider = groqKey ? "groq" : openaiKey ? "openai" : null;
+    const apiKey = groqKey ?? openaiKey;
+    if (!apiKey || !provider) {
       const m = mockExtract(args.text, args.subject);
       return {
         merchant: m.merchant,
@@ -163,18 +169,25 @@ export const extractSubscription = internalAction({
       "You extract subscription info from forwarded emails. Return JSON with keys: merchant (string or null), product (string or null), price (number or null), currency (USD/EUR/GBP or null), billingInterval (monthly|yearly|weekly|unknown), nextRenewalAt (ISO date string or null), trialEndsAt (ISO date string or null), billingProvider (string or null, e.g. Google Play, Apple, Amazon), isConfirmation (boolean: true if this email confirms a cancellation), confidence (0-1), quote (exact substring from email supporting price or renewal date, max 300 chars). Never invent a price or date. If unsure, null.";
 
     const userContent = `Subject: ${args.subject}\n\nBody:\n${args.text.slice(0, 15000)}`;
+    const endpoint =
+      provider === "groq"
+        ? "https://api.groq.com/openai/v1/chat/completions"
+        : "https://api.openai.com/v1/chat/completions";
+    const model = provider === "groq" ? "openai/gpt-oss-120b" : "gpt-4o-mini";
 
     try {
-      const res = await fetch("https://api.openai.com/v1/chat/completions", {
+      const res = await fetch(endpoint, {
         method: "POST",
         headers: {
           Authorization: `Bearer ${apiKey}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: "gpt-4o-mini",
+          model,
           temperature: 0,
-          response_format: { type: "json_object" },
+          ...(provider === "openai"
+            ? { response_format: { type: "json_object" } }
+            : { response_format: { type: "json_object" } }),
           messages: [
             { role: "system", content: system },
             { role: "user", content: userContent },

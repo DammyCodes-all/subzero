@@ -6,6 +6,7 @@ const app = defineApp({
     AGENTMAIL_API_KEY: v.optional(v.string()),
     AGENTMAIL_WEBHOOK_SECRET: v.optional(v.string()),
     OPENAI_API_KEY: v.optional(v.string()),
+    GROQ_API_KEY: v.optional(v.string()),
     FIRECRAWL_API_KEY: v.optional(v.string()),
     NODE_ENV: v.optional(v.string()),
   },

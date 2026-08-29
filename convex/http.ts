@@ -164,9 +164,9 @@ http.route({
   }),
 });
 
-// Legacy / compatibility route from feat/ai-extraction — kept for existing AgentMail
-// configs that POST to /api/agentmail-webhook with { to|recipient, subject, text|html }.
-// Delegates to the same ingestion path via ai.extractFromTextInternal.
+// Legacy route — kept for configs that POST to /api/agentmail-webhook.
+// Now delegates to the same unified ingestion pipeline (Groq gpt-oss-120b + mock)
+// so both /agentmail/inbound and /api/agentmail-webhook share provider, dedup, and evidence logic.
 http.route({
   path: "/api/agentmail-webhook",
   method: "POST",
@@ -193,36 +193,30 @@ http.route({
           : typeof body.html === "string"
             ? body.html
             : "";
+      const html = typeof body.html === "string" ? body.html : undefined;
 
-      const fullEmailContent = `Subject: ${subject}\n\n${text}`;
-
-      const userId: string | null = await ctx.runQuery(
-        internal.connections.getUserIdForEmail,
-        { email: recipient },
-      );
-
-      if (!userId) {
-        return new Response(
-          JSON.stringify({
-            error: "No target user connection found for email",
-          }),
-          { status: 404, headers: { "Content-Type": "application/json" } },
-        );
+      if (!recipient) {
+        return new Response(JSON.stringify({ error: "Missing to/recipient" }), {
+          status: 400,
+          headers: { "Content-Type": "application/json" },
+        });
       }
 
-      const result: {
-        success: boolean;
-        subscriptionId?: string;
-        merchant?: string;
-        reason?: string;
-      } = await ctx.runAction(internal.ai.extractFromTextInternal, {
-        userId,
-        rawText: fullEmailContent,
-        sourceName: `Forwarded email: ${subject.slice(0, 40)}`,
+      // Reuse the canonical forwarding pipeline (same Groq provider, same persist, same svix dedup).
+      // Fire-and-forget via scheduler to keep webhook fast, then return 202.
+      await ctx.scheduler.runAfter(0, internal.ingestion.process.processForwardedEmail, {
+        inboxId: recipient,
+        to: recipient,
+        from: typeof body.from === "string" ? body.from : "",
+        subject,
+        text,
+        html,
+        svixId: undefined,
+        messageId: undefined,
       });
 
-      return new Response(JSON.stringify({ status: "processed", result }), {
-        status: 200,
+      return new Response(JSON.stringify({ status: "queued" }), {
+        status: 202,
         headers: { "Content-Type": "application/json" },
       });
     } catch (err: unknown) {

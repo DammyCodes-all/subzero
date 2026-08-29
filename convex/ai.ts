@@ -2,6 +2,7 @@ import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { ActionCtx, action, internalAction } from "./_generated/server";
+import { env } from "./_generated/server";
 
 const SYSTEM_PROMPT = `You are SubZero's subscription extraction AI engine.
 Your job is to analyze incoming text (email receipt, subscription notification, or trial confirmation) and extract structured subscription information.
@@ -34,20 +35,47 @@ Rules:
 - Provide a confidence score between 0.0 and 1.0.
 - Standardize price as a positive float number. Default currency to "USD" if unspecified.`;
 
-async function callOpenAI(text: string) {
-  const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey) {
-    throw new Error("OPENAI_API_KEY environment variable is not configured");
+async function callAI(text: string) {
+  const groqKey = (env as unknown as { GROQ_API_KEY?: string }).GROQ_API_KEY ?? process.env.GROQ_API_KEY;
+  const openaiKey = (env as unknown as { OPENAI_API_KEY?: string }).OPENAI_API_KEY ?? process.env.OPENAI_API_KEY;
+  const provider = groqKey ? "groq" : openaiKey ? "openai" : null;
+  const apiKey = groqKey ?? openaiKey;
+  if (!apiKey || !provider) {
+    // Mock fallback — same shape as LLM, keeps demo working without keys
+    const lower = text.toLowerCase();
+    const isSub = /receipt|trial|renewal|subscription|invoice|charged|billed/i.test(lower);
+    const priceMatch = lower.match(/\$\s*(\d+(?:\.\d{1,2})?)/) ?? lower.match(/(\d+\.\d{2})/);
+    const price = priceMatch ? Number.parseFloat(priceMatch[1]) : 0;
+    const merchants = ["adobe","canva","spotify","notion","netflix","chatgpt","figma","linear"];
+    let merchant = "Unknown";
+    for (const m of merchants) if (lower.includes(m)) { merchant = m.charAt(0).toUpperCase()+m.slice(1); if (m==="chatgpt") merchant="ChatGPT"; break; }
+    return {
+      isSubscription: isSub && !!price,
+      merchant,
+      product: null as string | null,
+      price: price || 0,
+      currency: "USD",
+      billingInterval: "monthly" as const,
+      nextRenewalAtISO: null as string | null,
+      trialEndsAtISO: null as string | null,
+      billingProvider: null as string | null,
+      cancellationUrl: null as string | null,
+      cancellationMethod: "unknown" as const,
+      evidenceList: [{ source: "Mock", excerpt: text.slice(0,300), confidence: 0.6 }],
+    };
   }
 
-  const response = await fetch("https://api.openai.com/v1/chat/completions", {
+  const endpoint = provider === "groq" ? "https://api.groq.com/openai/v1/chat/completions" : "https://api.openai.com/v1/chat/completions";
+  const model = provider === "groq" ? "openai/gpt-oss-120b" : "gpt-4o-mini";
+
+  const response = await fetch(endpoint, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${apiKey}`,
     },
     body: JSON.stringify({
-      model: "gpt-4o-mini",
+      model,
       response_format: { type: "json_object" },
       messages: [
         { role: "system", content: SYSTEM_PROMPT },
@@ -59,7 +87,7 @@ async function callOpenAI(text: string) {
 
   if (!response.ok) {
     const errText = await response.text();
-    throw new Error(`OpenAI API error (${response.status}): ${errText}`);
+    throw new Error(`${provider} API error (${response.status}): ${errText}`);
   }
 
   const data = (await response.json()) as {
@@ -125,7 +153,7 @@ async function processExtraction(
   rawText: string,
   sourceName: string
 ): Promise<{ success: boolean; subscriptionId?: Id<"subscriptions">; merchant?: string; reason?: string }> {
-  const extracted = await callOpenAI(rawText);
+  const extracted = await callAI(rawText);
   if (!extracted.isSubscription || !extracted.merchant) {
     return { success: false, reason: "No subscription detected in text" };
   }
