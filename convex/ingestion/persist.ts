@@ -181,6 +181,11 @@ export const persistExtracted = internalMutation({
     if (Number.isNaN(price) || price <= 0 || price > 100000) {
       return { subscriptionId: null, evidenceId: null, isNew: false, isDuplicate: false };
     }
+    // Guard: one-time payments (exam fees, purchases) look like merchant+price but have no renewal/trial.
+    // Only create subscription if it has a billing interval or a future date.
+    if (ex.billingInterval === "unknown" && !ex.nextRenewalAt && !ex.trialEndsAt && !ex.isConfirmation) {
+      return { subscriptionId: null, evidenceId: null, isNew: false, isDuplicate: false };
+    }
 
     const key = dedupKey({
       merchant,
