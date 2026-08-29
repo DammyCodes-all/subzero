@@ -64,7 +64,24 @@ export const scanGmail = action({
     if (conn?.lastGmailScanAt && Date.now() - conn.lastGmailScanAt < COOLDOWN_MS) {
       return { scanned: 0, created: 0, merged: 0, skipped: 0, unparsed: 0, duplicate: 0, cancelled: 0, reason: "cooldown" };
     }
+    const fixture = process.env.FIXTURE_GMAIL === "1";
     let scanned = 0, created = 0, merged = 0, skipped = 0, unparsed = 0, duplicate = 0, cancelled = 0;
+    if (fixture) {
+      const { fixtures } = await import("./ingestion/fixtures");
+      const list = Object.values(fixtures);
+      for (const f of list) {
+        scanned++;
+        const r = await processOneEmail(ctx, userId, f.subject, f.text, f.html ?? "", `fixture:${f.subject.slice(0,20)}`);
+        if (r.status === "created") created++;
+        else if (r.status === "merged") merged++;
+        else if (r.status === "skipped") skipped++;
+        else if (r.status === "unparsed") unparsed++;
+        else if (r.status === "duplicate") duplicate++;
+        else if (r.status === "cancelled") cancelled++;
+      }
+      if (conn?._id) await ctx.runMutation(internal.gmail.touchScan as any, { connId: conn._id });
+      return { scanned, created, merged, skipped, unparsed, duplicate, cancelled };
+    }
 
     if (!conn || !conn.gmailRefreshToken || !conn.gmailScopeGranted || conn.status !== "connected") {
       return { scanned: 0, created: 0, merged: 0, skipped: 0, unparsed: 0, duplicate: 0, cancelled: 0, reason: "no_consent" };
@@ -120,6 +137,19 @@ export const scanForUser = internalAction({
   returns: v.object({ scanned: v.number(), created: v.number(), reason: v.optional(v.string()) }),
   handler: async (ctx, args) => {
     const conn: any = await ctx.runQuery(internal.gmail.getConnectionInternal, { userId: args.userId });
+    const fixture = process.env.FIXTURE_GMAIL === "1";
+    if (fixture) {
+      if (conn?.lastGmailScanAt && Date.now() - conn.lastGmailScanAt < COOLDOWN_MS) return { scanned: 0, created: 0, reason: "cooldown" };
+      const { fixtures } = await import("./ingestion/fixtures");
+      let scanned = 0, created = 0;
+      for (const f of Object.values(fixtures)) {
+        scanned++;
+        const r = await processOneEmail(ctx, args.userId, f.subject, f.text, f.html ?? "", `fixture:${f.subject.slice(0,20)}`);
+        if (r.status === "created") created++;
+      }
+      if (conn?._id) await ctx.runMutation(internal.gmail.touchScan, { connId: conn._id });
+      return { scanned, created };
+    }
     if (!conn || !conn.gmailRefreshToken) return { scanned: 0, created: 0, reason: "no_consent" };
     if (conn.lastGmailScanAt && Date.now() - conn.lastGmailScanAt < COOLDOWN_MS) return { scanned: 0, created: 0, reason: "cooldown" };
     try {
