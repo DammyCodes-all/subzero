@@ -15,6 +15,7 @@ import { SummaryStrip } from "@/components/SummaryStrip";
 import { DashboardSkeleton } from "@/components/Skeleton";
 import { Button } from "@/components/ui/button";
 import { api } from "../../../convex/_generated/api";
+import type { Doc } from "../../../convex/_generated/dataModel";
 
 export default function Dashboard() {
   return (
@@ -37,9 +38,15 @@ function DashboardInner() {
   const now = Date.now();
   const thirtyDays = 30 * 24 * 60 * 60 * 1000;
   const total = all
-    ? all
-        .filter((s) => s.nextRenewalAt && s.nextRenewalAt <= now + thirtyDays)
-        .reduce((sum, s) => sum + s.price, 0)
+    ? (all as Doc<"subscriptions">[])
+        .filter(
+          (s: Doc<"subscriptions">) =>
+            s.nextRenewalAt && s.nextRenewalAt <= now + thirtyDays,
+        )
+        .reduce(
+          (sum: number, s: Doc<"subscriptions">) => sum + s.price,
+          0,
+        )
     : 0;
 
   // Sort all by nextRenewalAt ascending (nulls last)
@@ -112,7 +119,7 @@ function DashboardInner() {
                               Also due this week
                             </p>
                             <div className="space-y-2">
-                              {rest.map((sub) => (
+                              {rest.map((sub: Doc<"subscriptions">) => (
                                 <Link
                                   key={sub._id}
                                   href={`/subscriptions/${sub._id}`}

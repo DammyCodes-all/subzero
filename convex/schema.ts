@@ -13,7 +13,10 @@ export default defineSchema({
     gmailScopeGranted: v.optional(v.boolean()),
     accountEmail: v.optional(v.string()),
     agentmailInbox: v.optional(v.string()),
-  }).index("by_user", ["userId"]),
+  })
+    .index("by_user", ["userId"])
+    .index("by_agentmail_inbox", ["agentmailInbox"])
+    .index("by_account_email", ["accountEmail"]),
 
   subscriptions: defineTable({
     userId: v.string(),
