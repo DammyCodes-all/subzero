@@ -1,12 +1,11 @@
 import { v } from "convex/values";
-import { internalQuery, mutation, query } from "./_generated/server";
+import { internalQuery, query } from "./_generated/server";
+import { getAuthUserId } from "@convex-dev/auth/server";
 
 export const getUserIdForEmail = internalQuery({
   args: { email: v.string() },
   handler: async (ctx, args) => {
     const emailNorm = args.email.trim().toLowerCase();
-    // Delegate to canonical resolver in agentmail.ts (single source for inbox routing)
-    // to avoid duplicating by_agentmailInbox / by_accountEmail logic.
     const byInbox = await ctx.db
       .query("connections")
       .withIndex("by_agentmailInbox", (q) => q.eq("agentmailInbox", emailNorm))
@@ -23,14 +22,32 @@ export const getUserIdForEmail = internalQuery({
 
 export const getMyConnections = query({
   args: {},
+  returns: v.array(
+    v.object({
+      _id: v.id("connections"),
+      provider: v.string(),
+      status: v.string(),
+      accountEmail: v.optional(v.string()),
+      agentmailInbox: v.optional(v.string()),
+      lastGmailScanAt: v.optional(v.number()),
+      gmailScopeGranted: v.optional(v.boolean()),
+    })
+  ),
   handler: async (ctx) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) return [];
+    const userId = await getAuthUserId(ctx);
+    if (!userId) return [];
     const rows = await ctx.db
       .query("connections")
-      .withIndex("by_user", (q) => q.eq("userId", identity.tokenIdentifier))
+      .withIndex("by_user", (q) => q.eq("userId", userId))
       .collect();
-    // Never leak gmailRefreshToken to client
-    return rows.map(({ gmailRefreshToken, ...rest }) => rest);
+    return rows.map((c) => ({
+      _id: c._id,
+      provider: c.provider,
+      status: c.status,
+      accountEmail: c.accountEmail,
+      agentmailInbox: c.agentmailInbox,
+      lastGmailScanAt: c.lastGmailScanAt,
+      gmailScopeGranted: c.gmailScopeGranted,
+    }));
   },
 });

@@ -1,5 +1,3 @@
-"use client";
-
 import { AuthGuard } from "@/components/AuthGuard";
 import { DashboardLayoutShell } from "@/components/layout/DashboardLayoutShell";
 

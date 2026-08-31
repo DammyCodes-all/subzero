@@ -4,11 +4,11 @@ import { useState } from "react";
 import { HugeiconsIcon } from "@hugeicons/react";
 import {
   MailSearch01Icon,
-  Add01Icon,
   Menu01Icon,
 } from "@hugeicons/core-free-icons";
 import { Button } from "@/components/ui/button";
 import { ScanEmailDialog } from "@/components/ScanEmailDialog";
+import { ConnectGmailButton } from "@/components/ConnectGmailButton";
 
 interface TopbarProps {
   onMobileMenuToggle: () => void;
@@ -54,22 +54,10 @@ export function Topbar({ onMobileMenuToggle }: TopbarProps) {
             <span>Scan Email</span>
           </Button>
 
-          {/* Quick Add action button */}
-          <Button
-            size="sm"
-            onClick={() => {
-              // Placeholder for quick add subscription modal if implemented
-            }}
-            className="h-8 gap-1.5 rounded-lg bg-primary px-3 text-xs font-semibold text-primary-foreground hover:bg-primary/90"
-          >
-            <HugeiconsIcon
-              icon={Add01Icon as unknown as Parameters<typeof HugeiconsIcon>[0]["icon"]}
-              size={15}
-              strokeWidth={2}
-              color="currentColor"
-            />
-            <span className="hidden sm:inline">Add Subscription</span>
-          </Button>
+          {/* Connect Gmail action */}
+          <ConnectGmailButton className="h-8 gap-1.5 rounded-lg bg-primary px-3 text-xs font-semibold text-primary-foreground hover:bg-primary/90">
+            <span className="hidden sm:inline">Connect Gmail</span>
+          </ConnectGmailButton>
         </div>
       </header>
 
