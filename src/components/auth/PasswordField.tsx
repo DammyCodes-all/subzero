@@ -1,6 +1,7 @@
 "use client";
 
-import { Eye, EyeOff } from "lucide-react";
+import { HugeiconsIcon } from "@hugeicons/react";
+import { ViewIcon, ViewOffIcon } from "@hugeicons/core-free-icons";
 import * as React from "react";
 import { Input } from "@/components/ui/input";
 
@@ -39,10 +40,15 @@ export function PasswordField({
         type="button"
         onClick={() => setShow((s) => !s)}
         aria-label={show ? "Hide password" : "Show password"}
-        className="absolute right-1 top-1/2 -translate-y-1/2 flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:text-foreground"
+        className="absolute right-1 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground hover:text-foreground"
         tabIndex={-1}
       >
-        {show ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+        <HugeiconsIcon
+          icon={(show ? ViewOffIcon : ViewIcon) as unknown as Parameters<typeof HugeiconsIcon>[0]["icon"]}
+          size={16}
+          strokeWidth={1.8}
+          color="currentColor"
+        />
       </button>
     </div>
   );

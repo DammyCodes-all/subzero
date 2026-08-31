@@ -1,17 +1,25 @@
 "use client";
 
-import { useAuthActions, useAuthToken } from "@convex-dev/auth/react";
-import { Check } from "lucide-react";
+import { useAuthActions } from "@convex-dev/auth/react";
+import { HugeiconsIcon } from "@hugeicons/react";
+import { CheckmarkCircle01Icon } from "@hugeicons/core-free-icons";
 import { useConvexAuth } from "convex/react";
 import { useAction, useMutation, useQuery } from "convex/react";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { ConnectGmailButton } from "@/components/ConnectGmailButton";
 import { api } from "../../convex/_generated/api";
 
 export function ZeroAttentionState() {
   return (
     <div className="flex items-center justify-center gap-2 rounded-lg border border-primary/20 bg-primary/5 px-4 py-6 text-center">
-      <Check className="size-4 shrink-0 text-primary" />
+      <HugeiconsIcon
+        icon={CheckmarkCircle01Icon as unknown as Parameters<typeof HugeiconsIcon>[0]["icon"]}
+        size={16}
+        strokeWidth={1.8}
+        color="currentColor"
+        className="shrink-0 text-primary"
+      />
       <p className="text-sm font-medium text-primary">
         Nothing needs you right now
       </p>
@@ -98,22 +106,6 @@ function AuthenticatedEmptyState() {
     }
   };
 
-  const authToken = useAuthToken();
-
-  const handleConnect = async () => {
-    try {
-      // React provider keeps JWT in localStorage, not nextjs cookies.
-      // POST it to set a httpOnly cookie that the server routes can read.
-      if (authToken) {
-        await fetch("/api/gmail/oauth", {
-          method: "POST",
-          headers: { Authorization: `Bearer ${authToken}` },
-        });
-      }
-    } catch {}
-    window.location.href = "/api/gmail/oauth";
-  };
-
   return (
     <div className="rounded-lg border border-dashed bg-card p-10 text-center">
         <h3 className="font-heading text-base font-semibold">No subscriptions yet</h3>
@@ -125,9 +117,7 @@ function AuthenticatedEmptyState() {
         {status === undefined ? (
           <div className="h-24 animate-pulse rounded-lg border bg-card" />
         ) : !isConnected ? (
-          <Button onClick={handleConnect} size="sm" className="w-full">
-            Connect Gmail
-          </Button>
+          <ConnectGmailButton className="w-full" />
         ) : (
           <>
             <div className="flex items-center justify-between">

@@ -2,12 +2,33 @@
 
 import { useState } from "react";
 import { useAction } from "convex/react";
-import { AlertCircle, CheckCircle2, Loader2, Sparkles, X } from "lucide-react";
+import { HugeiconsIcon } from "@hugeicons/react";
+import {
+  AiMagicIcon,
+  CheckmarkCircle02Icon,
+  AlertCircleIcon,
+  Cancel01Icon,
+  Loading03Icon,
+} from "@hugeicons/core-free-icons";
 import { Button } from "@/components/ui/button";
 import { api } from "../../convex/_generated/api";
 
-export function ScanEmailDialog() {
-  const [isOpen, setIsOpen] = useState(false);
+interface ScanEmailDialogProps {
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+}
+
+export function ScanEmailDialog({ open, onOpenChange }: ScanEmailDialogProps) {
+  const [internalOpen, setInternalOpen] = useState(false);
+  const isOpen = open ?? internalOpen;
+  const setIsOpen = (val: boolean) => {
+    if (onOpenChange) {
+      onOpenChange(val);
+    } else {
+      setInternalOpen(val);
+    }
+  };
+
   const [rawText, setRawText] = useState("");
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<{
@@ -42,34 +63,51 @@ export function ScanEmailDialog() {
 
   return (
     <>
-      <Button
-        variant="outline"
-        size="sm"
-        onClick={() => setIsOpen(true)}
-        className="gap-1.5 font-medium border-border/80 hover:border-foreground/30"
-      >
-        <Sparkles className="size-3.5 text-primary" />
-        Scan email / paste receipt
-      </Button>
+      {open === undefined && (
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => setIsOpen(true)}
+          className="gap-1.5 border-border/80 font-medium hover:border-foreground/30"
+        >
+          <HugeiconsIcon
+            icon={AiMagicIcon}
+            size={14}
+            color="currentColor"
+            className="text-primary"
+          />
+          Scan email / paste receipt
+        </Button>
+      )}
 
       {isOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-in fade-in duration-150">
-          <div className="w-full max-w-lg rounded-xl border border-border bg-card p-6 shadow-xl space-y-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs animate-in fade-in duration-150">
+          <div className="w-full max-w-lg space-y-4 rounded-xl border border-border bg-card p-6 shadow-xl">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <Sparkles className="size-4 text-primary" />
+                <HugeiconsIcon
+                  icon={AiMagicIcon}
+                  size={18}
+                  color="currentColor"
+                  className="text-primary"
+                />
                 <h3 className="font-heading font-semibold text-base">
                   Scan receipt or subscription email
                 </h3>
               </div>
               <button
+                type="button"
                 onClick={() => {
                   setIsOpen(false);
                   setResult(null);
                 }}
-                className="text-muted-foreground hover:text-foreground p-1 rounded-md transition-colors"
+                className="rounded-md p-1 text-muted-foreground transition-colors hover:text-foreground"
               >
-                <X className="size-4" />
+                <HugeiconsIcon
+                  icon={Cancel01Icon}
+                  size={16}
+                  color="currentColor"
+                />
               </button>
             </div>
 
@@ -82,35 +120,45 @@ export function ScanEmailDialog() {
               onChange={(e) => setRawText(e.target.value)}
               placeholder="e.g. Your trial for Adobe Creative Cloud ends September 3, 2026 and your plan will renew at $54.99/month..."
               rows={6}
-              className="w-full rounded-md border border-input bg-background/50 p-3 text-xs font-mono placeholder:text-muted-foreground/60 focus:outline-none focus:ring-2 focus:ring-ring"
+              className="w-full rounded-md border border-input bg-background/50 p-3 font-mono text-xs placeholder:text-muted-foreground/60 focus:outline-none focus:ring-2 focus:ring-ring"
             />
 
             {result && (
               <div
-                className={`p-3 rounded-md text-xs flex items-start gap-2 ${
+                className={`flex items-start gap-2 rounded-md p-3 text-xs ${
                   result.success
-                    ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
-                    : "bg-destructive/10 text-destructive border border-destructive/20"
+                    ? "border border-emerald-500/20 bg-emerald-500/10 text-emerald-400"
+                    : "border border-destructive/20 bg-destructive/10 text-destructive"
                 }`}
               >
                 {result.success ? (
                   <>
-                    <CheckCircle2 className="size-4 shrink-0 mt-0.5" />
+                    <HugeiconsIcon
+                      icon={CheckmarkCircle02Icon}
+                      size={16}
+                      color="currentColor"
+                      className="mt-0.5 shrink-0"
+                    />
                     <div>
                       <p className="font-medium">
                         Extracted subscription for {result.merchant}!
                       </p>
-                      <p className="opacity-80 text-[11px]">
+                      <p className="text-[11px] opacity-80">
                         Saved to your dashboard with verifiable evidence.
                       </p>
                     </div>
                   </>
                 ) : (
                   <>
-                    <AlertCircle className="size-4 shrink-0 mt-0.5" />
+                    <HugeiconsIcon
+                      icon={AlertCircleIcon}
+                      size={16}
+                      color="currentColor"
+                      className="mt-0.5 shrink-0"
+                    />
                     <div>
                       <p className="font-medium">Extraction failed</p>
-                      <p className="opacity-80 text-[11px]">
+                      <p className="text-[11px] opacity-80">
                         {result.reason ?? "Could not detect a subscription in text."}
                       </p>
                     </div>
@@ -138,7 +186,12 @@ export function ScanEmailDialog() {
               >
                 {loading ? (
                   <>
-                    <Loader2 className="size-3.5 animate-spin" />
+                    <HugeiconsIcon
+                      icon={Loading03Icon}
+                      size={14}
+                      color="currentColor"
+                      className="animate-spin"
+                    />
                     Extracting...
                   </>
                 ) : (
@@ -152,3 +205,4 @@ export function ScanEmailDialog() {
     </>
   );
 }
+

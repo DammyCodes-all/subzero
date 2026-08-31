@@ -24,9 +24,9 @@ function SkeletonCard({
 
 export function DashboardSkeleton() {
   return (
-    <div className="mx-auto max-w-[680px] px-6 py-10">
+    <div className="space-y-6">
       {/* Summary strip skeleton */}
-      <div className="mb-8 flex items-center gap-2 border-b border-border/30 pb-5">
+      <div className="flex items-center gap-2 border-b border-border/30 pb-5">
         <SkeletonLine className="h-5 w-10" />
         <SkeletonLine className="h-4 w-16" />
         <SkeletonLine className="h-4 w-3" />
@@ -38,10 +38,10 @@ export function DashboardSkeleton() {
       </div>
 
       {/* Section heading */}
-      <SkeletonLine className="mb-6 h-7 w-56" />
+      <SkeletonLine className="h-7 w-56" />
 
       {/* Hero card skeleton */}
-      <SkeletonCard className="mb-6 p-6">
+      <SkeletonCard className="p-6">
         <div className="flex items-start justify-between gap-6">
           <div className="flex-1 space-y-3">
             <SkeletonLine className="h-5 w-40" />
@@ -53,24 +53,53 @@ export function DashboardSkeleton() {
       </SkeletonCard>
 
       {/* "Also due this week" heading */}
-      <SkeletonLine className="mb-3 h-4 w-36" />
+      <SkeletonLine className="h-4 w-36" />
 
       {/* Compact rows */}
-      <div className="mb-8 space-y-2">
+      <div className="space-y-2">
         <SkeletonCard className="h-12 w-full" />
         <SkeletonCard className="h-12 w-full" />
       </div>
 
       {/* Section heading */}
-      <SkeletonLine className="mb-4 h-5 w-44" />
+      <SkeletonLine className="h-5 w-44" />
 
       {/* Subscription rows */}
-      <div className="space-y-1">
+      <div className="space-y-2">
         <SkeletonCard className="h-14 w-full" />
         <SkeletonCard className="h-14 w-full" />
         <SkeletonCard className="h-14 w-full" />
         <SkeletonCard className="h-14 w-full" />
       </div>
+    </div>
+  );
+}
+
+export function ForwardingCardSkeleton() {
+  return (
+    <div className="animate-pulse rounded-md border border-dashed border-border/60 bg-transparent p-5">
+      <SkeletonLine className="h-4 w-32" />
+      <SkeletonLine className="mt-2.5 h-3.5 w-full" />
+      <div className="mt-4 flex items-center gap-2">
+        <SkeletonLine className="h-9 flex-1" />
+        <SkeletonLine className="h-8 w-16 shrink-0" />
+      </div>
+      <SkeletonLine className="mt-2 h-3 w-48" />
+    </div>
+  );
+}
+
+export function ConnectionsAgentMailSkeleton() {
+  return (
+    <div className="animate-pulse flex flex-col gap-3 rounded-lg border border-border/80 bg-background/50 p-4 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex items-center gap-3">
+        <div className="h-8 w-8 rounded-full bg-muted" />
+        <div>
+          <SkeletonLine className="h-4 w-48" />
+          <SkeletonLine className="mt-1.5 h-3 w-56" />
+        </div>
+      </div>
+      <SkeletonLine className="h-8 w-20" />
     </div>
   );
 }

@@ -2,7 +2,13 @@
 
 import { useState } from "react";
 import { useAction } from "convex/react";
-import { Loader2, Mail, Send, X } from "lucide-react";
+import { HugeiconsIcon } from "@hugeicons/react";
+import {
+  Mail01Icon,
+  SentIcon,
+  Cancel01Icon,
+  Loading03Icon,
+} from "@hugeicons/core-free-icons";
 import { Button } from "@/components/ui/button";
 import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
@@ -51,27 +57,44 @@ Thank you.`;
       <div className="w-full max-w-lg rounded-xl border border-border bg-card p-6 shadow-xl space-y-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <Mail className="size-4 text-primary" />
+            <HugeiconsIcon
+              icon={Mail01Icon as unknown as Parameters<typeof HugeiconsIcon>[0]["icon"]}
+              size={18}
+              strokeWidth={1.8}
+              color="currentColor"
+              className="text-primary"
+            />
             <h3 className="font-heading font-semibold text-base">
               Review cancellation email
             </h3>
           </div>
           <button
+            type="button"
             onClick={onClose}
-            className="text-muted-foreground hover:text-foreground p-1 rounded-md transition-colors"
+            className="rounded-md p-1 text-muted-foreground transition-colors hover:text-foreground"
           >
-            <X className="size-4" />
+            <HugeiconsIcon
+              icon={Cancel01Icon as unknown as Parameters<typeof HugeiconsIcon>[0]["icon"]}
+              size={16}
+              color="currentColor"
+            />
           </button>
         </div>
 
         {sent ? (
-          <div className="py-6 text-center space-y-3">
+          <div className="space-y-3 py-6 text-center">
             <div className="mx-auto flex size-12 items-center justify-center rounded-full bg-emerald-500/10">
-              <Send className="size-5 text-emerald-500" />
+              <HugeiconsIcon
+                icon={SentIcon as unknown as Parameters<typeof HugeiconsIcon>[0]["icon"]}
+                size={20}
+                strokeWidth={1.8}
+                color="currentColor"
+                className="text-emerald-500"
+              />
             </div>
             <p className="font-medium">Email sent to {merchant}</p>
-            <p className="text-sm text-muted-foreground max-w-[280px] mx-auto">
-              We'll watch your inbox for the confirmation and update the subscription automatically.
+            <p className="mx-auto max-w-[280px] text-sm text-muted-foreground">
+              We&apos;ll watch your inbox for the confirmation and update the subscription automatically.
             </p>
             <div className="pt-4">
               <Button onClick={onClose} size="sm">
@@ -82,7 +105,7 @@ Thank you.`;
         ) : (
           <>
             <p className="text-xs text-muted-foreground">
-              This will be sent via SubZero AgentMail. The merchant's reply will route to your dashboard automatically.
+              This will be sent via SubZero AgentMail. The merchant&apos;s reply will route to your dashboard automatically.
             </p>
 
             <div className="rounded-md border border-input bg-background/50 p-4 font-mono text-xs whitespace-pre-wrap">
@@ -105,12 +128,22 @@ Thank you.`;
               >
                 {loading ? (
                   <>
-                    <Loader2 className="size-3.5 animate-spin" />
+                    <HugeiconsIcon
+                      icon={Loading03Icon as unknown as Parameters<typeof HugeiconsIcon>[0]["icon"]}
+                      size={14}
+                      color="currentColor"
+                      className="animate-spin"
+                    />
                     Sending...
                   </>
                 ) : (
                   <>
-                    <Send className="size-3.5" />
+                    <HugeiconsIcon
+                      icon={SentIcon as unknown as Parameters<typeof HugeiconsIcon>[0]["icon"]}
+                      size={14}
+                      strokeWidth={1.8}
+                      color="currentColor"
+                    />
                     Send cancellation
                   </>
                 )}

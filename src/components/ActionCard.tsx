@@ -1,6 +1,7 @@
 "use client";
 
-import { ExternalLink } from "lucide-react";
+import { HugeiconsIcon } from "@hugeicons/react";
+import { ExternalLinkIcon } from "@hugeicons/core-free-icons";
 import { Button } from "@/components/ui/button";
 import { getCancellationCTA, openExternalUrl } from "@/lib/cancellation";
 import {
@@ -91,7 +92,13 @@ export function ActionCard({ sub, evidence }: { sub: Sub; evidence?: string }) {
               }}
             >
               {cta.label}
-              <ExternalLink className="size-3.5 opacity-70" />
+              <HugeiconsIcon
+                icon={ExternalLinkIcon as unknown as Parameters<typeof HugeiconsIcon>[0]["icon"]}
+                size={14}
+                strokeWidth={1.8}
+                color="currentColor"
+                className="opacity-70"
+              />
             </Button>
           ) : (
             <Button

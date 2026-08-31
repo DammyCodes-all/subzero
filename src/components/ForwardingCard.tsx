@@ -1,9 +1,11 @@
 "use client";
 
-import { Check, Copy } from "lucide-react";
+import { HugeiconsIcon } from "@hugeicons/react";
+import { CheckmarkCircle01Icon, Copy01Icon } from "@hugeicons/core-free-icons";
 import { useEffect, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { Button } from "@/components/ui/button";
+import { ForwardingCardSkeleton } from "@/components/Skeleton";
 import { api } from "../../convex/_generated/api";
 
 const FALLBACK_INBOX = "subzero-agent@agentmail.to";
@@ -18,7 +20,10 @@ export function ForwardingCard() {
     if (inbox === null) void getOrCreate({});
   }, [inbox, getOrCreate]);
 
-  // Use the inbox from the query (set from env.AGENTMAIL_INBOX), fallback to default.
+  if (inbox === undefined) {
+    return <ForwardingCardSkeleton />;
+  }
+
   const displayInbox = inbox ?? FALLBACK_INBOX;
 
   async function handleCopy() {
@@ -49,12 +54,23 @@ export function ForwardingCard() {
         >
           {copied ? (
             <>
-              <Check className="size-3.5 text-primary" />
+              <HugeiconsIcon
+                icon={CheckmarkCircle01Icon as unknown as Parameters<typeof HugeiconsIcon>[0]["icon"]}
+                size={14}
+                strokeWidth={1.8}
+                color="currentColor"
+                className="text-primary"
+              />
               Copied
             </>
           ) : (
             <>
-              <Copy className="size-3.5" />
+              <HugeiconsIcon
+                icon={Copy01Icon as unknown as Parameters<typeof HugeiconsIcon>[0]["icon"]}
+                size={14}
+                strokeWidth={1.8}
+                color="currentColor"
+              />
               Copy
             </>
           )}

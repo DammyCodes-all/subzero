@@ -1,6 +1,8 @@
 "use client";
 
-import { ExternalLink, Loader2 } from "lucide-react";
+import { HugeiconsIcon } from "@hugeicons/react";
+import { ExternalLinkIcon } from "@hugeicons/core-free-icons";
+import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { getProviderFallbackUrl, openExternalUrl } from "@/lib/cancellation";
 import { frictionLabel } from "@/lib/format";
@@ -93,7 +95,13 @@ export function HowToCancel({
               onClick={() => openExternalUrl(providerUrl, provider)}
             >
               Open {provider}
-              <ExternalLink className="size-3.5 opacity-70" />
+              <HugeiconsIcon
+                icon={ExternalLinkIcon as unknown as Parameters<typeof HugeiconsIcon>[0]["icon"]}
+                size={14}
+                strokeWidth={1.8}
+                color="currentColor"
+                className="opacity-70"
+              />
             </Button>
           ) : (
             <Button disabled variant="outline" size="sm" className="mt-5">
@@ -135,7 +143,13 @@ export function HowToCancel({
               onClick={() => openExternalUrl(url, provider)}
             >
               Open cancellation
-              <ExternalLink className="size-3.5 opacity-70" />
+              <HugeiconsIcon
+                icon={ExternalLinkIcon as unknown as Parameters<typeof HugeiconsIcon>[0]["icon"]}
+                size={14}
+                strokeWidth={1.8}
+                color="currentColor"
+                className="opacity-70"
+              />
             </Button>
           ) : (
             <Button disabled variant="outline" size="sm" className="mt-5">
@@ -215,7 +229,13 @@ export function HowToCancel({
               onClick={() => openExternalUrl(url, provider)}
             >
               Contact support
-              <ExternalLink className="size-3.5 opacity-70" />
+              <HugeiconsIcon
+                icon={ExternalLinkIcon as unknown as Parameters<typeof HugeiconsIcon>[0]["icon"]}
+                size={14}
+                strokeWidth={1.8}
+                color="currentColor"
+                className="opacity-70"
+              />
             </Button>
           )}
         </div>
@@ -248,7 +268,13 @@ export function HowToCancel({
               onClick={() => openExternalUrl(url, provider)}
             >
               View steps
-              <ExternalLink className="size-3.5 opacity-70" />
+              <HugeiconsIcon
+                icon={ExternalLinkIcon as unknown as Parameters<typeof HugeiconsIcon>[0]["icon"]}
+                size={14}
+                strokeWidth={1.8}
+                color="currentColor"
+                className="opacity-70"
+              />
             </Button>
           ) : (
             <Button variant="outline" size="sm" className="mt-5" disabled>
