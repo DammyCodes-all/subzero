@@ -30,9 +30,9 @@ export function SummaryHeader({
   // 1. Monthly Spend calculation (normalized to monthly)
   const monthlySpend = activeSubs.reduce((sum, s) => {
     let monthlyPrice = s.price;
-    if (s.billingInterval === "year" || s.billingInterval === "annual") {
+    if (s.billingInterval === "yearly") {
       monthlyPrice = s.price / 12;
-    } else if (s.billingInterval === "week") {
+    } else if (s.billingInterval === "weekly") {
       monthlyPrice = s.price * 4.33;
     }
     return sum + monthlyPrice;
@@ -54,7 +54,7 @@ export function SummaryHeader({
   // 5. Total Money Saved (Sum of cancelled subs monthly value * 12)
   const totalSaved = cancelledSubs.reduce((sum, s) => {
     let annualVal = s.price;
-    if (s.billingInterval === "month") {
+    if (s.billingInterval === "monthly") {
       annualVal = s.price * 12;
     }
     return sum + annualVal;

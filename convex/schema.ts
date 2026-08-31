@@ -76,7 +76,8 @@ export default defineSchema({
     .index("by_user_and_dedup", ["userId", "dedupKey"])
     .index("by_user_and_renewal", ["userId", "nextRenewalAt"])
     .index("by_merchant", ["merchant"])
-    .index("by_renewal", ["nextRenewalAt"]),
+    .index("by_renewal", ["nextRenewalAt"])
+    .index("by_researchStatus", ["researchStatus"]),
 
   evidence: defineTable({
     subscriptionId: v.id("subscriptions"),

@@ -14,8 +14,8 @@ function b64UrlDecode(s: string): string {
   }
 }
 
-export function buildGmailQuery(days = 60): string {
-  // Narrow: subscription receipts, exclude newsletters
+export function buildGmailQuery(days = 90): string {
+  // Narrow: subscription receipts, exclude newsletters — 90d per plan v2, keep -unsubscribe
   return `subject:(receipt OR invoice OR trial OR renewal OR subscription) newer_than:${days}d -unsubscribe`;
 }
 

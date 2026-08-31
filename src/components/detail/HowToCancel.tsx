@@ -4,7 +4,7 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import { ExternalLinkIcon } from "@hugeicons/core-free-icons";
 import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { getProviderFallbackUrl, openExternalUrl } from "@/lib/cancellation";
+import { openExternalUrl } from "@/lib/cancellation";
 import { frictionLabel } from "@/lib/format";
 
 type Sub = {
@@ -61,7 +61,7 @@ export function HowToCancel({
   // Research output is source of truth — use it when present
   const hasResearchedSteps = !!(action?.instructions && action.instructions.length > 0);
 
-  // open_provider — must cancel where billed
+  // open_provider — must cancel where billed (no hardcoded fallback URL; use verified url only)
   if (method === "open_provider" && provider) {
     const providerSteps = hasResearchedSteps
       ? action!.instructions!
@@ -71,7 +71,7 @@ export function HowToCancel({
           "Tap Cancel subscription → Confirm",
           "Save the confirmation email — SubZero marks it cancelled",
         ];
-    const providerUrl = url ?? getProviderFallbackUrl(provider);
+    const providerUrl = url ?? undefined;
     return (
       <div className="space-y-4">
         {difficultyBlock}
