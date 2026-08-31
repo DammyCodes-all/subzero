@@ -170,13 +170,16 @@ export function SignupForm({ onSuccess }: { onSuccess?: () => void }) {
             setPassword(v);
             setErrors((s) => ({ ...s, password: undefined, confirm: undefined, form: undefined }));
           }}
+          onBlur={() => {
+            setTouched((s) => ({ ...s, password: true }));
+            const msg = validateField("password", { name, email, password, confirm });
+            setErrors((s) => ({ ...s, password: msg }));
+          }}
           id="signup-password"
           autoComplete="new-password"
         />
-        {touched.password && errors.password ? (
+        {touched.password && errors.password && (
           <p className="text-xs text-destructive">{errors.password}</p>
-        ) : (
-          <p className="text-xs text-muted-foreground">At least 8 characters</p>
         )}
       </div>
 

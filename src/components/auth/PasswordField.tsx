@@ -11,6 +11,7 @@ export function PasswordField({
   id,
   autoComplete,
   onKeyDown,
+  onBlur,
 }: {
   value: string;
   onChange: (v: string) => void;
@@ -18,6 +19,7 @@ export function PasswordField({
   id?: string;
   autoComplete?: string;
   onKeyDown?: React.KeyboardEventHandler<HTMLInputElement>;
+  onBlur?: React.FocusEventHandler<HTMLInputElement>;
 }) {
   const [show, setShow] = React.useState(false);
   return (
@@ -30,6 +32,7 @@ export function PasswordField({
         placeholder={placeholder}
         autoComplete={autoComplete}
         onKeyDown={onKeyDown}
+        onBlur={onBlur}
         className="pr-10"
       />
       <button
