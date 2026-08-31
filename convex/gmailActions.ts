@@ -9,7 +9,7 @@ import { normalizeEmail } from "./ingestion/normalize";
 
 const COOLDOWN_MS = 10 * 60 * 1000;
 const PRICE_HINT = /(\$|€|£|₦|₹|¥)\s*[\d,]+|[\d,]+\s*(USD|EUR|GBP|NGN|INR|JPY|CAD|AUD)/i;
-const KEYWORDS = /receipt|trial|renewal|subscription|invoice|charged|billed|cancelled|canceled|payment|plan/i;
+const KEYWORDS = /receipt|trial|renewal|subscription|invoice|charged|billed|cancelled|canceled|payment|plan|order number|GPA\./i;
 
 async function processOneEmail(
   ctx: any,

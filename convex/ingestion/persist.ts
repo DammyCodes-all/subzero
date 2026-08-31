@@ -1,4 +1,5 @@
 import { v } from "convex/values";
+import { internal } from "../_generated/api";
 import { internalMutation, internalQuery } from "../_generated/server";
 import { dedupKey } from "../lib/dedup";
 import { getDifficulty } from "../lib/difficulty";
@@ -195,12 +196,31 @@ export const persistExtracted = internalMutation({
       currency,
     });
 
-    const existing = await ctx.db
+    let existing = await ctx.db
       .query("subscriptions")
       .withIndex("by_user_and_dedup", (q) =>
         q.eq("userId", args.userId).eq("dedupKey", key),
       )
       .unique();
+
+    // Fallback: if not found and we now have a billingProvider, try matching the same
+    // merchant/product/price/currency without provider to avoid duplicate rows on enrichment.
+    // e.g., first receipt had no provider -> key "...||price|cur", second adds "google play".
+    if (!existing && ex.billingProvider) {
+      const fallbackKey = dedupKey({
+        merchant,
+        product: ex.product,
+        billingProvider: undefined,
+        price,
+        currency,
+      });
+      existing = await ctx.db
+        .query("subscriptions")
+        .withIndex("by_user_and_dedup", (q) =>
+          q.eq("userId", args.userId).eq("dedupKey", fallbackKey),
+        )
+        .unique();
+    }
 
     const difficulty = getDifficulty("unknown", 0, !!ex.billingProvider);
 
@@ -223,13 +243,23 @@ export const persistExtracted = internalMutation({
         patch.trialEndsAt = ex.trialEndsAt;
       }
       if (ex.product && !existing.product) patch.product = ex.product;
-      if (ex.billingProvider && !existing.billingProvider)
+      const addedProvider = !!(ex.billingProvider && !existing.billingProvider);
+      if (addedProvider) {
         patch.billingProvider = ex.billingProvider;
+        patch.dedupKey = key;
+        // Re-trigger research with new provider context (generic site hint)
+        patch.researchStatus = "pending";
+      }
       // Always ensure difficulty is set if missing
       if (!existing.cancellationDifficulty)
         patch.cancellationDifficulty = difficulty;
       if (Object.keys(patch).length > 0) {
         await ctx.db.patch(existing._id, patch as never);
+      }
+      if (addedProvider && existing.researchStatus !== "pending") {
+        await ctx.scheduler.runAfter(0, internal.research.researchCancellationRoute, {
+          subscriptionId: existing._id,
+        });
       }
       subscriptionId = existing._id;
     } else {

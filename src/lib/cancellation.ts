@@ -22,27 +22,24 @@ type SubLike = {
   researchStatus?: string | null;
 };
 
-export function getProviderFallbackUrl(provider?: string | null): string | undefined {
-  if (!provider) return undefined;
-  const p = provider.toLowerCase();
-  if (p.includes("google")) return "https://play.google.com/store/account/subscriptions";
-  if (p.includes("apple")) return "https://apps.apple.com/account/subscriptions";
-  if (p.includes("amazon")) return "https://www.amazon.com/gp/help/customer/display.html?nodeId=G57AV2WTEF34REEB";
-  return undefined;
-}
-
 export function openExternalUrl(url: string, provider?: string | null) {
   if (typeof window === "undefined") return;
   const p = provider?.toLowerCase() ?? "";
   const isAndroid = /Android/i.test(navigator.userAgent);
   const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
-  // Google Play on Android: use intent to force Play Store app, fallback to https
+  // Google Play on Android: use intent to force Play Store app when url is a Play URL
   if (p.includes("google") && isAndroid) {
-    window.location.href = "intent://play.google.com/store/account/subscriptions#Intent;package=com.android.vending;scheme=https;end";
-    setTimeout(() => {
-      try { window.open(url, "_blank", "noopener,noreferrer"); } catch {}
-    }, 600);
-    return;
+    try {
+      const u = new URL(url);
+      if (u.hostname === "play.google.com") {
+        const intentUrl = `intent://${u.host}${u.pathname}${u.search}#Intent;package=com.android.vending;scheme=https;end`;
+        window.location.href = intentUrl;
+        setTimeout(() => {
+          try { window.open(url, "_blank", "noopener,noreferrer"); } catch {}
+        }, 600);
+        return;
+      }
+    } catch {}
   }
   if (p.includes("apple") && isIOS) {
     // iOS will handle https -> App Store / Settings
@@ -68,27 +65,57 @@ export function getCancellationCTA(sub: SubLike): CancellationCTA {
   }
 
   if (m === "open_provider" && provider) {
+    if (!url) {
+      return {
+        label: "No verified route",
+        variant: "outline",
+        disabled: true,
+        helper: `Billed through ${provider} — no verified link yet`,
+      };
+    }
     return {
       label: `Open ${provider}`,
-      href: url ?? getProviderFallbackUrl(provider) ?? url,
+      href: url,
       variant: "default",
       helper: `Billed through ${provider} — cancel there`,
     };
   }
-  // Fallback: provider present but method still open_web → treat as provider
-  if (m === "open_web" && provider && (provider.toLowerCase().includes("google") || provider.toLowerCase().includes("apple"))) {
+  // Web method with provider billing but discovered route is open_web — show but note provider
+  // (no hardcoding; research must have returned URL if store-billed)
+  if (m === "open_web" && provider) {
+    if (!url) {
+      return {
+        label: "No verified route",
+        variant: "outline",
+        disabled: true,
+        helper: `Billed through ${provider}`,
+      };
+    }
     return {
       label: `Open ${provider}`,
-      href: url ?? (provider.toLowerCase().includes("google") ? "https://play.google.com/store/account/subscriptions" : "https://apps.apple.com/account/subscriptions"),
+      href: url,
       variant: "default",
       helper: `Billed through ${provider}`,
     };
   }
   if (m === "open_web") {
     if (url) return { label: "Open cancellation", href: url, variant: "default", helper: `Cancel on ${sub.merchant}` };
-    return { label: "Open cancellation", variant: "default", helper: "" };
+    return {
+      label: "No verified route",
+      variant: "outline",
+      disabled: true,
+      helper: `No verified link for ${sub.merchant}`,
+    };
   }
   if (m === "open_provider") {
+    if (!url) {
+      return {
+        label: "No verified route",
+        variant: "outline",
+        disabled: true,
+        helper: "No verified provider link",
+      };
+    }
     return { label: `Open ${provider ?? "provider"}`, href: url, variant: "default", helper: "Cancel where you were billed" };
   }
   if (m === "send_email") {
