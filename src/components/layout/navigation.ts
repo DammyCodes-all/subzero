@@ -1,7 +1,7 @@
 import {
   DashboardSquare01Icon,
   Invoice02Icon,
-  ChartHistogramIcon,
+  Alert02Icon,
   MailAccount01Icon,
   Settings01Icon,
 } from "@hugeicons/core-free-icons";
@@ -21,9 +21,9 @@ export const NAV_ITEMS: NavItem[] = [
     exact: false,
   },
   {
-    label: "Analytics",
-    href: "/dashboard/analytics",
-    icon: ChartHistogramIcon as unknown as NavItem["icon"],
+    label: "Actions",
+    href: "/dashboard/actions",
+    icon: Alert02Icon as unknown as NavItem["icon"],
     exact: false,
   },
   {
