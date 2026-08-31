@@ -18,7 +18,7 @@ async function processOneEmail(
   text: string,
   html: string,
   messageId: string,
-): Promise<{ status: string }> {
+): Promise<{ status: string; subscriptionId?: string }> {
   const normalized = normalizeEmail({ text, html, subject });
   const hay = `${normalized.text} ${normalized.subject}`;
   if (!KEYWORDS.test(hay)) return { status: "skipped" };
@@ -41,7 +41,12 @@ async function processOneEmail(
     source,
   });
   if (result.isDuplicate) return { status: "duplicate" };
-  return { status: extracted.isConfirmation ? "cancelled" : result.isNew ? "created" : "merged" };
+  if (result.isNew && result.subscriptionId && !extracted.isConfirmation) {
+    await ctx.scheduler.runAfter(0, internal.research.researchCancellationRoute, {
+      subscriptionId: result.subscriptionId,
+    });
+  }
+  return { status: extracted.isConfirmation ? "cancelled" : result.isNew ? "created" : "merged", subscriptionId: result.subscriptionId };
 }
 
 export const scanGmail = action({

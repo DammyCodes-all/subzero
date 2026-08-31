@@ -247,6 +247,7 @@ export const persistExtracted = internalMutation({
         cancellationDifficulty: difficulty,
         cancellationMethod: "unknown",
         dedupKey: key,
+        researchStatus: "pending",
       });
     }
 
