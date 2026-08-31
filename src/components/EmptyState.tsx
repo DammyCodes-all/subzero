@@ -1,12 +1,13 @@
 "use client";
 
-import { useAuthActions, useAuthToken } from "@convex-dev/auth/react";
+import { useAuthActions } from "@convex-dev/auth/react";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { CheckmarkCircle01Icon } from "@hugeicons/core-free-icons";
 import { useConvexAuth } from "convex/react";
 import { useAction, useMutation, useQuery } from "convex/react";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { ConnectGmailButton } from "@/components/ConnectGmailButton";
 import { api } from "../../convex/_generated/api";
 
 export function ZeroAttentionState() {
@@ -105,22 +106,6 @@ function AuthenticatedEmptyState() {
     }
   };
 
-  const authToken = useAuthToken();
-
-  const handleConnect = async () => {
-    try {
-      // React provider keeps JWT in localStorage, not nextjs cookies.
-      // POST it to set a httpOnly cookie that the server routes can read.
-      if (authToken) {
-        await fetch("/api/gmail/oauth", {
-          method: "POST",
-          headers: { Authorization: `Bearer ${authToken}` },
-        });
-      }
-    } catch {}
-    window.location.href = "/api/gmail/oauth";
-  };
-
   return (
     <div className="rounded-lg border border-dashed bg-card p-10 text-center">
         <h3 className="font-heading text-base font-semibold">No subscriptions yet</h3>
@@ -132,9 +117,7 @@ function AuthenticatedEmptyState() {
         {status === undefined ? (
           <div className="h-24 animate-pulse rounded-lg border bg-card" />
         ) : !isConnected ? (
-          <Button onClick={handleConnect} size="sm" className="w-full">
-            Connect Gmail
-          </Button>
+          <ConnectGmailButton className="w-full" />
         ) : (
           <>
             <div className="flex items-center justify-between">

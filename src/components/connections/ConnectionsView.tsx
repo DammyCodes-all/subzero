@@ -8,10 +8,10 @@ import {
   Copy01Icon,
   CheckmarkCircle01Icon,
   MailSearch01Icon,
-  Add01Icon,
   Loading03Icon,
 } from "@hugeicons/core-free-icons";
 import { Button } from "@/components/ui/button";
+import { ConnectGmailButton } from "@/components/ConnectGmailButton";
 import { ForwardingCard } from "@/components/ForwardingCard";
 import { ConnectionsAgentMailSkeleton } from "@/components/Skeleton";
 import { api } from "../../../convex/_generated/api";
@@ -51,10 +51,6 @@ export function ConnectionsView() {
     } finally {
       setScanningId(null);
     }
-  };
-
-  const handleConnectGmail = () => {
-    window.location.href = "/api/gmail/oauth";
   };
 
   const googleConns = connections?.filter((c) => c.provider === "google") ?? [];
@@ -98,19 +94,7 @@ export function ConnectionsView() {
             </div>
           </div>
 
-          <Button
-            size="sm"
-            onClick={handleConnectGmail}
-            className="gap-1.5 rounded-lg bg-primary text-xs font-semibold text-primary-foreground hover:bg-primary/90"
-          >
-            <HugeiconsIcon
-              icon={Add01Icon as unknown as Parameters<typeof HugeiconsIcon>[0]["icon"]}
-              size={15}
-              strokeWidth={2}
-              color="currentColor"
-            />
-            Connect Gmail Account
-          </Button>
+          <ConnectGmailButton />
         </div>
 
         {/* Connections List */}
