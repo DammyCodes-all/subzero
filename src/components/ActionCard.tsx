@@ -2,6 +2,7 @@
 
 import { ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { getCancellationCTA, openExternalUrl } from "@/lib/cancellation";
 import {
   formatPrice,
   formatRenewalDate,
@@ -17,55 +18,17 @@ type Sub = {
   currency: string;
   billingInterval: string;
   nextRenewalAt?: number;
+  trialEndsAt?: number;
   cancellationDifficulty?: string;
   cancellationMethod?: string;
   cancellationUrl?: string;
   billingProvider?: string;
+  researchStatus?: string;
 };
 
-function getCTA(sub: Sub) {
-  const method = sub.cancellationMethod ?? "unknown";
-  if (method === "open_web" && sub.cancellationUrl) {
-    return {
-      label: "Open cancellation",
-      href: sub.cancellationUrl,
-      variant: "default" as const,
-    };
-  }
-  if (method === "open_web") {
-    return { label: "Open cancellation", variant: "default" as const };
-  }
-  if (method === "open_provider") {
-    const provider = sub.billingProvider ?? "provider";
-    return {
-      label: `Open ${provider}`,
-      variant: "default" as const,
-      href: sub.cancellationUrl,
-    };
-  }
-  if (method === "send_email") {
-    return { label: "Review & send", variant: "default" as const };
-  }
-  if (method === "contact_support") {
-    return {
-      label: "Contact support",
-      variant: "default" as const,
-      href: sub.cancellationUrl,
-    };
-  }
-  if (method === "manual") {
-    return { label: "View steps", variant: "outline" as const };
-  }
-  return {
-    label: "No verified route",
-    variant: "outline" as const,
-    disabled: true,
-  };
-}
-
 export function ActionCard({ sub, evidence }: { sub: Sub; evidence?: string }) {
-  const cta = getCTA(sub);
-  const urgent = isUrgent(sub.nextRenewalAt);
+  const cta = getCancellationCTA(sub);
+  const urgent = isUrgent(sub.nextRenewalAt) || isUrgent(sub.trialEndsAt);
 
   return (
     <div
@@ -124,7 +87,7 @@ export function ActionCard({ sub, evidence }: { sub: Sub; evidence?: string }) {
               onClick={(e) => {
                 e.preventDefault();
                 e.stopPropagation();
-                window.open(cta.href, "_blank", "noopener,noreferrer");
+                openExternalUrl(cta.href!, sub.billingProvider);
               }}
             >
               {cta.label}
