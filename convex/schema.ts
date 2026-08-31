@@ -63,6 +63,14 @@ export default defineSchema({
     cancellationUrl: v.optional(v.string()),
     billingProvider: v.optional(v.string()),
     dedupKey: v.string(),
+    researchStatus: v.optional(
+      v.union(
+        v.literal("pending"),
+        v.literal("done"),
+        v.literal("failed"),
+      ),
+    ),
+    researchedAt: v.optional(v.number()),
   })
     .index("by_user", ["userId"])
     .index("by_user_and_dedup", ["userId", "dedupKey"])
