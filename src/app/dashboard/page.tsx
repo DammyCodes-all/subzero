@@ -15,7 +15,7 @@ import { ForwardingCard } from "@/components/ForwardingCard";
 import { Header } from "@/components/Header";
 import { DashboardSkeleton } from "@/components/Skeleton";
 import { SubscriptionRow } from "@/components/SubscriptionRow";
-import { SummaryStrip } from "@/components/SummaryStrip";
+import { SummaryHeader } from "@/components/SummaryHeader";
 import { Button } from "@/components/ui/button";
 import { api } from "../../../convex/_generated/api";
 import type { Doc } from "../../../convex/_generated/dataModel";
@@ -106,7 +106,10 @@ function DashboardInner() {
           <DashboardSkeleton />
         ) : count === 0 ? (
           <div className="space-y-8">
-            <SummaryStrip count={0} total={0} attentionCount={0} />
+            <SummaryHeader
+              subscriptions={(all as Doc<"subscriptions">[]) ?? []}
+              attentionCount={0}
+            />
             <NoSubscriptionsState />
             <ForwardingCard />
             {process.env.NODE_ENV !== "production" && (
@@ -124,9 +127,8 @@ function DashboardInner() {
           </div>
         ) : (
           <div className="space-y-8">
-            <SummaryStrip
-              count={count}
-              total={total}
+            <SummaryHeader
+              subscriptions={(all as Doc<"subscriptions">[]) ?? []}
               attentionCount={attentionCount}
             />
 
