@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useQuery } from "convex/react";
 import Link from "next/link";
 import { HugeiconsIcon } from "@hugeicons/react";
@@ -23,15 +23,18 @@ type FilterTab = "all" | "active" | "trials" | "urgent" | "cancelled";
 export function SubscriptionsView() {
   const all = useQuery(api.subscriptions.list);
   const [filter, setFilter] = useState<FilterTab>("all");
-  const [viewMode, setViewMode] = useState<"grid" | "table">("grid");
+  const [viewMode, setViewMode] = useState<"grid" | "table">(() => {
+    if (typeof window === "undefined") return "table";
+    const stored = localStorage.getItem("subscriptions-view-mode");
+    if (stored === "grid" || stored === "table") return stored;
+    return window.innerWidth >= 640 ? "table" : "grid";
+  });
   const [searchQuery, setSearchQuery] = useState("");
 
-  // Responsive default view mode
-  useEffect(() => {
-    if (typeof window !== "undefined" && window.innerWidth >= 640) {
-      setViewMode("table");
-    }
-  }, []);
+  const handleViewModeChange = (mode: "grid" | "table") => {
+    setViewMode(mode);
+    localStorage.setItem("subscriptions-view-mode", mode);
+  };
 
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 8;
@@ -99,7 +102,7 @@ export function SubscriptionsView() {
         <div className="flex items-center gap-1 self-start rounded-lg border border-border bg-card p-1 sm:self-auto">
           <button
             type="button"
-            onClick={() => setViewMode("grid")}
+            onClick={() => handleViewModeChange("grid")}
             aria-label="Grid view"
             className={`flex h-7 w-7 items-center justify-center rounded-md transition-colors ${
               viewMode === "grid"
@@ -115,7 +118,7 @@ export function SubscriptionsView() {
           </button>
           <button
             type="button"
-            onClick={() => setViewMode("table")}
+            onClick={() => handleViewModeChange("table")}
             aria-label="Table view"
             className={`flex h-7 w-7 items-center justify-center rounded-md transition-colors ${
               viewMode === "table"
