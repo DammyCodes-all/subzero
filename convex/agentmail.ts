@@ -150,19 +150,47 @@ export const resolveUserByInbox = internalQuery({
     const fromEmail = extractEmail(args.fallbackFrom ?? "");
     const toEmail = extractEmail(args.fallbackTo ?? "");
 
-    // 1. Try matching by agentmailInbox directly in connections table
-    const byInbox = await ctx.db
+    // 1. Try matching by agentmailInbox — but inbox is global (subzero-agent@) shared by all users, so prefer existing user + fromEmail match when multiple
+    const byInboxCandidates = await ctx.db
       .query("connections")
       .withIndex("by_agentmailInbox", (q) => q.eq("agentmailInbox", inboxNorm))
-      .first();
-    if (byInbox) return byInbox.userId;
+      .collect();
+    // Filter to only connections whose user still exists (skip orphaned deleted users)
+    const validByInbox: typeof byInboxCandidates = [];
+    for (const c of byInboxCandidates) {
+      try {
+        const u: any = await ctx.db.get(c.userId as any);
+        if (u) validByInbox.push(c);
+      } catch {}
+    }
+    const candidates = validByInbox.length ? validByInbox : byInboxCandidates;
+    if (candidates.length === 1) {
+      return candidates[0].userId;
+    }
+    if (candidates.length > 1 && fromEmail) {
+      const matchByFrom = candidates.find((c) => c.accountEmail?.toLowerCase() === fromEmail);
+      if (matchByFrom) return matchByFrom.userId;
+      // Fallback to most recent valid candidate
+      candidates.sort((a, b) => b._creationTime - a._creationTime);
+      return candidates[0].userId;
+    }
+    if (candidates.length > 1) {
+      candidates.sort((a, b) => b._creationTime - a._creationTime);
+      return candidates[0].userId;
+    }
+    if (candidates.length === 1) return candidates[0].userId;
 
     if (toEmail && toEmail !== inboxNorm) {
       const byTo = await ctx.db
         .query("connections")
         .withIndex("by_agentmailInbox", (q) => q.eq("agentmailInbox", toEmail))
         .first();
-      if (byTo) return byTo.userId;
+      if (byTo) {
+        try {
+          const u: any = await ctx.db.get(byTo.userId as any);
+          if (u) return byTo.userId;
+        } catch {}
+      }
     }
 
     // 2. Try matching fromEmail -> accountEmail in connections table
@@ -226,8 +254,28 @@ export const sendCancellationEmail = action({
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new Error("Not authenticated");
 
+    // Verify researched route allows email — don't invent support@ address
+    const sub = await ctx.runQuery(internal.subscriptions.getInternal, { id: args.subscriptionId });
+    if (!sub) throw new Error("Subscription not found");
+    if (sub.cancellationMethod !== "send_email") {
+      throw new Error(`Cannot send email: researched method is ${sub.cancellationMethod ?? "unknown"} (expected send_email). No verified email route.`);
+    }
+    // Prefer researched cancellationUrl (mailto: or https with email) — never synthesize support@<merchant>.com
+    let recipient: string | null = null;
+    if (sub.cancellationUrl) {
+      const url = sub.cancellationUrl.trim();
+      if (url.startsWith("mailto:")) recipient = url.slice(7).split("?")[0];
+      else if (url.includes("@")) {
+        const m = url.match(/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/);
+        if (m) recipient = m[0];
+      }
+    }
+    if (!recipient) {
+      throw new Error("No verified support email found in research (cancellationUrl missing mailto). Check How to cancel for contact details.");
+    }
+
     const apiKey = process.env.AGENTMAIL_API_KEY;
-    if (apiKey) {
+    if (apiKey && recipient) {
       try {
         const res = await fetch("https://api.agentmail.to/v1/messages/send", {
           method: "POST",
@@ -236,22 +284,24 @@ export const sendCancellationEmail = action({
             Authorization: `Bearer ${apiKey}`,
           },
           body: JSON.stringify({
-            to: `support@${args.merchant.toLowerCase().replace(/\s/g, "")}.com`,
+            to: recipient,
             subject: `Cancellation Request: ${args.merchant} Subscription`,
             text: args.body,
           }),
         });
         if (!res.ok) {
           console.error("AgentMail send failed:", await res.text());
+          throw new Error("Failed to send via AgentMail");
         }
       } catch (err) {
+        if (err instanceof Error && err.message === "Failed to send via AgentMail") throw err;
         console.error("AgentMail send error:", err);
+        throw err;
       }
-    } else {
-      console.log(`[Mock AgentMail] Sent to ${args.merchant}:\n${args.body}`);
+    } else if (recipient) {
+      console.log(`[Mock AgentMail] Sent to ${recipient} (${args.merchant}):\n${args.body}`);
     }
 
-    // Update status in the DB using an internal mutation
     await ctx.runMutation(internal.agentmail.markCancellationSent, {
       subscriptionId: args.subscriptionId,
     });
