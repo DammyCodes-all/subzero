@@ -10,4 +10,10 @@ crons.interval(
   internal.notifications.sweepUpcomingNudges,
 );
 
+crons.interval(
+  "retry failed research",
+  { hours: 6 },
+  internal.research.retryFailedResearch,
+);
+
 export default crons;
