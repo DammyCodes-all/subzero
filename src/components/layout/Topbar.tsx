@@ -29,7 +29,7 @@ export function Topbar({ onMobileMenuToggle }: TopbarProps) {
             className="flex h-8 w-8 items-center justify-center rounded-lg border border-border text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground md:hidden"
           >
             <HugeiconsIcon
-              icon={Menu01Icon}
+              icon={Menu01Icon as unknown as Parameters<typeof HugeiconsIcon>[0]["icon"]}
               size={18}
               strokeWidth={1.8}
               color="currentColor"
@@ -46,7 +46,7 @@ export function Topbar({ onMobileMenuToggle }: TopbarProps) {
             className="h-8 gap-1.5 rounded-lg border-border bg-card px-3 text-xs font-medium text-foreground hover:bg-secondary"
           >
             <HugeiconsIcon
-              icon={MailSearch01Icon}
+              icon={MailSearch01Icon as unknown as Parameters<typeof HugeiconsIcon>[0]["icon"]}
               size={15}
               strokeWidth={1.8}
               color="currentColor"
@@ -63,7 +63,7 @@ export function Topbar({ onMobileMenuToggle }: TopbarProps) {
             className="h-8 gap-1.5 rounded-lg bg-primary px-3 text-xs font-semibold text-primary-foreground hover:bg-primary/90"
           >
             <HugeiconsIcon
-              icon={Add01Icon}
+              icon={Add01Icon as unknown as Parameters<typeof HugeiconsIcon>[0]["icon"]}
               size={15}
               strokeWidth={2}
               color="currentColor"

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { SearchNotFoundIcon, ArrowLeft02Icon } from "@hugeicons/core-free-icons";
+import { Search01Icon, ArrowLeft02Icon } from "@hugeicons/core-free-icons";
 import { Button } from "@/components/ui/button";
 
 export default function NotFound() {
@@ -11,7 +11,7 @@ export default function NotFound() {
       {/* Decorative zero background tag */}
       <div className="relative mb-6 flex h-24 w-24 items-center justify-center rounded-2xl border border-border bg-card shadow-2xl">
         <HugeiconsIcon
-          icon={SearchNotFoundIcon}
+          icon={Search01Icon as unknown as Parameters<typeof HugeiconsIcon>[0]["icon"]}
           size={44}
           strokeWidth={1.5}
           color="currentColor"
@@ -35,7 +35,7 @@ export default function NotFound() {
         <Link href="/dashboard">
           <Button size="sm" className="h-9 gap-2 rounded-lg bg-primary px-4 text-xs font-semibold text-primary-foreground hover:bg-primary/90">
             <HugeiconsIcon
-              icon={ArrowLeft02Icon}
+              icon={ArrowLeft02Icon as unknown as Parameters<typeof HugeiconsIcon>[0]["icon"]}
               size={16}
               strokeWidth={1.8}
               color="currentColor"
