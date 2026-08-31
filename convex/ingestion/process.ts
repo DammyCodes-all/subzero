@@ -55,11 +55,14 @@ export const processForwardedEmail = internalAction({
     const to = args.to.trim();
 
     // 1. Resolve user (prefer inboxId, then to, then from as last resort)
+    console.log(`[ingestion] Resolving user: inboxId=${inboxId}, from=${from.slice(0, 50)}, to=${to.slice(0, 50)}`);
     const userId: string | null = await ctx.runQuery(
       internal.agentmail.resolveUserByInbox,
       { inboxId, fallbackTo: to || undefined, fallbackFrom: from || undefined },
     );
+    console.log(`[ingestion] Resolved userId: ${userId ?? "NULL"}`);
     if (!userId) {
+      console.log("[ingestion] No user found — returning no_user");
       return { subscriptionId: null, evidenceId: null, status: "no_user" };
     }
 
@@ -92,9 +95,11 @@ export const processForwardedEmail = internalAction({
     // 4. Normalize
     const normalized = normalizeEmail({ text, html, subject: args.subject });
     const bodyForKeyword = `${normalized.text} ${normalized.subject}`.trim();
+    console.log(`[ingestion] Keyword check: textLen=${normalized.text.length}, subject="${normalized.subject.slice(0, 60)}", hasKeyword=${KEYWORDS.test(bodyForKeyword)}`);
     if (!KEYWORDS.test(bodyForKeyword)) {
       // Still allow confirmation emails that might not have keywords? Already covered by regex above (cancelled)
       // If no keyword match, treat as unparsed — no LLM call to save cost
+      console.log("[ingestion] No keyword match — returning skipped");
       return { subscriptionId: null, evidenceId: null, status: "skipped" };
     }
 
@@ -115,7 +120,9 @@ export const processForwardedEmail = internalAction({
       text: normalized.text,
       subject: normalized.subject,
     });
+    console.log(`[ingestion] Extraction result: merchant="${extracted.merchant ?? "null"}", price=${extracted.price ?? "null"}, currency="${extracted.currency}", isConfirmation=${extracted.isConfirmation}, confidence=${extracted.confidence}, quote="${extracted.quote.slice(0, 80)}"`);
 
+    console.log(`[ingestion] Persisting: merchant="${extracted.merchant}", price=${extracted.price}, interval="${extracted.billingInterval}"`);
     const source = `${extracted.merchant ?? args.subject.slice(0, 40) ?? "Forwarded email"} via forward`;
     const excerpt =
       extracted.quote || normalized.text.slice(0, 500) || args.subject;
@@ -125,7 +132,7 @@ export const processForwardedEmail = internalAction({
       !extracted.isConfirmation &&
       (!extracted.merchant || extracted.price === undefined)
     ) {
-      // Don't create subscription, but we still want traceability — persistUnparsed is no-op for now, just return unparsed
+      console.log(`[ingestion] Missing merchant or price — merchant="${extracted.merchant ?? "null"}", price=${extracted.price ?? "null"} — returning unparsed`);
       return { subscriptionId: null, evidenceId: null, status: "unparsed" };
     }
 

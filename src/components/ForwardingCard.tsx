@@ -6,22 +6,24 @@ import { useMutation, useQuery } from "convex/react";
 import { Button } from "@/components/ui/button";
 import { api } from "../../convex/_generated/api";
 
-const SHARED_INBOX = "subzero-agent@agentmail.to";
+const FALLBACK_INBOX = "subzero-agent@agentmail.to";
 
 export function ForwardingCard() {
   const inbox = useQuery(api.agentmail.getInbox);
   const getOrCreate = useMutation(api.agentmail.getOrCreateInbox);
   const [copied, setCopied] = useState(false);
 
-  // Shared inbox — no generation step. Just ensure the DB row exists so
-  // resolveUserByInbox can route via `from` → accountEmail.
+  // Ensure the DB connection row exists so resolveUserByInbox can route.
   useEffect(() => {
     if (inbox === null) void getOrCreate({});
   }, [inbox, getOrCreate]);
 
+  // Use the inbox from the query (set from env.AGENTMAIL_INBOX), fallback to default.
+  const displayInbox = inbox ?? FALLBACK_INBOX;
+
   async function handleCopy() {
     try {
-      await navigator.clipboard.writeText(SHARED_INBOX);
+      await navigator.clipboard.writeText(displayInbox);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {
@@ -37,7 +39,7 @@ export function ForwardingCard() {
       </p>
       <div className="mt-4 flex items-center gap-2">
         <code className="flex-1 truncate rounded bg-secondary px-2.5 py-2 font-mono text-xs tabular-nums text-foreground">
-          {SHARED_INBOX}
+          {displayInbox}
         </code>
         <Button
           variant="outline"

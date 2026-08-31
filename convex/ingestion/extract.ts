@@ -200,8 +200,11 @@ export const extractSubscription = internalAction({
     // Prefer Groq (free tier) if set, else OpenAI, else mock
     const provider = groqKey ? "groq" : openaiKey ? "openai" : null;
     const apiKey = groqKey ?? openaiKey;
+    console.log(`[extract] Provider: ${provider ?? "MOCK (no API key)"}, subject="${args.subject.slice(0, 60)}", textLen=${args.text.length}`);
     if (!apiKey || !provider) {
+      console.log("[extract] No API key — using mock extraction");
       const m = mockExtract(args.text, args.subject);
+      console.log(`[extract] Mock result: merchant="${m.merchant ?? "null"}", price=${m.price ?? "null"}, currency="${m.currency}"`);
       return {
         merchant: m.merchant,
         product: m.product,
@@ -252,7 +255,10 @@ export const extractSubscription = internalAction({
       });
 
       if (!res.ok) {
+        const errText = await res.text();
+        console.error(`[extract] LLM API error: ${res.status} ${errText.slice(0, 200)}`);
         const m = mockExtract(args.text, args.subject);
+        console.log(`[extract] Falling back to mock: merchant="${m.merchant ?? "null"}", price=${m.price ?? "null"}`);
         return {
           merchant: m.merchant,
           product: m.product,
@@ -276,6 +282,7 @@ export const extractSubscription = internalAction({
         choices?: { message?: { content?: string } }[];
       };
       const content = json.choices?.[0]?.message?.content ?? "{}";
+      console.log(`[extract] LLM raw response: ${content.slice(0, 300)}`);
       const parsed = JSON.parse(content) as Record<string, unknown>;
 
       let merchant =
@@ -360,6 +367,8 @@ export const extractSubscription = internalAction({
         parsed.nextRenewalAt as string | null,
       );
       const trialEndsAt = parseDateToMs(parsed.trialEndsAt as string | null);
+
+      console.log(`[extract] Final LLM result: merchant="${merchant ?? "null"}", price=${price ?? "null"}, currency="${currency}", isConfirmation=${isConfirmation}, confidence=${confidence}`);
 
       return {
         merchant,

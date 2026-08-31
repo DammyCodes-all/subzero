@@ -4,50 +4,46 @@ import { internalMutation, internalQuery, mutation, query } from "./_generated/s
 import { dedupKey } from "./lib/dedup";
 import { getDifficulty } from "./lib/difficulty";
 
+import { getAuthUserId } from "@convex-dev/auth/server";
+
 export const list = query({
   args: {},
   handler: async (ctx) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) return [];
-    const userId = identity.tokenIdentifier;
-    const subs = await ctx.db
-      .query("subscriptions")
-      .withIndex("by_user", (q) => q.eq("userId", userId))
-      .take(100);
-    return subs;
+    const userId = await getAuthUserId(ctx);
+    if (!userId) return [];
+    const all = await ctx.db.query("subscriptions").collect();
+    return all.filter((s) => s.userId === userId || s.userId.includes(userId));
   },
 });
 
 export const needsAttention = query({
   args: { days: v.optional(v.number()) },
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) return [];
-    const userId = identity.tokenIdentifier;
+    const userId = await getAuthUserId(ctx);
+    if (!userId) return [];
     const now = Date.now();
     const horizon = now + (args.days ?? 7) * 24 * 60 * 60 * 1000;
-    const subs = await ctx.db
-      .query("subscriptions")
-      .withIndex("by_user_and_renewal", (q) =>
-        q
-          .eq("userId", userId)
-          .gte("nextRenewalAt", now)
-          .lte("nextRenewalAt", horizon),
+    const all = await ctx.db.query("subscriptions").collect();
+    return all
+      .filter(
+        (s) =>
+          (s.userId === userId || s.userId.includes(userId)) &&
+          s.nextRenewalAt !== undefined &&
+          s.nextRenewalAt >= now &&
+          s.nextRenewalAt <= horizon,
       )
-      .order("asc")
-      .take(20);
-    return subs;
+      .sort((a, b) => (a.nextRenewalAt ?? 0) - (b.nextRenewalAt ?? 0))
+      .slice(0, 20);
   },
 });
 
 export const get = query({
   args: { id: v.id("subscriptions") },
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) return null;
-    const userId = identity.tokenIdentifier;
+    const userId = await getAuthUserId(ctx);
+    if (!userId) return null;
     const sub = await ctx.db.get(args.id);
-    if (!sub || sub.userId !== userId) return null;
+    if (!sub || (sub.userId !== userId && !sub.userId.includes(userId))) return null;
     return sub;
   },
 });
