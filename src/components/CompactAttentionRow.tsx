@@ -1,6 +1,7 @@
 "use client";
 
-import { ExternalLink } from "lucide-react";
+import { HugeiconsIcon } from "@hugeicons/react";
+import { ExternalLinkIcon } from "@hugeicons/core-free-icons";
 import { Button } from "@/components/ui/button";
 import { formatCountdownShort, formatPrice } from "@/lib/format";
 
@@ -66,7 +67,13 @@ export function CompactAttentionRow({ sub }: { sub: Sub }) {
             }}
           >
             {cta.label}
-            <ExternalLink className="size-3 opacity-60" />
+            <HugeiconsIcon
+              icon={ExternalLinkIcon as unknown as Parameters<typeof HugeiconsIcon>[0]["icon"]}
+              size={12}
+              strokeWidth={1.8}
+              color="currentColor"
+              className="opacity-60"
+            />
           </Button>
         ) : (
           <Button
