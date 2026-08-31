@@ -1,5 +1,6 @@
 import { v } from "convex/values";
 import { mutation, internalMutation, internalQuery, query } from "./_generated/server";
+import { getAuthUserId } from "@convex-dev/auth/server";
 
 export const getGmailStatus = query({
   args: {},
@@ -10,26 +11,20 @@ export const getGmailStatus = query({
     lastGmailScanAt: v.optional(v.number()),
   }),
   handler: async (ctx) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) return { connected: false };
     const ident = await ctx.auth.getUserIdentity();
-    if (!ident) return { connected: false };
-    const tokenId = ident.tokenIdentifier;
-    let rows = await ctx.db.query("connections").withIndex("by_user", (q) => q.eq("userId", tokenId)).collect();
+    const tokenId = ident?.tokenIdentifier ?? userId;
+    let rows = await ctx.db.query("connections").withIndex("by_user", (q) => q.eq("userId", userId)).collect();
+    if (rows.length === 0 && tokenId !== userId) {
+      rows = await ctx.db.query("connections").withIndex("by_user", (q) => q.eq("userId", tokenId)).collect();
+    }
     let g = rows.find((c) => c.provider === "google");
     if (!g) {
-      const parts = tokenId.split("|");
-      const uid = parts.length >= 2 ? parts[1] : tokenId;
-      const byPlain = await ctx.db.query("connections").withIndex("by_user", (q) => q.eq("userId", uid)).collect();
-      g = byPlain.find((c) => c.provider === "google");
-      if (!g) {
-        const email = ident.email?.toLowerCase();
-        if (email) {
-          const byEmail = await ctx.db.query("connections").withIndex("by_accountEmail", (q) => q.eq("accountEmail", email)).first();
-          if (byEmail && byEmail.provider === "google") g = byEmail as any;
-        }
-      }
-      if (!g) {
-        const byUserPrefix = await ctx.db.query("connections").withIndex("by_user", (q) => q.eq("userId", `user:${uid}`)).collect();
-        g = byUserPrefix.find((c) => c.provider === "google");
+      const email = ident?.email?.toLowerCase();
+      if (email) {
+        const byEmail = await ctx.db.query("connections").withIndex("by_accountEmail", (q) => q.eq("accountEmail", email)).first();
+        if (byEmail && byEmail.provider === "google") g = byEmail as any;
       }
     }
     if (!g) return { connected: false };

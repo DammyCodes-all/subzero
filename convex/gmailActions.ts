@@ -3,6 +3,7 @@
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import { action, internalAction } from "./_generated/server";
+import { getAuthUserId } from "@convex-dev/auth/server";
 import { buildGmailQuery, getAccessToken, getMessage, listMessages } from "./lib/gmail";
 import { normalizeEmail } from "./ingestion/normalize";
 
@@ -56,10 +57,8 @@ export const scanGmail = action({
     reason: v.optional(v.string()),
   }),
   handler: async (ctx, _args) => {
-    const ident = await ctx.auth.getUserIdentity();
-    if (!ident) throw new Error("Not authenticated");
-    const tokenId = ident.tokenIdentifier;
-    const userId = tokenId;
+    const userId = await getAuthUserId(ctx);
+    if (!userId) throw new Error("Not authenticated");
     const conn: any = await ctx.runQuery(internal.gmail.getConnectionInternal, { userId });
     if (conn?.lastGmailScanAt && Date.now() - conn.lastGmailScanAt < COOLDOWN_MS) {
       return { scanned: 0, created: 0, merged: 0, skipped: 0, unparsed: 0, duplicate: 0, cancelled: 0, reason: "cooldown" };
@@ -176,9 +175,8 @@ export const triggerScanForCurrentUser: any = action({
   args: {},
   returns: v.object({ scanned: v.number(), created: v.number(), reason: v.optional(v.string()) }),
   handler: async (ctx: any) => {
-    const ident = await ctx.auth.getUserIdentity();
-    if (!ident) throw new Error("Not authenticated");
-    const userId = ident.tokenIdentifier;
+    const userId = await getAuthUserId(ctx);
+    if (!userId) throw new Error("Not authenticated");
     return await ctx.runAction(internal.gmailActions.scanForUser, { userId });
   },
 });

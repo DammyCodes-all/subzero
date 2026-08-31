@@ -36,3 +36,6 @@ Implemented Phase 2: Cancellation Research Engine (`convex/research.ts`). Create
 
 ### 2026-08-29 - working tree
 Implemented Phase 4: The Nudge Engine (Scheduled Notifications & Reminders). Created `convex/notifications.ts` and `convex/crons.ts`. Automatically schedules 3 renewal lead-time milestones (7d, 3d, 24h) via `ctx.scheduler` upon subscription ingestion/upsert. Configured `deliverNudge` internalAction to deliver outbound email alerts via AgentMail with renewal urgency, price, merchant name, and direct cancellation link. Added daily cron job (`daily renewal nudge sweep`) for renewal sweeps. Convex features: scheduler, crons, actions, mutations, queries.
+
+### 2026-08-31 - working tree
+Fixed user identity resolution and duplicate connection creation by standardizing Auth calls to `getAuthUserId(ctx)` across `convex/agentmail.ts`, `convex/subscriptions.ts`, `convex/gmail.ts`, and `convex/gmailActions.ts`. Resolved session ID mismatch where queries failed to match subscriptions created across different auth sessions. Completed Phase 5 (Gmail API Scan) with canonical user binding. Convex features: auth, queries, mutations, actions, schema, indexes.

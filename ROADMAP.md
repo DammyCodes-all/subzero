@@ -13,23 +13,18 @@ This document tracks the core build status, completed phases, and remaining task
 | **Phase 2** | **Cancellation Research Engine** (Firecrawl help-page scraper + AI step extraction) | **Complete** |
 | **Phase 3** | **Action Engine UI** (Dynamic CTAs for `open_web` & `send_email` modal) | **Complete** |
 | **Phase 4** | **The Nudge Engine** (Scheduled `7d`/`3d`/`24h` warnings + daily cron sweep) | **Complete** |
+| **Phase 5** | **Gmail API Historical Scan** (Google OAuth + historical inbox scan & extraction) | **Complete** |
 
 ---
 
-## 🔮 What's Left Before Submission
+## 🔮 Final Lock-in & Submission
 
-### 1. Phase 5: Gmail API Historical Scan (Optional Ingestion Path)
-- **Goal:** Allow users who click "Connect Google" to trigger a one-time historical scan of their last 30 days of Gmail messages for billing/subscription receipts.
-- **Implementation Note:** Google Auth is already set up in Convex Auth. We can add a Convex action that queries the Gmail `messages.list` endpoint for `subject:receipt OR subject:subscription OR subject:renewal` and pipes discovered emails into our extraction engine.
-
-### 2. Phase 6: Final Verification & Typecheck Audit
-- **Goal:** Run `pnpm typecheck` to ensure 0 TypeScript errors across the entire codebase.
+### Phase 6: Final Verification & Typecheck Audit
+- **Goal:** Clean typecheck & end-to-end verification.
+- **Status:** **Complete** — Auth identity canonicalized (`getAuthUserId`), email ingestion webhooks verified, Gmail scan action wired, subscriptions list real-time UI synchronized.
 
 ---
 
-## 🎯 Next Steps & Recommendation
+## 🎯 Status Summary
 
-The core protection loop (Ingestion → Extraction → Research → Action Engine → Nudge Engine) is **100% functional**.
-
-- **Option A:** Build **Phase 5 (Gmail API Scan)** to complete the final optional ingestion path from the product spec.
-- **Option B:** Perform **Phase 6 (Final Verification Audit)** to lock in the submission.
+The full protection loop (**Ingestion → Extraction → Research → Action Engine → Nudge Engine → Gmail Scan**) is **100% complete and fully functional**.
