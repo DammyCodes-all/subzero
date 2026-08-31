@@ -1,7 +1,8 @@
 "use client";
 
 import { useAuthActions, useAuthToken } from "@convex-dev/auth/react";
-import { Check } from "lucide-react";
+import { HugeiconsIcon } from "@hugeicons/react";
+import { CheckmarkCircle01Icon } from "@hugeicons/core-free-icons";
 import { useConvexAuth } from "convex/react";
 import { useAction, useMutation, useQuery } from "convex/react";
 import { useEffect, useState } from "react";
@@ -11,7 +12,13 @@ import { api } from "../../convex/_generated/api";
 export function ZeroAttentionState() {
   return (
     <div className="flex items-center justify-center gap-2 rounded-lg border border-primary/20 bg-primary/5 px-4 py-6 text-center">
-      <Check className="size-4 shrink-0 text-primary" />
+      <HugeiconsIcon
+        icon={CheckmarkCircle01Icon as unknown as Parameters<typeof HugeiconsIcon>[0]["icon"]}
+        size={16}
+        strokeWidth={1.8}
+        color="currentColor"
+        className="shrink-0 text-primary"
+      />
       <p className="text-sm font-medium text-primary">
         Nothing needs you right now
       </p>

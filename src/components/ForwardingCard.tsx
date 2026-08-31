@@ -1,6 +1,7 @@
 "use client";
 
-import { Check, Copy } from "lucide-react";
+import { HugeiconsIcon } from "@hugeicons/react";
+import { CheckmarkCircle01Icon, Copy01Icon } from "@hugeicons/core-free-icons";
 import { useEffect, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { Button } from "@/components/ui/button";
@@ -49,12 +50,23 @@ export function ForwardingCard() {
         >
           {copied ? (
             <>
-              <Check className="size-3.5 text-primary" />
+              <HugeiconsIcon
+                icon={CheckmarkCircle01Icon as unknown as Parameters<typeof HugeiconsIcon>[0]["icon"]}
+                size={14}
+                strokeWidth={1.8}
+                color="currentColor"
+                className="text-primary"
+              />
               Copied
             </>
           ) : (
             <>
-              <Copy className="size-3.5" />
+              <HugeiconsIcon
+                icon={Copy01Icon as unknown as Parameters<typeof HugeiconsIcon>[0]["icon"]}
+                size={14}
+                strokeWidth={1.8}
+                color="currentColor"
+              />
               Copy
             </>
           )}

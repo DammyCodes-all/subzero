@@ -1,7 +1,8 @@
 "use client";
 
 import { useQuery } from "convex/react";
-import { ExternalLink } from "lucide-react";
+import { HugeiconsIcon } from "@hugeicons/react";
+import { ExternalLinkIcon } from "@hugeicons/core-free-icons";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { AuthGuard } from "@/components/AuthGuard";
@@ -132,7 +133,13 @@ function DetailInner() {
             <a href={cta.href} target="_blank" rel="noopener noreferrer">
               <Button className="gap-1.5 font-medium">
                 {cta.label}
-                <ExternalLink className="size-3.5 opacity-70" />
+                <HugeiconsIcon
+                  icon={ExternalLinkIcon as unknown as Parameters<typeof HugeiconsIcon>[0]["icon"]}
+                  size={14}
+                  strokeWidth={1.8}
+                  color="currentColor"
+                  className="opacity-70"
+                />
               </Button>
             </a>
           ) : (
