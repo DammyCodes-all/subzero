@@ -13,6 +13,7 @@ import {
 } from "@hugeicons/core-free-icons";
 import { Button } from "@/components/ui/button";
 import { ForwardingCard } from "@/components/ForwardingCard";
+import { ConnectionsAgentMailSkeleton } from "@/components/Skeleton";
 import { api } from "../../../convex/_generated/api";
 
 export function ConnectionsView() {
@@ -115,6 +116,9 @@ export function ConnectionsView() {
         {/* Connections List */}
         <div className="space-y-3">
           {/* AgentMail Inbound Alias Row */}
+          {inbox === undefined ? (
+            <ConnectionsAgentMailSkeleton />
+          ) : (
           <div className="flex flex-col gap-3 rounded-lg border border-border/80 bg-background/50 p-4 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-center gap-3">
               <div className="flex h-8 w-8 items-center justify-center rounded-full bg-emerald-500/10 text-emerald-400">
@@ -127,7 +131,7 @@ export function ConnectionsView() {
               </div>
               <div>
                 <p className="font-mono text-sm font-medium text-foreground">
-                  {inbox ?? "subzero-agent@agentmail.to"}
+                  {inbox}
                 </p>
                 <p className="text-xs text-muted-foreground">
                   AgentMail Inbound Alias (Passive forwarding)
@@ -149,6 +153,7 @@ export function ConnectionsView() {
               {copied ? "Copied" : "Copy Alias"}
             </Button>
           </div>
+          )}
 
           {/* Google Connections Rows */}
           {googleConns.map((conn) => (
