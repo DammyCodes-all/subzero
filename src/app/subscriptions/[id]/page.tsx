@@ -9,6 +9,7 @@ import { EvidenceBlock } from "@/components/detail/EvidenceBlock";
 import { HowToCancel } from "@/components/detail/HowToCancel";
 import { Header } from "@/components/Header";
 import { Button } from "@/components/ui/button";
+import { getCancellationCTA, openExternalUrl } from "@/lib/cancellation";
 import { formatPrice, formatRenewalDate, isUrgent, needsAttention } from "@/lib/format";
 import { useEffect, useState } from "react";
 import { ReviewAndSendModal } from "@/components/detail/ReviewAndSendModal";
@@ -30,8 +31,11 @@ function DetailInner() {
   const evidence = useQuery(api.evidence.getBySubscription, {
     subscriptionId: id,
   });
+  const action = useQuery(api.cancellationActions.getBySubscription, {
+    subscriptionId: id,
+  });
 
-  if (sub === undefined || evidence === undefined) {
+  if (sub === undefined || evidence === undefined || action === undefined) {
     return (
       <div className="mx-auto max-w-[680px] px-6 py-10">
         <div className="space-y-4 animate-in fade-in duration-200">
@@ -69,7 +73,7 @@ function DetailInner() {
 
   const urgent = isUrgent(sub.nextRenewalAt) || isUrgent(sub.trialEndsAt);
   const attention = needsAttention(sub.nextRenewalAt) || needsAttention(sub.trialEndsAt);
-  const cta = getDetailCTA(sub);
+  const cta = getCancellationCTA(sub as never);
 
   return (
     <div className="mx-auto max-w-[680px] px-6 py-10">
@@ -129,12 +133,13 @@ function DetailInner() {
         {/* Primary action — sole solid chartreuse (restraint) */}
         <div className="flex flex-wrap items-center gap-3">
           {cta.href ? (
-            <a href={cta.href} target="_blank" rel="noopener noreferrer">
-              <Button className="gap-1.5 font-medium">
-                {cta.label}
-                <ExternalLink className="size-3.5 opacity-70" />
-              </Button>
-            </a>
+            <Button
+              className="gap-1.5 font-medium"
+              onClick={() => openExternalUrl(cta.href!, sub.billingProvider)}
+            >
+              {cta.label}
+              <ExternalLink className="size-3.5 opacity-70" />
+            </Button>
           ) : (
             <Button
               variant={cta.variant}
@@ -160,7 +165,7 @@ function DetailInner() {
         <h2 className="font-heading text-base font-semibold tracking-tight">
           How to cancel
         </h2>
-        <HowToCancel sub={sub} />
+        <HowToCancel sub={sub as never} action={action as never} />
       </section>
 
       {/* Evidence — why we believe it (spec: if we can't back it, don't show it) */}
@@ -194,59 +199,6 @@ function DetailInner() {
       )}
     </div>
   );
-}
-
-function getDetailCTA(sub: {
-  cancellationMethod?: string;
-  cancellationUrl?: string;
-  billingProvider?: string;
-}) {
-  const m = sub.cancellationMethod ?? "unknown";
-  if (m === "open_web" && sub.cancellationUrl)
-    return {
-      label: "Open cancellation",
-      href: sub.cancellationUrl,
-      variant: "default" as const,
-      helper: "Opens merchant site in new tab",
-    };
-  if (m === "open_web")
-    return {
-      label: "Open cancellation",
-      variant: "default" as const,
-      helper: "",
-    };
-  if (m === "open_provider")
-    return {
-      label: `Open ${sub.billingProvider ?? "provider"}`,
-      href: sub.cancellationUrl,
-      variant: "default" as const,
-      helper: "Cancel where you were billed",
-    };
-  if (m === "send_email")
-    return {
-      label: "Review & send",
-      variant: "default" as const,
-      helper: "Draft sent via SubZero",
-    };
-  if (m === "contact_support")
-    return {
-      label: "Contact support",
-      href: sub.cancellationUrl,
-      variant: "default" as const,
-      helper: "Requires support request",
-    };
-  if (m === "manual")
-    return {
-      label: "View steps",
-      variant: "outline" as const,
-      helper: "Manual steps below",
-    };
-  return {
-    label: "No verified route",
-    variant: "outline" as const,
-    disabled: true,
-    helper: "We'll update when verified",
-  };
 }
 
 export default function SubscriptionDetailPage() {
