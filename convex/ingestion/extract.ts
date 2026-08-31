@@ -224,8 +224,58 @@ export const extractSubscription = internalAction({
       };
     }
 
-    const system =
-      "You extract subscription info from forwarded emails. Return JSON with keys: merchant (string or null), product (string or null), price (number or null), currency (ISO 4217 code: USD, EUR, GBP, NGN, INR, JPY, CAD, AUD — infer from symbol: $→USD, C$→CAD, A$→AUD, €→EUR, £→GBP, ₦→NGN, ₹→INR, ¥→JPY, or suffix like 12.99 CAD — or null), billingInterval (monthly|yearly|weekly|unknown), nextRenewalAt (ISO date string or null), trialEndsAt (ISO date string or null), billingProvider (string or null, e.g. Google Play, Apple, Amazon), isConfirmation (boolean: true if this email confirms a cancellation), confidence (0-1), quote (exact substring from email supporting price or renewal date, max 300 chars). Rules: (1) Only extract recurring subscriptions — monthly/yearly/weekly or a trial that will auto-renew. If it's a one-time payment, exam fee, or purchase without renewal (e.g., NATIONAL EXAMINATIONS COUNCIL ₦5,100, single invoice), return merchant null and price null. (2) Merchant is the service (Snap Inc, Spotify, Notion) not the processor — Google Play/Apple is billingProvider. Never invent a price or date. If unsure, null. For price, strip commas: ₦7,700.00→7700. For JPY, no decimals: ¥7,700→7700.";
+    const system = `You are a precise subscription extraction engine. Extract from forwarded email text into valid JSON ONLY.
+
+TASK: Extract subscription fields from DOCUMENT below. Follow SCHEMA exactly.
+
+SCHEMA — return ONLY valid JSON matching this exact schema. Do not add keys. Do not remove keys. No markdown, no code fences, no explanation. Use null for missing fields (never omit a key).
+
+{
+  "merchant": "<canonical brand string | null>",
+  "product": "<plan/feature string | null>",
+  "price": "<number | null>",
+  "currency": "<USD|EUR|GBP|NGN|INR|JPY|CAD|AUD | null>",
+  "billingInterval": "<monthly|yearly|weekly|unknown>",
+  "nextRenewalAt": "<ISO 8601 date string | null>",
+  "trialEndsAt": "<ISO 8601 date string | null>",
+  "billingProvider": "<string | null>",
+  "isConfirmation": "<boolean>",
+  "confidence": "<number 0-1>",
+  "quote": "<exact substring from email max 300 chars>"
+}
+
+RULES:
+- Missing field → null. Do NOT guess, do NOT infer. If not explicitly stated, null.
+- Only recurring subscriptions (monthly/yearly/weekly or auto-renew trial). One-time purchase/exam fee without renewal (e.g., NATIONAL EXAMINATIONS COUNCIL ₦5,100) → merchant null, price null.
+- price: strip commas ₦7,700.00→7700; JPY no decimals ¥7,700→7700; number type, not string.
+- currency: infer from symbol/suffix: $→USD, C$→CAD, A$→AUD, €→EUR, £→GBP, ₦→NGN, ₹→INR, ¥→JPY, or suffix "12.99 CAD". If unsure, null (not USD).
+- billingInterval enum only monthly|yearly|weekly|unknown. unknown if not stated.
+- dates ISO 8601 YYYY-MM-DD or null. Do not compute; use explicit date in text.
+- isConfirmation true only if email explicitly confirms cancellation (cancelled/canceled confirmed).
+- quote: exact substring backing price or renewal date, max 300 chars.
+- CONFIDENCE: 0.95-0.99 explicit price+renewal labeled, 0.85-0.95 needs minor interpretation, 0.6-0.85 ambiguous.
+
+CANONICAL MERCHANT MAP (brand only, never product/billingProvider):
+- Any merchant containing "google" → "Google One"
+- Snap → "Snap Inc", OpenAI → "ChatGPT", others: Adobe, Spotify, Notion, Netflix, Figma, Linear, Canva, YouTube
+- Examples:
+  1) Input text "Google AI Plus (400 GB) (Google One)" → merchant "Google One", product "Google AI Plus (400 GB)"
+  2) Input "Google One 2TB via Google Play ₦7,700 monthly" → merchant "Google One", product "Google One 2TB"
+  3) Input "Snap Inc (Snapchat+) billed via Google Play" → merchant "Snap Inc", product "Snapchat+", billingProvider "Google Play"
+- Never repeat merchant in product; never put "Google Play"/"Apple" in merchant.
+
+FEW-SHOT — exact outputs:
+
+Document: Subject: Your Google Play Order Receipt from 20 Aug 2026 Body: Google AI Plus (400 GB) (Google One) Your trial will end on 20 Aug 2027. You will be automatically charged ₦7,700.00/month via Google Play
+=> {"merchant":"Google One","product":"Google AI Plus (400 GB)","price":7700,"currency":"NGN","billingInterval":"monthly","nextRenewalAt":"2027-08-20","trialEndsAt":"2027-08-20","billingProvider":"Google Play","isConfirmation":false,"confidence":0.98,"quote":"Your trial will end on 20 Aug 2027. You will be automatically charged ₦7,700.00/month"}
+
+Document: Subject: NATIONAL EXAMINATIONS COUNCIL Invoice Body: ₦5,100 single payment for 2024 exam, no renewal
+=> {"merchant":null,"product":null,"price":null,"currency":null,"billingInterval":"unknown","nextRenewalAt":null,"trialEndsAt":null,"billingProvider":null,"isConfirmation":false,"confidence":0.99,"quote":"₦5,100 single payment"}
+
+Document: Subject: Your trial ends soon Body: Spotify Premium $9.99/month renews 2026-09-15
+=> {"merchant":"Spotify","product":"Spotify Premium","price":9.99,"currency":"USD","billingInterval":"monthly","nextRenewalAt":"2026-09-15","trialEndsAt":null,"billingProvider":null,"isConfirmation":false,"confidence":0.96,"quote":"$9.99/month renews 2026-09-15"}
+
+VALIDATION: Respond with raw JSON only. No markdown, no code fences, no extra text. All keys present, no trailing commas, no single quotes.`;
 
     const userContent = `Subject: ${args.subject}\n\nBody:\n${args.text.slice(0, 15000)}`;
     const endpoint =

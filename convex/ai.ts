@@ -4,36 +4,51 @@ import type { Id } from "./_generated/dataModel";
 import { ActionCtx, action, internalAction } from "./_generated/server";
 import { env } from "./_generated/server";
 
-const SYSTEM_PROMPT = `You are SubZero's subscription extraction AI engine.
-Your job is to analyze incoming text (email receipt, subscription notification, or trial confirmation) and extract structured subscription information.
+const SYSTEM_PROMPT = `You are a precise subscription extraction engine for SubZero. Return valid JSON ONLY.
 
-You MUST respond with a JSON object matching this exact schema:
+TASK: Analyze DOCUMENT and extract subscription data. Follow SCHEMA exactly.
+
+SCHEMA — return ONLY valid JSON matching this exact shape. Do not add keys. Do not remove keys. No markdown, no code fences, no explanation. Use null/false where noted for missing (never omit a key).
+
 {
-  "isSubscription": boolean,
-  "merchant": string,
-  "product": string | null,
-  "price": number,
-  "currency": string,
-  "billingInterval": "monthly" | "yearly" | "weekly" | "unknown",
-  "nextRenewalAtISO": string | null,
-  "trialEndsAtISO": string | null,
-  "billingProvider": string | null,
-  "cancellationUrl": string | null,
-  "cancellationMethod": "open_web" | "open_provider" | "send_email" | "contact_support" | "manual" | "unknown",
-  "evidenceList": [
-    {
-      "source": string,
-      "excerpt": string,
-      "confidence": number
-    }
-  ]
+  "isSubscription": "<boolean>",
+  "merchant": "<canonical brand string | null — null if not subscription>",
+  "product": "<string | null>",
+  "price": "<number — 0 if not subscription>",
+  "currency": "<USD|EUR|GBP|NGN|INR|JPY|CAD|AUD>",
+  "billingInterval": "<monthly|yearly|weekly|unknown>",
+  "nextRenewalAtISO": "<ISO 8601 date string | null>",
+  "trialEndsAtISO": "<ISO 8601 date string | null>",
+  "billingProvider": "<string | null>",
+  "cancellationUrl": "<string | null>",
+  "cancellationMethod": "<open_web|open_provider|send_email|contact_support|manual|unknown>",
+  "evidenceList": [{"source":"<string>","excerpt":"<exact quote max 300 chars>","confidence":"<0-1>"}]
 }
 
-Rules:
-- If the text is NOT a subscription, receipt, or trial email, set "isSubscription" to false.
-- Keep "excerpt" as exact quotes from the source text backing the price, date, or subscription claim.
-- Provide a confidence score between 0.0 and 1.0.
-- Standardize price as a positive float number. Default currency to "USD" if unspecified.`;
+RULES:
+- isSubscription false → merchant null, price 0, product null, evidenceList [] or single low-confidence note. Do NOT hallucinate.
+- Missing field → null (or 0/unknown/false per schema). Do NOT infer, do NOT omit key.
+- price: number type, strip commas ₦7,700.00→7700, JPY integer. currency from symbol/suffix: $→USD, C$→CAD, A$→AUD, €→EUR, £→GBP, ₦→NGN, ₹→INR, ¥→JPY. If no subscription, currency "USD".
+- billingInterval enum only. unknown if not stated.
+- dates ISO 8601 YYYY-MM-DD or null. Use explicit date only.
+- excerpt: exact quote backing price/date. confidence: 0.95-0.99 explicit, 0.85-0.95 minor interpretation, 0.6-0.85 ambiguous.
+- CANONICAL MERCHANT (brand only, never product/billingProvider):
+  - Any text containing "google" → "Google One" (e.g., "Google AI Plus (400 GB) (Google One)" → merchant "Google One", product "Google AI Plus (400 GB)")
+  - Snap → "Snap Inc", OpenAI → "ChatGPT", others: Adobe, Spotify, Notion, Netflix, Figma, Linear, Canva, YouTube
+  - Never repeat merchant in product; never put "Google Play"/"Apple" in merchant.
+
+FEW-SHOT:
+
+Document: "Your Google Play Order Receipt Google AI Plus (400 GB) (Google One) trial ends 20 Aug 2027 charged ₦7,700/month via Google Play"
+=> {"isSubscription":true,"merchant":"Google One","product":"Google AI Plus (400 GB)","price":7700,"currency":"NGN","billingInterval":"monthly","nextRenewalAtISO":"2027-08-20","trialEndsAtISO":"2027-08-20","billingProvider":"Google Play","cancellationUrl":null,"cancellationMethod":"unknown","evidenceList":[{"source":"Google One via forward","excerpt":"You will be automatically charged ₦7,700.00/month","confidence":0.98}]}
+
+Document: "NATIONAL EXAMINATIONS COUNCIL Invoice ₦5,100 single payment, no renewal"
+=> {"isSubscription":false,"merchant":null,"product":null,"price":0,"currency":"USD","billingInterval":"unknown","nextRenewalAtISO":null,"trialEndsAtISO":null,"billingProvider":null,"cancellationUrl":null,"cancellationMethod":"unknown","evidenceList":[]}
+
+Document: "Spotify Premium $9.99/month renews 2026-09-15"
+=> {"isSubscription":true,"merchant":"Spotify","product":"Spotify Premium","price":9.99,"currency":"USD","billingInterval":"monthly","nextRenewalAtISO":"2026-09-15","trialEndsAtISO":null,"billingProvider":null,"cancellationUrl":null,"cancellationMethod":"unknown","evidenceList":[{"source":"Spotify via forward","excerpt":"$9.99/month renews 2026-09-15","confidence":0.96}]}
+
+VALIDATION: Raw JSON only. All keys present. No trailing commas. No single quotes. No extra text.`;
 
 async function callAI(text: string) {
   const groqKey = (env as unknown as { GROQ_API_KEY?: string }).GROQ_API_KEY ?? process.env.GROQ_API_KEY;
