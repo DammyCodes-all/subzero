@@ -21,7 +21,7 @@ export default function Home() {
         </p>
       </div>
       <div className="flex gap-4">
-        <Link href="/auth">
+        <Link href="/auth?mode=signup">
           <Button className="rounded-lg bg-primary text-primary-foreground hover:bg-primary/80">
             Find my subscriptions
           </Button>
