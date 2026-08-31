@@ -21,11 +21,7 @@ import { api } from "../../../convex/_generated/api";
 import type { Doc } from "../../../convex/_generated/dataModel";
 
 export default function Dashboard() {
-  return (
-    <AuthGuard>
-      <DashboardInner />
-    </AuthGuard>
-  );
+  return <DashboardInner />;
 }
 
 function DashboardInner() {
@@ -80,9 +76,7 @@ function DashboardInner() {
   }, [gmailError, gmailConnected, router]);
 
   return (
-    <div className="min-h-screen bg-background">
-      <Header />
-      <main className="mx-auto max-w-[680px] px-6 py-10">
+    <div className="space-y-6">
         {gmailError && (
           <div className="mb-6 rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3">
             <p className="text-sm font-medium text-destructive">Couldn&apos;t connect Gmail</p>
@@ -222,7 +216,6 @@ function DashboardInner() {
             )}
           </div>
         )}
-      </main>
     </div>
   );
 }
