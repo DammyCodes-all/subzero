@@ -37,6 +37,35 @@ export const getGmailStatus = query({
   },
 });
 
+export const listConnections = query({
+  args: {},
+  returns: v.array(
+    v.object({
+      _id: v.id("connections"),
+      provider: v.string(),
+      status: v.string(),
+      accountEmail: v.optional(v.string()),
+      agentmailInbox: v.optional(v.string()),
+      lastGmailScanAt: v.optional(v.number()),
+      gmailScopeGranted: v.optional(v.boolean()),
+    })
+  ),
+  handler: async (ctx) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) return [];
+    const rows = await ctx.db.query("connections").withIndex("by_user", (q) => q.eq("userId", userId)).collect();
+    return rows.map((c) => ({
+      _id: c._id,
+      provider: c.provider,
+      status: c.status,
+      accountEmail: c.accountEmail,
+      agentmailInbox: c.agentmailInbox,
+      lastGmailScanAt: c.lastGmailScanAt,
+      gmailScopeGranted: c.gmailScopeGranted,
+    }));
+  },
+});
+
 export const getConnectionInternal = internalQuery({
   args: { userId: v.string() },
   returns: v.union(
