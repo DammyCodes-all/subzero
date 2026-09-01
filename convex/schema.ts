@@ -140,4 +140,32 @@ export default defineSchema({
     .index("by_user", ["userId"])
     .index("by_scheduled", ["scheduledAt"])
     .index("by_subscription_and_type", ["subscriptionId", "type"]),
+
+  ingestionAttempts: defineTable({
+    userId: v.string(),
+    svixId: v.optional(v.string()),
+    messageId: v.optional(v.string()),
+    inboxId: v.string(),
+    from: v.optional(v.string()),
+    subject: v.optional(v.string()),
+    status: v.union(
+      v.literal("processing"),
+      v.literal("created"),
+      v.literal("merged"),
+      v.literal("duplicate"),
+      v.literal("skipped"),
+      v.literal("unparsed"),
+      v.literal("no_user"),
+      v.literal("cancelled"),
+      v.literal("failed"),
+    ),
+    subscriptionId: v.optional(v.id("subscriptions")),
+    reason: v.optional(v.string()),
+    receivedAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_user", ["userId"])
+    .index("by_user_receivedAt", ["userId", "receivedAt"])
+    .index("by_svixId", ["svixId"])
+    .index("by_messageId", ["messageId"]),
 });

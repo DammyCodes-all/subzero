@@ -9,6 +9,7 @@ import { CompactAttentionRow } from "@/components/CompactAttentionRow";
 import { NoSubscriptionsState } from "@/components/EmptyState";
 import { DashboardSkeleton } from "@/components/Skeleton";
 import { SummaryHeader } from "@/components/SummaryHeader";
+import { ProcessingRows } from "@/components/ingestion/ProcessingRows";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { ArrowRight02Icon } from "@hugeicons/core-free-icons";
 import { Button } from "@/components/ui/button";
@@ -62,6 +63,7 @@ export function DashboardView() {
 
   return (
     <div className="space-y-8">
+      <ProcessingRows />
       {/* Gmail OAuth banners */}
       {gmailError && (
         <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3">

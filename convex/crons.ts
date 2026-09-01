@@ -16,4 +16,10 @@ crons.interval(
   internal.research.retryFailedResearch,
 );
 
+crons.interval(
+  "cleanup old ingestion attempts",
+  { hours: 24 },
+  internal.ingestionAttempts.cleanupOldAttempts,
+);
+
 export default crons;
