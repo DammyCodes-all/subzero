@@ -38,7 +38,6 @@ export function HowToCancel({
   const difficultyBlock = difficulty ? (
     <p className="font-mono text-xs tabular-nums text-muted-foreground">
       {frictionLabel(difficulty)}
-      {provider ? ` · Billed through ${provider}` : ""}
       {action?.instructions?.length ? ` · ${action.instructions.length} steps` : ""}
     </p>
   ) : null;
@@ -63,21 +62,25 @@ export function HowToCancel({
 
   // open_provider — must cancel where billed (no hardcoded fallback URL; use verified url only)
   if (method === "open_provider" && provider) {
-    const providerSteps = hasResearchedSteps
+    const rawSteps = hasResearchedSteps
       ? action!.instructions!
       : [
           `Open ${provider} → Subscriptions`,
           `Find ${sub.merchant}${sub.product ? ` · ${sub.product}` : ""}`,
           "Tap Cancel subscription → Confirm",
-          "Save the confirmation email — SubZero marks it cancelled",
+          "Save the confirmation email. SubZero marks it cancelled",
         ];
+    // Strip raw URLs from steps — URL is shown as button, not as step text
+    const providerSteps = rawSteps
+      .map((s) => s.replace(/https?:\/\/\S+/g, "").replace(/\s{2,}/g, " ").replace(/\s+at\s*$/i, "").trim())
+      .filter(Boolean);
     const providerUrl = url ?? undefined;
     return (
       <div className="space-y-4">
         {difficultyBlock}
         <div className="rounded-lg border bg-card p-5">
           <p className="text-sm leading-relaxed text-foreground">
-            Billed through <span className="font-medium">{provider}</span> — you need to cancel there, not on {sub.merchant}&apos;s site.
+            This subscription is billed through <span className="font-medium">{provider}</span>. Cancel in {provider}, not on {sub.merchant}&apos;s site.
           </p>
           <ol className="mt-4 space-y-2.5">
             {providerSteps.map((step, i) => (
@@ -167,7 +170,7 @@ export function HowToCancel({
       : [
           "Review the draft email SubZero prepared",
           "Send via SubZero (AgentMail)",
-          "Keep the confirmation — SubZero marks it cancelled on reply",
+          "Keep the confirmation. SubZero marks it cancelled on reply",
         ];
     return (
       <div className="space-y-4">
@@ -292,7 +295,7 @@ export function HowToCancel({
       <div className="rounded-lg border border-dashed border-border/60 bg-transparent p-5">
         <p className="text-sm font-medium text-foreground">No verified route yet</p>
         <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-          We couldn&apos;t verify a current cancellation path for {sub.merchant}. We won&apos;t guess — check the merchant&apos;s help center or contact support. This page updates when we find a verified source.
+          We could not verify a current cancellation path for {sub.merchant}. We will not guess. Check the merchant help center or contact support. This page updates when we find a verified source.
         </p>
         <Button variant="outline" size="sm" disabled className="mt-4 font-mono text-xs">
           No verified route

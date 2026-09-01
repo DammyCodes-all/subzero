@@ -33,7 +33,7 @@ export function daysUntil(ts?: number): number | null {
 
 export function formatCountdown(ts?: number): string {
   const d = daysUntil(ts);
-  if (d === null) return "—";
+  if (d === null) return "-";
   if (d <= 0) return "today";
   if (d === 1) return "tomorrow";
   return `${d} days`;
@@ -41,14 +41,14 @@ export function formatCountdown(ts?: number): string {
 
 export function formatCountdownShort(ts?: number): string {
   const d = daysUntil(ts);
-  if (d === null) return "—";
+  if (d === null) return "-";
   if (d <= 0) return "today";
   if (d === 1) return "1d";
   return `${d}d`;
 }
 
 export function formatRenewalDate(ts?: number): string {
-  if (!ts) return "—";
+  if (!ts) return "-";
   return new Intl.DateTimeFormat("en-US", {
     month: "short",
     day: "numeric",

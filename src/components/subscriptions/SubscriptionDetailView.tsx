@@ -164,9 +164,11 @@ export function SubscriptionDetailView() {
                   {cta.label}
                 </Button>
               )}
-              <span className="font-mono text-xs text-muted-foreground">
-                {cta.helper}
-              </span>
+              {cta.helper && cta.href && (
+                <span className="font-mono text-xs text-muted-foreground">
+                  {cta.helper}
+                </span>
+              )}
             </div>
           </div>
 

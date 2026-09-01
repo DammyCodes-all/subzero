@@ -70,14 +70,14 @@ export function getCancellationCTA(sub: SubLike): CancellationCTA {
         label: "No verified route",
         variant: "outline",
         disabled: true,
-        helper: `Billed through ${provider} — no verified link yet`,
+        helper: `Billed through ${provider}. No verified link yet`,
       };
     }
     return {
       label: `Open ${provider}`,
       href: url,
       variant: "default",
-      helper: `Billed through ${provider} — cancel there`,
+      helper: `Cancel in ${provider}`,
     };
   }
   // Web method with provider billing but discovered route is open_web — show but note provider
