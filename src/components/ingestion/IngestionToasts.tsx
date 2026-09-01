@@ -113,7 +113,7 @@ export function IngestionToasts() {
       }
       const { title, description, type } = copyFor(curr, a.subject, a.reason);
       const fn = type === "success" ? sileo.success : type === "error" ? sileo.error : sileo.info;
-      fn({ title, description, duration: curr === "failed" ? 6000 : 5000 });
+      fn({ title, description });
       prevStatus.current.set(id, curr);
       // cleanup map for terminal that was loading
       toastMap.current.delete(id);

@@ -23,7 +23,7 @@ export function DashboardView() {
 
   const isLoading = attention === undefined || all === undefined;
 
-  // Gmail OAuth banner state
+  // Gmail OAuth banner state (kept — not the forwarded processing banner)
   const searchParams = useSearchParams();
   const router = useRouter();
   const gmailError = searchParams.get("gmail_error");
@@ -64,7 +64,7 @@ export function DashboardView() {
   return (
     <div className="space-y-8">
       <ProcessingRows />
-      {/* Gmail OAuth banners */}
+      {/* Gmail OAuth banners — not the forwarded processing banner; kept for Gmail connect feedback */}
       {gmailError && (
         <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3">
           <p className="text-sm font-medium text-destructive">
