@@ -12,7 +12,7 @@
 - **Auth:** Convex Auth
 - **AI models:** gpt-4o-mini
 - **Started:** 2026-08-28T08:01:06Z
-- **Last updated:** 2026-08-29T18:55:00Z
+- **Last updated:** 2026-09-01T00:00:00Z
 
 ## Log
 
@@ -39,3 +39,6 @@ Implemented Phase 4: The Nudge Engine (Scheduled Notifications & Reminders). Cre
 
 ### 2026-08-31 - working tree
 Fixed user identity resolution and duplicate connection creation by standardizing Auth calls to `getAuthUserId(ctx)` across `convex/agentmail.ts`, `convex/subscriptions.ts`, `convex/gmail.ts`, and `convex/gmailActions.ts`. Resolved session ID mismatch where queries failed to match subscriptions created across different auth sessions. Completed Phase 5 (Gmail API Scan) with canonical user binding. Convex features: auth, queries, mutations, actions, schema, indexes.
+
+### 2026-09-01 - working tree
+Hardened multi-email support after a two-document audit (`dev_audit.md`, `docs/multi-email-audit.md`). Added `sourceEmail` to `subscriptions` and `ingestionAttempts` (`convex/schema.ts`) and plumbed it through Gmail scan + forwarding pipelines (`convex/ingestion/persist.ts`, `convex/ingestion/process.ts`, `convex/gmailActions.ts`) so renewal nudges (`convex/notifications.ts`) and cancellation emails (`convex/agentmail.ts`) deliver to the inbox the subscription was detected from, not the first connection. Made webhook signature verification a hard 401 in production (`convex/http.ts`), blocked password signup from merging into OAuth-only accounts and new signups using an email already connected to another account (`convex/auth.ts`), added cross-user email-ownership guards in `storeByEmail`/`storeGmailToken` (`convex/gmail.ts`), and per-connection Gmail scanning with per-connection cooldown plus targeted disconnect via `connectionId` (`convex/gmail.ts`, `convex/gmailActions.ts`, `src/components/connections/ConnectionsView.tsx`). Replaced heuristic routing in `resolveUserByInbox` — removed `.take(100)` broad scans and "most recent connection" guessing, refusing ambiguous shared-inbox emails instead (`convex/agentmail.ts`). Added per-account forwarding guidance to `ForwardingCard.tsx`. Convex features: auth, schema, indexes, queries, mutations, actions, http, scheduler, crons.

@@ -61,6 +61,18 @@ export const { auth, signIn, signOut, store, isAuthenticated } = convexAuth({
           .withIndex("email", (q: any) => q.eq("email", emailNorm))
           .first();
         if (existingByEmail) {
+          // Block password signup if the existing user has NO password account (created via OAuth only).
+          // Otherwise an attacker with the same email would silently gain password access to it.
+          if (args.type === "credentials" && args.provider.id === "password") {
+            const hasPasswordAccount = await (ctx.db.query("authAccounts") as any)
+              .withIndex("userIdAndProvider", (q: any) =>
+                q.eq("userId", existingByEmail._id).eq("provider", "password"),
+              )
+              .first();
+            if (!hasPasswordAccount) {
+              throw new Error("An account with this email already exists. Please sign in with Google.");
+            }
+          }
           // For password signup, keep provided name if existing has none, but don't overwrite verified name
           if (args.type === "credentials" && args.provider.id === "password") {
             const name = typeof profile.name === "string" ? profile.name.replace(/\s+/g, " ").trim() : undefined;
@@ -81,6 +93,18 @@ export const { auth, signIn, signOut, store, isAuthenticated } = convexAuth({
       }
 
       // No existing user — create new one. Validate name for password.
+      // Guard: block creating a NEW account with an email already connected as a Gmail
+      // account to another user — that email "belongs" to an existing account.
+      if (emailNorm) {
+        const connectedElsewhere = await (ctx.db.query("connections") as any)
+          .withIndex("by_accountEmail", (q: any) => q.eq("accountEmail", emailNorm))
+          .first();
+        if (connectedElsewhere && connectedElsewhere.provider === "google" && connectedElsewhere.status === "connected") {
+          throw new Error(
+            "This email is already connected to another SubZero account. Sign in to that account instead.",
+          );
+        }
+      }
       if (args.type === "credentials" && args.provider.id === "password") {
         const name = typeof profile.name === "string" ? profile.name.trim() : undefined;
         if (!rawEmail) throw new Error("Invalid email");

@@ -65,8 +65,12 @@ http.route({
           }
         }
         if (!verified) {
-          // For hackathon demo: never block forwarding on signature — log and continue.
-          // In prod this should be strict 401, but shared inbox + secret rotation makes strict fail flaky.
+          const isProd = env.NODE_ENV === "production" || process.env.NODE_ENV === "production";
+          if (isProd) {
+            console.error("webhook verify failed (BLOCKED in prod)", String(lastErr));
+            return new Response("invalid signature", { status: 401 });
+          }
+          // Dev-only: log and continue for hackathon demo
           console.error("webhook verify failed (soft-continue for demo)", String(lastErr));
         }
       } else {
@@ -259,6 +263,7 @@ http.route({
             inboxId,
             from: fromVal || undefined,
             subject: subjectVal || undefined,
+            sourceEmail: toVal || undefined,
           });
         if (!created.isNew) {
           // Svix retry — idempotent, no need to re-schedule
@@ -364,6 +369,7 @@ http.route({
               inboxId: recipient,
               from: legacyFrom || undefined,
               subject: subject || undefined,
+              sourceEmail: recipient || undefined,
             });
           if (!created.isNew) isLegacyNew = false;
           else legacyAttemptId = created.attemptId;

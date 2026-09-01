@@ -62,6 +62,7 @@ export default defineSchema({
     ),
     cancellationUrl: v.optional(v.string()),
     billingProvider: v.optional(v.string()),
+    sourceEmail: v.optional(v.string()),
     dedupKey: v.string(),
     researchStatus: v.optional(
       v.union(
@@ -160,6 +161,7 @@ export default defineSchema({
       v.literal("failed"),
     ),
     subscriptionId: v.optional(v.id("subscriptions")),
+    sourceEmail: v.optional(v.string()),
     reason: v.optional(v.string()),
     receivedAt: v.number(),
     updatedAt: v.number(),

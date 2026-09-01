@@ -233,7 +233,7 @@ export function ConnectionsView() {
                 <Button
                   variant="ghost"
                   size="sm"
-                  onClick={() => void disconnect({})}
+                  onClick={() => void disconnect({ connectionId: conn._id })}
                   className="h-8 text-xs text-muted-foreground hover:text-destructive"
                 >
                   Disconnect

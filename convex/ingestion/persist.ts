@@ -43,6 +43,7 @@ export const persistExtracted = internalMutation({
     svixId: v.optional(v.string()),
     messageId: v.optional(v.string()),
     source: v.string(),
+    sourceEmail: v.optional(v.string()),
   },
   returns: v.object({
     subscriptionId: v.union(v.id("subscriptions"), v.null()),
@@ -147,6 +148,7 @@ export const persistExtracted = internalMutation({
           nextRenewalAt: ex.nextRenewalAt,
           trialEndsAt: ex.trialEndsAt,
           billingProvider: ex.billingProvider,
+          sourceEmail: args.sourceEmail,
           cancellationMethod: "unknown",
           cancellationDifficulty: getDifficulty(
             "unknown",
@@ -243,6 +245,8 @@ export const persistExtracted = internalMutation({
         patch.trialEndsAt = ex.trialEndsAt;
       }
       if (ex.product && !existing.product) patch.product = ex.product;
+      // Preserve the first-known source email if we don't have one yet
+      if (args.sourceEmail && !existing.sourceEmail) patch.sourceEmail = args.sourceEmail;
       const addedProvider = !!(ex.billingProvider && !existing.billingProvider);
       if (addedProvider) {
         patch.billingProvider = ex.billingProvider;
@@ -274,6 +278,7 @@ export const persistExtracted = internalMutation({
         nextRenewalAt: ex.nextRenewalAt,
         trialEndsAt: ex.trialEndsAt,
         billingProvider: ex.billingProvider,
+        sourceEmail: args.sourceEmail,
         cancellationDifficulty: difficulty,
         cancellationMethod: "unknown",
         dedupKey: key,

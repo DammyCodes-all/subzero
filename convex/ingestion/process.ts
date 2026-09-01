@@ -157,6 +157,9 @@ export const processForwardedEmail = internalAction({
       }
 
       // 7. Persist
+      // Determine source email for routing/delivery: prefer the resolved recipient of the
+      // email (routed from inbox/from), fall back to the sender.
+      const sourceEmail = (args.to.includes("@") ? args.to : from).trim().toLowerCase() || undefined;
       const result = (await ctx.runMutation(
         internal.ingestion.persist.persistExtracted,
         {
@@ -165,6 +168,7 @@ export const processForwardedEmail = internalAction({
           svixId: args.svixId,
           messageId: args.messageId,
           source,
+          sourceEmail,
         },
       )) as {
         subscriptionId: Id<"subscriptions"> | null;

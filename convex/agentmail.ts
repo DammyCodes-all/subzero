@@ -170,13 +170,18 @@ export const resolveUserByInbox = internalQuery({
     if (candidates.length > 1 && fromEmail) {
       const matchByFrom = candidates.find((c) => c.accountEmail?.toLowerCase() === fromEmail);
       if (matchByFrom) return matchByFrom.userId;
-      // Fallback to most recent valid candidate
-      candidates.sort((a, b) => b._creationTime - a._creationTime);
-      return candidates[0].userId;
+      // Shared inbox + no from-address match — do NOT guess. Reject.
+      console.error(
+        `[agentmail] Shared inbox with ${candidates.length} candidate users and unrecognized from "${fromEmail}". Refusing to guess.`,
+      );
+      return null;
     }
     if (candidates.length > 1) {
-      candidates.sort((a, b) => b._creationTime - a._creationTime);
-      return candidates[0].userId;
+      // Shared inbox with no from-address at all — cannot disambiguate. Reject.
+      console.error(
+        `[agentmail] Shared inbox with ${candidates.length} candidate users and no from-address. Refusing to guess.`,
+      );
+      return null;
     }
     if (candidates.length === 1) return candidates[0].userId;
 
@@ -193,7 +198,7 @@ export const resolveUserByInbox = internalQuery({
       }
     }
 
-    // 2. Try matching fromEmail -> accountEmail in connections table
+    // 2. Try matching fromEmail -> accountEmail in connections table (indexed lookup only)
     if (fromEmail) {
       const byAccountEmail = await ctx.db
         .query("connections")
@@ -201,30 +206,19 @@ export const resolveUserByInbox = internalQuery({
         .first();
       if (byAccountEmail) return byAccountEmail.userId;
 
-      // Broad scan of connections for case-insensitive match
-      const allConns = await ctx.db.query("connections").take(100);
-      const hitConn = allConns.find((c) => c.accountEmail?.toLowerCase() === fromEmail);
-      if (hitConn) return hitConn.userId;
-
-      // Check users table directly for matching email
-      const allUsers = await ctx.db.query("users").take(100);
-      const userMatch = allUsers.find((u) => u.email?.toLowerCase() === fromEmail);
+      // Check users table directly (indexed lookup by email)
+      const userMatch = await ctx.db
+        .query("users")
+        .withIndex("email", (q: any) => q.eq("email", fromEmail))
+        .first();
       if (userMatch) {
         const userConn = await ctx.db
           .query("connections")
-          .withIndex("by_user", (q) => q.eq("userId", userMatch._id))
+          .withIndex("by_user", (q: any) => q.eq("userId", userMatch._id))
           .first();
         if (userConn) return userConn.userId;
-        return userMatch._id;
+        return userMatch._id as any;
       }
-    }
-
-    // 3. Fallback for single-user setup / single agentmail connection
-    const allConns = await ctx.db.query("connections").take(10);
-    const agentmailConns = allConns.filter((c) => c.provider === "agentmail");
-    if (agentmailConns.length === 1) {
-      console.log(`[agentmail] Fallback: single agentmail connection found, returning userId=${agentmailConns[0].userId}`);
-      return agentmailConns[0].userId;
     }
 
     return null;
@@ -274,6 +268,12 @@ export const sendCancellationEmail = action({
       throw new Error("No verified support email found in research (cancellationUrl missing mailto). Check How to cancel for contact details.");
     }
 
+    // Include the source email context (which inbox this subscription was detected from)
+    // so the merchant / user has full context in the cancellation thread.
+    const sourceHint = sub.sourceEmail
+      ? `\n\n(Subscription detected from: ${sub.sourceEmail})`
+      : "";
+
     const apiKey = process.env.AGENTMAIL_API_KEY;
     if (apiKey && recipient) {
       try {
@@ -286,7 +286,7 @@ export const sendCancellationEmail = action({
           body: JSON.stringify({
             to: recipient,
             subject: `Cancellation Request: ${args.merchant} Subscription`,
-            text: args.body,
+            text: `${args.body}${sourceHint}`,
           }),
         });
         if (!res.ok) {
@@ -299,7 +299,7 @@ export const sendCancellationEmail = action({
         throw err;
       }
     } else if (recipient) {
-      console.log(`[Mock AgentMail] Sent to ${recipient} (${args.merchant}):\n${args.body}`);
+      console.log(`[Mock AgentMail] Sent to ${recipient} (${args.merchant}):\n${args.body}${sourceHint}`);
     }
 
     await ctx.runMutation(internal.agentmail.markCancellationSent, {

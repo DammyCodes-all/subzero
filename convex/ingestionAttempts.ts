@@ -10,6 +10,7 @@ export const createProcessingAttempt = internalMutation({
     inboxId: v.string(),
     from: v.optional(v.string()),
     subject: v.optional(v.string()),
+    sourceEmail: v.optional(v.string()),
   },
   returns: v.object({ attemptId: v.id("ingestionAttempts"), isNew: v.boolean() }),
   handler: async (ctx, args) => {
@@ -39,6 +40,7 @@ export const createProcessingAttempt = internalMutation({
       inboxId: args.inboxId,
       from,
       subject,
+      sourceEmail: args.sourceEmail,
       status: "processing",
       receivedAt: now,
       updatedAt: now,

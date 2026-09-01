@@ -18,6 +18,7 @@ async function processOneEmail(
   text: string,
   html: string,
   messageId: string,
+  sourceEmail?: string,
 ): Promise<{ status: string; subscriptionId?: string }> {
   const normalized = normalizeEmail({ text, html, subject });
   const hay = `${normalized.text} ${normalized.subject}`;
@@ -39,6 +40,7 @@ async function processOneEmail(
     svixId: `gmail:${messageId}`,
     messageId: `gmail:${messageId}`,
     source,
+    sourceEmail,
   });
   if (result.isDuplicate) return { status: "duplicate" };
   if (result.isNew && result.subscriptionId && !extracted.isConfirmation) {
@@ -64,13 +66,16 @@ export const scanGmail = action({
   handler: async (ctx, _args) => {
     const userId = await getAuthUserId(ctx);
     if (!userId) throw new Error("Not authenticated");
-    const conn: any = await ctx.runQuery(internal.gmail.getConnectionInternal, { userId });
-    if (conn?.lastGmailScanAt && Date.now() - conn.lastGmailScanAt < COOLDOWN_MS) {
-      return { scanned: 0, created: 0, merged: 0, skipped: 0, unparsed: 0, duplicate: 0, cancelled: 0, reason: "cooldown" };
-    }
+    const conns: any[] = await ctx.runQuery(internal.gmail.getConnectionsInternal, { userId });
     const fixture = process.env.FIXTURE_GMAIL === "1";
     let scanned = 0, created = 0, merged = 0, skipped = 0, unparsed = 0, duplicate = 0, cancelled = 0;
+
     if (fixture) {
+      // Fixtures are user-agnostic — scan once
+      const first = conns[0];
+      if (first?.lastGmailScanAt && Date.now() - first.lastGmailScanAt < COOLDOWN_MS) {
+        return { scanned: 0, created: 0, merged: 0, skipped: 0, unparsed: 0, duplicate: 0, cancelled: 0, reason: "cooldown" };
+      }
       const { fixtures } = await import("./ingestion/fixtures");
       const list = Object.values(fixtures);
       for (const f of list) {
@@ -83,55 +88,75 @@ export const scanGmail = action({
         else if (r.status === "duplicate") duplicate++;
         else if (r.status === "cancelled") cancelled++;
       }
-      if (conn?._id) await ctx.runMutation(internal.gmail.touchScan as any, { connId: conn._id });
+      if (first?._id) await ctx.runMutation(internal.gmail.touchScan as any, { connId: first._id });
       return { scanned, created, merged, skipped, unparsed, duplicate, cancelled };
     }
 
-    if (!conn || !conn.gmailRefreshToken || !conn.gmailScopeGranted || conn.status !== "connected") {
+    const active = conns.filter(
+      (c) => c.gmailRefreshToken && c.gmailScopeGranted && c.status === "connected",
+    );
+    if (active.length === 0) {
       return { scanned: 0, created: 0, merged: 0, skipped: 0, unparsed: 0, duplicate: 0, cancelled: 0, reason: "no_consent" };
     }
 
-    let accessToken: string;
-    try {
-      const tok = await getAccessToken(conn.gmailRefreshToken);
-      accessToken = tok.accessToken;
-    } catch (e: any) {
-      return { scanned: 0, created: 0, merged: 0, skipped: 0, unparsed: 0, duplicate: 0, cancelled: 0, reason: String(e).slice(0,200) };
-    }
+    let anyScanned = false;
+    for (const conn of active) {
+      // Per-connection cooldown — skip connections scanned recently, scan the rest
+      if (conn.lastGmailScanAt && Date.now() - conn.lastGmailScanAt < COOLDOWN_MS) {
+        continue;
+      }
+      let accessToken: string;
+      try {
+        const tok = await getAccessToken(conn.gmailRefreshToken);
+        accessToken = tok.accessToken;
+      } catch (e: any) {
+        continue;
+      }
 
-    const q = buildGmailQuery(60);
-    let pageToken: string | undefined = undefined;
-    let pages = 0;
-    const maxPages = 2;
-    do {
-      const { messages, nextPageToken } = await listMessages(accessToken, q, 15, pageToken);
-      pageToken = nextPageToken;
-      pages++;
-      for (let i = 0; i < messages.length; i += 5) {
-        const batch = messages.slice(i, i + 5);
-        const fetched = await Promise.all(
-          batch.map((m) => getMessage(accessToken, m.id).catch(() => null)),
-        );
-        for (const msg of fetched) {
-          if (!msg) { skipped++; continue; }
-          scanned++;
-          try {
-            const r = await processOneEmail(ctx, userId, msg.subject, msg.text, msg.html, msg.id);
-            if (r.status === "created") created++;
-            else if (r.status === "merged") merged++;
-            else if (r.status === "skipped") skipped++;
-            else if (r.status === "unparsed") unparsed++;
-            else if (r.status === "duplicate") duplicate++;
-            else if (r.status === "cancelled") cancelled++;
-          } catch {
-            unparsed++;
+      const q = buildGmailQuery(60);
+      let pageToken: string | undefined = undefined;
+      let pages = 0;
+      const maxPages = 2;
+      do {
+        const { messages, nextPageToken } = await listMessages(accessToken, q, 15, pageToken);
+        pageToken = nextPageToken;
+        pages++;
+        for (let i = 0; i < messages.length; i += 5) {
+          const batch = messages.slice(i, i + 5);
+          const fetched = await Promise.all(
+            batch.map((m) => getMessage(accessToken, m.id).catch(() => null)),
+          );
+          for (const msg of fetched) {
+            if (!msg) { skipped++; continue; }
+            scanned++;
+            anyScanned = true;
+            try {
+              const r = await processOneEmail(ctx, userId, msg.subject, msg.text, msg.html, msg.id, conn.accountEmail);
+              if (r.status === "created") created++;
+              else if (r.status === "merged") merged++;
+              else if (r.status === "skipped") skipped++;
+              else if (r.status === "unparsed") unparsed++;
+              else if (r.status === "duplicate") duplicate++;
+              else if (r.status === "cancelled") cancelled++;
+            } catch {
+              unparsed++;
+            }
           }
         }
-      }
-      if (!pageToken) break;
-    } while (pages < maxPages);
+        if (!pageToken) break;
+      } while (pages < maxPages);
 
-    if (conn?._id) await ctx.runMutation(internal.gmail.touchScan as any, { connId: conn._id });
+      if (conn?._id) await ctx.runMutation(internal.gmail.touchScan as any, { connId: conn._id });
+    }
+
+    if (!anyScanned && scanned === 0) {
+      const allOnCooldown = active.every(
+        (c) => c.lastGmailScanAt && Date.now() - c.lastGmailScanAt < COOLDOWN_MS,
+      );
+      if (allOnCooldown) {
+        return { scanned, created, merged, skipped, unparsed, duplicate, cancelled, reason: "cooldown" };
+      }
+    }
     return { scanned, created, merged, skipped, unparsed, duplicate, cancelled };
   },
 });
@@ -140,10 +165,11 @@ export const scanForUser = internalAction({
   args: { userId: v.string() },
   returns: v.object({ scanned: v.number(), created: v.number(), reason: v.optional(v.string()) }),
   handler: async (ctx, args) => {
-    const conn: any = await ctx.runQuery(internal.gmail.getConnectionInternal, { userId: args.userId });
+    const conns: any[] = await ctx.runQuery(internal.gmail.getConnectionsInternal, { userId: args.userId });
     const fixture = process.env.FIXTURE_GMAIL === "1";
     if (fixture) {
-      if (conn?.lastGmailScanAt && Date.now() - conn.lastGmailScanAt < COOLDOWN_MS) return { scanned: 0, created: 0, reason: "cooldown" };
+      const first = conns[0];
+      if (first?.lastGmailScanAt && Date.now() - first.lastGmailScanAt < COOLDOWN_MS) return { scanned: 0, created: 0, reason: "cooldown" };
       const { fixtures } = await import("./ingestion/fixtures");
       let scanned = 0, created = 0;
       for (const f of Object.values(fixtures)) {
@@ -151,28 +177,34 @@ export const scanForUser = internalAction({
         const r = await processOneEmail(ctx, args.userId, f.subject, f.text, f.html ?? "", `fixture:${f.subject.slice(0,20)}`);
         if (r.status === "created") created++;
       }
-      if (conn?._id) await ctx.runMutation(internal.gmail.touchScan, { connId: conn._id });
+      if (first?._id) await ctx.runMutation(internal.gmail.touchScan, { connId: first._id });
       return { scanned, created };
     }
-    if (!conn || !conn.gmailRefreshToken) return { scanned: 0, created: 0, reason: "no_consent" };
-    if (conn.lastGmailScanAt && Date.now() - conn.lastGmailScanAt < COOLDOWN_MS) return { scanned: 0, created: 0, reason: "cooldown" };
-    try {
-      const tok = await getAccessToken(conn.gmailRefreshToken);
-      const q = buildGmailQuery(60);
-      const { messages } = await listMessages(tok.accessToken, q, 15);
-      let scanned = 0, created = 0;
-      for (const m of messages.slice(0, 5)) {
-        const msg = await getMessage(tok.accessToken, m.id).catch(() => null);
-        if (!msg) continue;
-        scanned++;
-        const r = await processOneEmail(ctx, args.userId, msg.subject, msg.text, msg.html, msg.id).catch(() => ({ status: "unparsed" }));
-        if (r.status === "created") created++;
+    const active = conns.filter((c) => c.gmailRefreshToken && c.status === "connected");
+    if (active.length === 0) return { scanned: 0, created: 0, reason: "no_consent" };
+    const eligible = active.filter(
+      (c) => !(c.lastGmailScanAt && Date.now() - c.lastGmailScanAt < COOLDOWN_MS),
+    );
+    if (eligible.length === 0) return { scanned: 0, created: 0, reason: "cooldown" };
+    let scanned = 0, created = 0;
+    for (const conn of eligible) {
+      try {
+        const tok = await getAccessToken(conn.gmailRefreshToken);
+        const q = buildGmailQuery(60);
+        const { messages } = await listMessages(tok.accessToken, q, 15);
+        for (const m of messages.slice(0, 5)) {
+          const msg = await getMessage(tok.accessToken, m.id).catch(() => null);
+          if (!msg) continue;
+          scanned++;
+          const r = await processOneEmail(ctx, args.userId, msg.subject, msg.text, msg.html, msg.id, conn.accountEmail).catch(() => ({ status: "unparsed" }));
+          if (r.status === "created") created++;
+        }
+        if (conn?._id) await ctx.runMutation(internal.gmail.touchScan, { connId: conn._id });
+      } catch (e: any) {
+        continue;
       }
-      if (conn?._id) await ctx.runMutation(internal.gmail.touchScan, { connId: conn._id });
-      return { scanned, created };
-    } catch (e: any) {
-      return { scanned: 0, created: 0, reason: String(e).slice(0,200) };
     }
+    return { scanned, created };
   },
 });
 

@@ -59,16 +59,26 @@ export const getNotificationDetails = internalQuery({
     const sub = await ctx.db.get(notif.subscriptionId);
     if (!sub) return null;
 
-    // Find connection to get user email
-    const conn = await ctx.db
-      .query("connections")
-      .withIndex("by_user", (q) => q.eq("userId", notif.userId))
-      .first();
+    // Prefer the subscription's source email for delivery — matches the inbox
+    // the subscription was detected from (multi-email aware).
+    let recipientEmail: string | null = sub.sourceEmail ?? null;
+    if (!recipientEmail) {
+      // Fallback: find the connection matching this subscription's source email, else first connection
+      const conns = await ctx.db
+        .query("connections")
+        .withIndex("by_user", (q) => q.eq("userId", notif.userId))
+        .collect();
+      const sourceMatch = conns.find(
+        (c) => c.accountEmail?.toLowerCase() === sub.sourceEmail?.toLowerCase(),
+      );
+      const conn = sourceMatch ?? conns[0];
+      recipientEmail = conn?.accountEmail ?? null;
+    }
 
     return {
       notif,
       sub,
-      userEmail: conn?.accountEmail ?? null,
+      userEmail: recipientEmail,
     };
   },
 });
