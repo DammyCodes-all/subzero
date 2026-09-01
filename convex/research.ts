@@ -53,7 +53,7 @@ export const researchCancellationRoute = internalAction({
         },
         body: JSON.stringify({
           query: searchQuery,
-          limit: 5,
+          limit: 10,
         }),
         signal: controller.signal,
       });
@@ -133,6 +133,11 @@ export const researchCancellationRoute = internalAction({
       if (host === "play.google.com" || host === "apps.apple.com") s += 3;
       if (path.includes("cancel") || (path.includes("subscription") && combined.includes("cancel"))) s += 2;
       if (combined.includes("how to cancel") || combined.includes("cancel subscription")) s += 2;
+      // Prefer official help answers over community threads/forums
+      if (path.includes("/answer/")) s += 3;
+      if (path.includes("/thread/") || path.includes("/threads/") || host.includes("reddit.com") || host.includes("youtube.com")) s -= 6;
+      if (providerLower.includes("google") && path.includes("googleplay")) s += 4;
+      if (providerLower.includes("apple") && path.includes("apple")) s += 4;
       // For store-billed, demote merchant portal account pages generically (not snap-specific)
       if (providerLower && merchantHostMatch && path.includes("accounts.")) s -= 4;
       // For store-billed, slightly prefer provider help over merchant cancel page when both exist
@@ -172,9 +177,15 @@ export const researchCancellationRoute = internalAction({
     let allLinks: string[] = [];
 
     const urlsToScrape: string[] = [];
-    if (ranked[0]?.h.url) urlsToScrape.push(String(ranked[0].h.url));
-    if (ranked[1]?.h.url && ranked[1].score >= (ranked[0]?.score ?? 0) - 2 && ranked[1].score > 0) {
-      urlsToScrape.push(String(ranked[1].h.url));
+    // Scrape top 3 with positive scores — ensures provider article (e.g. Play help for Google One via Play) is included even if thread ranks higher
+    for (const r of ranked.slice(0, 3)) {
+      if (r.h.url && r.score > 0) urlsToScrape.push(String(r.h.url));
+      if (urlsToScrape.length >= 3) break;
+    }
+    // Fallback: if we only got 1, allow 2nd even if score borderline but contains googleplay for provider
+    if (urlsToScrape.length === 1 && ranked[1]?.h.url) {
+      const u = String(ranked[1].h.url).toLowerCase();
+      if (providerLower.includes("google") && u.includes("googleplay")) urlsToScrape.push(String(ranked[1].h.url));
     }
 
     let scrapedAny = false;

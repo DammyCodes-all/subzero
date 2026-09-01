@@ -157,7 +157,7 @@ export function DashboardView() {
               <div className="space-y-4">
                 {/* Hero card */}
                 <Link
-                  href={`/dashboard/subscriptions/${hero._id}`}
+                  href={`/subscriptions/${hero._id}`}
                   className="block rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
                 >
                   <ActionCard sub={hero} />
@@ -173,7 +173,7 @@ export function DashboardView() {
                       {rest.map((sub: Doc<"subscriptions">) => (
                         <Link
                           key={sub._id}
-                          href={`/dashboard/subscriptions/${sub._id}`}
+                          href={`/subscriptions/${sub._id}`}
                           className="block rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
                         >
                           <CompactAttentionRow sub={sub} />
