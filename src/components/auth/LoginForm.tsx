@@ -9,18 +9,28 @@ import { Label } from "@/components/ui/label";
 import { PasswordField } from "./PasswordField";
 
 const loginSchema = z.object({
-  email: z.string().trim().toLowerCase().pipe(z.string().email("Enter a valid email address")),
+  email: z
+    .string()
+    .trim()
+    .toLowerCase()
+    .pipe(z.string().email("Enter a valid email address")),
   password: z.string().min(1, "Password is required"),
 });
 
 type FieldErrors = Partial<Record<"email" | "password" | "form", string>>;
 
-function mapServerError(e: unknown): { field?: keyof FieldErrors; message: string } {
+function mapServerError(e: unknown): {
+  field?: keyof FieldErrors;
+  message: string;
+} {
   const msg = e instanceof Error ? e.message : String(e);
-  const clean = msg.replace(/^Uncaught Error:\s*/i, "").slice(0, 500);
-  if (/Invalid credentials/i.test(clean)) return { message: "Wrong email or password." };
-  if (/Invalid email/i.test(clean)) return { field: "email", message: "Enter a valid email address." };
-  if (/Too many/i.test(clean) || /Rate limit/i.test(clean)) return { message: "Too many attempts. Try again in a few minutes." };
+  const clean = msg.replace(/^(Uncaught Error:\s*)+/i, "").slice(0, 500);
+  if (/Invalid credentials/i.test(clean))
+    return { message: "Wrong email or password." };
+  if (/Invalid email/i.test(clean))
+    return { field: "email", message: "Enter a valid email address." };
+  if (/Too many/i.test(clean) || /Rate limit/i.test(clean))
+    return { message: "Too many attempts. Try again in a few minutes." };
   return { message: clean || "Something went wrong. Try again." };
 }
 
@@ -39,7 +49,8 @@ export function LoginForm() {
       const flat = parsed.error.flatten();
       const fe: FieldErrors = {};
       const fieldErrors = flat.fieldErrors as Record<string, string[]>;
-      for (const k of ["email", "password"] as const) if (fieldErrors[k]?.[0]) fe[k] = fieldErrors[k]![0]!;
+      for (const k of ["email", "password"] as const)
+        if (fieldErrors[k]?.[0]) fe[k] = fieldErrors[k]![0]!;
       if (flat.formErrors[0]) fe.form = flat.formErrors[0] as string;
       setErrors(fe);
       setTouched({ email: true, password: true });
@@ -48,7 +59,11 @@ export function LoginForm() {
     setErrors({});
     setPending(true);
     try {
-      await signIn("password", { flow: "signIn", email: parsed.data.email, password: parsed.data.password });
+      await signIn("password", {
+        flow: "signIn",
+        email: parsed.data.email,
+        password: parsed.data.password,
+      });
     } catch (err) {
       const mapped = mapServerError(err);
       if (mapped.field) setErrors({ [mapped.field]: mapped.message });
@@ -74,7 +89,10 @@ export function LoginForm() {
             setTouched((s) => ({ ...s, email: true }));
             const res = loginSchema.safeParse({ email, password });
             if (!res.success) {
-              const fe = res.error.flatten().fieldErrors as Record<string, string[]>;
+              const fe = res.error.flatten().fieldErrors as Record<
+                string,
+                string[]
+              >;
               setErrors((s) => ({ ...s, email: fe.email?.[0] }));
             } else {
               setErrors((s) => ({ ...s, email: undefined }));
@@ -85,7 +103,11 @@ export function LoginForm() {
           inputMode="email"
           aria-invalid={!!errors.email}
           aria-describedby={errors.email ? "login-email-error" : undefined}
-          className={errors.email ? "border-destructive focus-visible:ring-destructive/20" : undefined}
+          className={
+            errors.email
+              ? "border-destructive focus-visible:ring-destructive/20"
+              : undefined
+          }
         />
         {touched.email && errors.email && (
           <p id="login-email-error" className="text-xs text-destructive">
@@ -105,10 +127,19 @@ export function LoginForm() {
           id="login-password"
           autoComplete="current-password"
         />
-        {touched.password && errors.password && <p className="text-xs text-destructive">{errors.password}</p>}
+        {touched.password && errors.password && (
+          <p className="text-xs text-destructive">{errors.password}</p>
+        )}
       </div>
 
-      {errors.form && <p className="text-sm text-destructive rounded-md bg-destructive/10 px-3 py-2" role="alert">{errors.form}</p>}
+      {errors.form && (
+        <p
+          className="text-sm text-destructive rounded-md bg-destructive/10 px-3 py-2"
+          role="alert"
+        >
+          {errors.form}
+        </p>
+      )}
 
       <Button type="submit" disabled={pending} className="w-full">
         {pending ? "Signing in…" : "Log in"}

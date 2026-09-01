@@ -8,6 +8,10 @@ import { useEffect, useState } from "react";
 import { sileo } from "sileo";
 import { ConnectGmailButton } from "@/components/ConnectGmailButton";
 import { Button } from "@/components/ui/button";
+import {
+  GOOGLE_OAUTH_REDIRECT,
+  markGoogleOAuthAttempt,
+} from "@/lib/googleAuth";
 import { api } from "../../convex/_generated/api";
 
 export function ZeroAttentionState() {
@@ -59,7 +63,10 @@ export function NoSubscriptionsState() {
       </p>
       <Button
         className="mt-4 font-medium"
-        onClick={() => void signIn("google", { redirectTo: "/dashboard" })}
+        onClick={() => {
+          markGoogleOAuthAttempt();
+          void signIn("google", { redirectTo: GOOGLE_OAUTH_REDIRECT });
+        }}
       >
         Connect Google
       </Button>
