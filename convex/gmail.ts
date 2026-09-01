@@ -1,7 +1,18 @@
-import { v } from "convex/values";
-import { mutation, internalMutation, internalQuery, query } from "./_generated/server";
 import { getAuthUserId } from "@convex-dev/auth/server";
+import { v } from "convex/values";
 import type { Id } from "./_generated/dataModel";
+import {
+  internalMutation,
+  internalQuery,
+  mutation,
+  query,
+} from "./_generated/server";
+
+function userIdCandidates(userId: string) {
+  const parts = userId.split("|");
+  const uid = parts.length >= 2 ? parts[1] : userId;
+  return new Set([userId, uid, `user:${uid}`]);
+}
 
 export const getGmailStatus = query({
   args: {},
@@ -16,24 +27,49 @@ export const getGmailStatus = query({
     if (!userId) return { connected: false };
     const ident = await ctx.auth.getUserIdentity();
     const tokenId = ident?.tokenIdentifier ?? userId;
-    let rows = await ctx.db.query("connections").withIndex("by_user", (q) => q.eq("userId", userId)).collect();
+    let rows = await ctx.db
+      .query("connections")
+      .withIndex("by_user", (q) => q.eq("userId", userId))
+      .collect();
     if (rows.length === 0 && tokenId !== userId) {
-      rows = await ctx.db.query("connections").withIndex("by_user", (q) => q.eq("userId", tokenId)).collect();
+      rows = await ctx.db
+        .query("connections")
+        .withIndex("by_user", (q) => q.eq("userId", tokenId))
+        .collect();
     }
-    let g = rows.find((c) => c.provider === "google");
-    if (!g) {
+    let googleRows = rows.filter((c) => c.provider === "google");
+    if (googleRows.length === 0) {
       const email = ident?.email?.toLowerCase();
       if (email) {
-        const byEmail = await ctx.db.query("connections").withIndex("by_accountEmail", (q) => q.eq("accountEmail", email)).first();
-        if (byEmail && byEmail.provider === "google") g = byEmail as any;
+        const byEmail = await ctx.db
+          .query("connections")
+          .withIndex("by_accountEmail_status", (q) =>
+            q.eq("accountEmail", email).eq("status", "connected"),
+          )
+          .collect();
+        googleRows = byEmail.filter((c) => c.provider === "google");
       }
     }
-    if (!g) return { connected: false };
+    const connectedRows = googleRows.filter(
+      (c) => c.status === "connected" && !!c.gmailScopeGranted,
+    );
+    const first = connectedRows[0] ?? googleRows[0];
+    if (!first) return { connected: false };
+    const oldestScan = connectedRows.some((c) => !c.lastGmailScanAt)
+      ? undefined
+      : connectedRows.reduce<number | undefined>((oldest, c) => {
+          return oldest === undefined
+            ? c.lastGmailScanAt
+            : Math.min(oldest, c.lastGmailScanAt ?? oldest);
+        }, undefined);
     return {
-      connected: g.status === "connected" && !!g.gmailScopeGranted,
-      gmailScopeGranted: g.gmailScopeGranted,
-      accountEmail: g.accountEmail,
-      lastGmailScanAt: g.lastGmailScanAt,
+      connected: connectedRows.length > 0,
+      gmailScopeGranted: first.gmailScopeGranted,
+      accountEmail:
+        connectedRows.length > 1
+          ? `${connectedRows.length} Gmail accounts`
+          : first.accountEmail,
+      lastGmailScanAt: oldestScan,
     };
   },
 });
@@ -49,12 +85,15 @@ export const listConnections = query({
       agentmailInbox: v.optional(v.string()),
       lastGmailScanAt: v.optional(v.number()),
       gmailScopeGranted: v.optional(v.boolean()),
-    })
+    }),
   ),
   handler: async (ctx) => {
     const userId = await getAuthUserId(ctx);
     if (!userId) return [];
-    const rows = await ctx.db.query("connections").withIndex("by_user", (q) => q.eq("userId", userId)).collect();
+    const rows = await ctx.db
+      .query("connections")
+      .withIndex("by_user", (q) => q.eq("userId", userId))
+      .collect();
     return rows.map((c) => ({
       _id: c._id,
       provider: c.provider,
@@ -118,7 +157,9 @@ export const getConnectionsInternal = internalQuery({
     // Fallback: user email -> accountEmail lookup
     if (result.length === 0) {
       try {
-        const user = await ctx.db.get(parts.length >= 2 ? (parts[1] as any) : (args.userId as any));
+        const user = await ctx.db.get(
+          parts.length >= 2 ? (parts[1] as any) : (args.userId as any),
+        );
         const email = (user as any)?.email?.toLowerCase();
         if (email) {
           const byEmail = await ctx.db
@@ -158,15 +199,24 @@ export const getConnectionInternal = internalQuery({
     v.null(),
   ),
   handler: async (ctx, args) => {
-    let rows = await ctx.db.query("connections").withIndex("by_user", (q) => q.eq("userId", args.userId)).collect();
+    const rows = await ctx.db
+      .query("connections")
+      .withIndex("by_user", (q) => q.eq("userId", args.userId))
+      .collect();
     let g = rows.find((c) => c.provider === "google");
     if (!g) {
       const parts = args.userId.split("|");
       const uid = parts.length >= 2 ? parts[1] : args.userId;
-      const byPlain = await ctx.db.query("connections").withIndex("by_user", (q) => q.eq("userId", uid)).collect();
+      const byPlain = await ctx.db
+        .query("connections")
+        .withIndex("by_user", (q) => q.eq("userId", uid))
+        .collect();
       g = byPlain.find((c) => c.provider === "google");
       if (!g) {
-        const byPlain2 = await ctx.db.query("connections").withIndex("by_user", (q) => q.eq("userId", `user:${uid}`)).collect();
+        const byPlain2 = await ctx.db
+          .query("connections")
+          .withIndex("by_user", (q) => q.eq("userId", `user:${uid}`))
+          .collect();
         g = byPlain2.find((c) => c.provider === "google");
       }
       if (!g) {
@@ -174,14 +224,23 @@ export const getConnectionInternal = internalQuery({
           const user = await ctx.db.get(uid as any);
           const email = (user as any)?.email?.toLowerCase();
           if (email) {
-            const byEmail = await ctx.db.query("connections").withIndex("by_accountEmail", (q) => q.eq("accountEmail", email)).first();
+            const byEmail = await ctx.db
+              .query("connections")
+              .withIndex("by_accountEmail", (q) => q.eq("accountEmail", email))
+              .first();
             if (byEmail && byEmail.provider === "google") g = byEmail as any;
           }
         } catch {}
       }
     }
     if (!g) return null;
-    return { _id: g._id, gmailRefreshToken: g.gmailRefreshToken, gmailScopeGranted: g.gmailScopeGranted, status: g.status, lastGmailScanAt: g.lastGmailScanAt };
+    return {
+      _id: g._id,
+      gmailRefreshToken: g.gmailRefreshToken,
+      gmailScopeGranted: g.gmailScopeGranted,
+      status: g.status,
+      lastGmailScanAt: g.lastGmailScanAt,
+    };
   },
 });
 
@@ -198,24 +257,28 @@ export const storeGmailToken = internalMutation({
     if (!refreshToken) throw new Error("Missing refreshToken");
     const emailNorm = args.accountEmail.trim().toLowerCase();
     // Guard: block connecting an email already owned by a DIFFERENT user.
-    const existingOwner = await ctx.db
+    const existingOwners = await ctx.db
       .query("connections")
-      .withIndex("by_accountEmail", (q) => q.eq("accountEmail", emailNorm))
-      .first();
-    if (existingOwner && existingOwner.provider === "google" && existingOwner.status === "connected") {
-      const ownerRows = await ctx.db
-        .query("connections")
-        .withIndex("by_user", (q) => q.eq("userId", existingOwner.userId))
-        .collect();
-      const isSelf = ownerRows.some((r) => r._id === existingOwner._id && r.userId === args.userId);
-      if (!isSelf) {
-        throw new Error(
-          "This email is already connected to another account. Each email can only be linked to one SubZero account.",
-        );
-      }
+      .withIndex("by_accountEmail_status", (q) =>
+        q.eq("accountEmail", emailNorm).eq("status", "connected"),
+      )
+      .collect();
+    const ownerIds = userIdCandidates(args.userId);
+    const ownedByOtherUser = existingOwners.some(
+      (owner) => owner.provider === "google" && !ownerIds.has(owner.userId),
+    );
+    if (ownedByOtherUser) {
+      throw new Error(
+        "This email is already connected to another account. Each email can only be linked to one SubZero account.",
+      );
     }
-    const rows = await ctx.db.query("connections").withIndex("by_user", (q) => q.eq("userId", args.userId)).collect();
-    const existing = rows.find((c) => c.provider === "google");
+    const rows = await ctx.db
+      .query("connections")
+      .withIndex("by_user", (q) => q.eq("userId", args.userId))
+      .collect();
+    const existing = rows.find(
+      (c) => c.provider === "google" && c.accountEmail === emailNorm,
+    );
     if (existing) {
       await ctx.db.patch(existing._id, {
         gmailRefreshToken: refreshToken,
@@ -239,11 +302,20 @@ export const storeGmailToken = internalMutation({
         const rawUserId = parts.length >= 2 ? parts[1] : args.userId;
         const user = await ctx.db.get(rawUserId as any);
         if (user) {
-          await ctx.db.patch(rawUserId as any, { image: args.pictureUrl } as any);
+          await ctx.db.patch(
+            rawUserId as any,
+            { image: args.pictureUrl } as any,
+          );
         } else {
           if (emailNorm) {
-            const byEmail = await ctx.db.query("users").withIndex("email", (q) => q.eq("email", emailNorm)).first();
-            if (byEmail) await ctx.db.patch(byEmail._id, { image: args.pictureUrl } as any);
+            const byEmail = await ctx.db
+              .query("users")
+              .withIndex("email", (q) => q.eq("email", emailNorm))
+              .first();
+            if (byEmail)
+              await ctx.db.patch(byEmail._id, {
+                image: args.pictureUrl,
+              } as any);
           }
         }
       } catch {}
@@ -263,31 +335,36 @@ export const storeByEmail = mutation({
     const userId = await getAuthUserId(ctx);
     if (!userId) throw new Error("Not authenticated");
     const emailNorm = args.accountEmail.trim().toLowerCase();
-    if (!emailNorm || !emailNorm.includes("@")) throw new Error("Invalid accountEmail");
+    if (!emailNorm || !emailNorm.includes("@"))
+      throw new Error("Invalid accountEmail");
     // Allow Gmail different from sign-in email — Google OAuth already proves ownership of `emailNorm`.
     const refreshToken = args.refreshToken.trim();
     if (!refreshToken) throw new Error("Missing refreshToken");
     // Guard: block connecting an email already owned by a DIFFERENT user.
     // Prevents User B from hijacking/overwriting User A's connected Gmail.
-    const existingOwner = await ctx.db
+    const existingOwners = await ctx.db
       .query("connections")
-      .withIndex("by_accountEmail", (q) => q.eq("accountEmail", emailNorm))
-      .first();
-    if (existingOwner && existingOwner.provider === "google" && existingOwner.status === "connected") {
-      const ownerRows = await ctx.db
-        .query("connections")
-        .withIndex("by_user", (q) => q.eq("userId", existingOwner.userId))
-        .collect();
-      const isSelf = ownerRows.some((r) => r._id === existingOwner._id && r.userId === userId);
-      if (!isSelf) {
-        throw new Error(
-          "This email is already connected to another account. Each email can only be linked to one SubZero account.",
-        );
-      }
+      .withIndex("by_accountEmail_status", (q) =>
+        q.eq("accountEmail", emailNorm).eq("status", "connected"),
+      )
+      .collect();
+    const ownerIds = userIdCandidates(userId);
+    const ownedByOtherUser = existingOwners.some(
+      (owner) => owner.provider === "google" && !ownerIds.has(owner.userId),
+    );
+    if (ownedByOtherUser) {
+      throw new Error(
+        "This email is already connected to another account. Each email can only be linked to one SubZero account.",
+      );
     }
     // Find existing google connection for this user
-    const rows = await ctx.db.query("connections").withIndex("by_user", (q) => q.eq("userId", userId)).collect();
-    const existing = rows.find((c: any) => c.provider === "google" && c.accountEmail === emailNorm);
+    const rows = await ctx.db
+      .query("connections")
+      .withIndex("by_user", (q) => q.eq("userId", userId))
+      .collect();
+    const existing = rows.find(
+      (c: any) => c.provider === "google" && c.accountEmail === emailNorm,
+    );
     if (existing) {
       // Same email reconnecting — update tokens in place
       await ctx.db.patch(existing._id, {
@@ -313,7 +390,11 @@ export const storeByEmail = mutation({
         const parts = userId.split("|");
         const rawUserId = parts.length >= 2 ? parts[1] : userId;
         const user = await ctx.db.get(rawUserId as any);
-        if (user) await ctx.db.patch(rawUserId as any, { image: args.pictureUrl } as any);
+        if (user)
+          await ctx.db.patch(
+            rawUserId as any,
+            { image: args.pictureUrl } as any,
+          );
       } catch {}
     }
     return { ok: true };
@@ -326,10 +407,19 @@ export const disconnectGmail = mutation({
   },
   returns: v.object({ ok: v.boolean() }),
   handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) throw new Error("Not authenticated");
     const ident = await ctx.auth.getUserIdentity();
-    if (!ident) throw new Error("Not authenticated");
-    const tokenId = ident.tokenIdentifier;
-    const emailLower = ident.email?.toLowerCase();
+    const tokenId = ident?.tokenIdentifier ?? userId;
+    const emailLower = ident?.email?.toLowerCase();
+    const tokenParts = tokenId.split("|");
+    const plainId = tokenParts.length >= 2 ? tokenParts[1] : tokenId;
+    const ownedUserIds = new Set([
+      ...userIdCandidates(userId),
+      tokenId,
+      plainId,
+      `user:${plainId}`,
+    ]);
 
     // If a specific connection is requested, only disconnect that one (if it belongs to the caller).
     if (args.connectionId) {
@@ -338,10 +428,7 @@ export const disconnectGmail = mutation({
       const owned =
         target &&
         target.provider === "google" &&
-        (target.userId === tokenId ||
-          target.userId === (tokenId.split("|").length >= 2 ? tokenId.split("|")[1] : tokenId) ||
-          target.userId === `user:${tokenId.split("|").length >= 2 ? tokenId.split("|")[1] : tokenId}`) &&
-        target.accountEmail?.toLowerCase() === emailLower;
+        ownedUserIds.has(target.userId);
       if (target && !owned) {
         throw new Error("You can only disconnect your own Gmail connections.");
       }
@@ -361,25 +448,37 @@ export const disconnectGmail = mutation({
     const toPatch: any[] = [];
     const add = (rows: any[]) => {
       for (const r of rows) {
-        if (r.provider !== "google") continue;
+        if (r.provider !== "google" || !ownedUserIds.has(r.userId)) continue;
         if (!seen.has(r._id)) {
           seen.add(r._id);
           toPatch.push(r);
         }
       }
     };
-    const byToken = await ctx.db.query("connections").withIndex("by_user", (q) => q.eq("userId", tokenId)).collect();
+    const byToken = await ctx.db
+      .query("connections")
+      .withIndex("by_user", (q) => q.eq("userId", tokenId))
+      .collect();
     add(byToken);
-    const parts = tokenId.split("|");
-    const uid = parts.length >= 2 ? parts[1] : tokenId;
-    const byPlain = await ctx.db.query("connections").withIndex("by_user", (q) => q.eq("userId", uid)).collect();
+    const uid = plainId;
+    const byPlain = await ctx.db
+      .query("connections")
+      .withIndex("by_user", (q) => q.eq("userId", uid))
+      .collect();
     add(byPlain);
     if (emailLower) {
-      const byEmail = await ctx.db.query("connections").withIndex("by_accountEmail", (q) => q.eq("accountEmail", emailLower)).first();
-      if (byEmail) add([byEmail]);
+      const byEmail = await ctx.db
+        .query("connections")
+        .withIndex("by_accountEmail", (q) => q.eq("accountEmail", emailLower))
+        .collect();
+      add(byEmail);
     }
     for (const g of toPatch) {
-      await ctx.db.patch(g._id, { status: "disconnected", gmailScopeGranted: false, gmailRefreshToken: undefined });
+      await ctx.db.patch(g._id, {
+        status: "disconnected",
+        gmailScopeGranted: false,
+        gmailRefreshToken: undefined,
+      });
     }
     return { ok: true };
   },

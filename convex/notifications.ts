@@ -1,8 +1,18 @@
 import { v } from "convex/values";
-import { internalAction, internalMutation, internalQuery } from "./_generated/server";
 import { internal } from "./_generated/api";
+import {
+  internalAction,
+  internalMutation,
+  internalQuery,
+} from "./_generated/server";
 
 const DAY = 24 * 60 * 60 * 1000;
+
+function userIdCandidates(userId: string) {
+  const parts = userId.split("|");
+  const uid = parts.length >= 2 ? parts[1] : userId;
+  return new Set([userId, uid, `user:${uid}`]);
+}
 
 export const scheduleNudgesForSubscription = internalMutation({
   args: { subscriptionId: v.id("subscriptions") },
@@ -42,9 +52,13 @@ export const scheduleNudgesForSubscription = internalMutation({
 
           // Schedule delivery at the milestone timestamp
           const delay = Math.max(0, m.time - now);
-          await ctx.scheduler.runAfter(delay, internal.notifications.deliverNudge, {
-            notificationId,
-          });
+          await ctx.scheduler.runAfter(
+            delay,
+            internal.notifications.deliverNudge,
+            {
+              notificationId,
+            },
+          );
         }
       }
     }
@@ -59,19 +73,50 @@ export const getNotificationDetails = internalQuery({
     const sub = await ctx.db.get(notif.subscriptionId);
     if (!sub) return null;
 
-    // Prefer the subscription's source email for delivery — matches the inbox
-    // the subscription was detected from (multi-email aware).
-    let recipientEmail: string | null = sub.sourceEmail ?? null;
+    let recipientEmail: string | null = null;
+    const ownerIds = userIdCandidates(notif.userId);
+
+    if (sub.sourceConnectionId) {
+      const sourceConn = await ctx.db.get(sub.sourceConnectionId);
+      if (
+        sourceConn?.provider === "google" &&
+        sourceConn.status === "connected" &&
+        ownerIds.has(sourceConn.userId)
+      ) {
+        recipientEmail = sourceConn.accountEmail ?? null;
+      }
+    }
+
+    if (!recipientEmail && sub.sourceEmail) {
+      const sourceMatches = await ctx.db
+        .query("connections")
+        .withIndex("by_accountEmail_status", (q) =>
+          q.eq("accountEmail", sub.sourceEmail).eq("status", "connected"),
+        )
+        .collect();
+      const sourceConn = sourceMatches.find(
+        (c) => c.provider === "google" && ownerIds.has(c.userId),
+      );
+      recipientEmail = sourceConn?.accountEmail ?? sub.sourceEmail;
+    }
+
     if (!recipientEmail) {
-      // Fallback: find the connection matching this subscription's source email, else first connection
       const conns = await ctx.db
         .query("connections")
         .withIndex("by_user", (q) => q.eq("userId", notif.userId))
         .collect();
-      const sourceMatch = conns.find(
-        (c) => c.accountEmail?.toLowerCase() === sub.sourceEmail?.toLowerCase(),
+      for (const ownerId of ownerIds) {
+        if (ownerId === notif.userId) continue;
+        const aliasConns = await ctx.db
+          .query("connections")
+          .withIndex("by_user", (q) => q.eq("userId", ownerId))
+          .collect();
+        conns.push(...aliasConns);
+      }
+      const conn = conns.find(
+        (c) =>
+          c.provider === "google" && c.status === "connected" && c.accountEmail,
       );
-      const conn = sourceMatch ?? conns[0];
       recipientEmail = conn?.accountEmail ?? null;
     }
 
@@ -101,9 +146,12 @@ export const markNotificationSent = internalMutation({
 export const deliverNudge = internalAction({
   args: { notificationId: v.id("notifications") },
   handler: async (ctx, args) => {
-    const details = await ctx.runQuery(internal.notifications.getNotificationDetails, {
-      notificationId: args.notificationId,
-    });
+    const details = await ctx.runQuery(
+      internal.notifications.getNotificationDetails,
+      {
+        notificationId: args.notificationId,
+      },
+    );
 
     if (!details || !details.notif || !details.sub) return;
 
@@ -113,7 +161,15 @@ export const deliverNudge = internalAction({
     if (sub.status === "cancelled" || notif.status !== "pending") return;
 
     const apiKey = process.env.AGENTMAIL_API_KEY;
-    const recipient = userEmail || "user@example.com";
+    if (!userEmail) {
+      await ctx.runMutation(internal.notifications.markNotificationSent, {
+        notificationId: args.notificationId,
+        status: "failed",
+        error: "No notification email available",
+      });
+      return;
+    }
+    const recipient = userEmail;
 
     const label =
       notif.type === "7d"
@@ -176,7 +232,9 @@ SubZero Protection Engine`;
         });
       }
     } else {
-      console.log(`[Mock AgentMail Outbound Nudge] Sent to ${recipient}:\nSubject: ${subject}\n\n${body}`);
+      console.log(
+        `[Mock AgentMail Outbound Nudge] Sent to ${recipient}:\nSubject: ${subject}\n\n${body}`,
+      );
       await ctx.runMutation(internal.notifications.markNotificationSent, {
         notificationId: args.notificationId,
         status: "sent",
@@ -188,11 +246,16 @@ SubZero Protection Engine`;
 export const sweepUpcomingNudges = internalAction({
   args: {},
   handler: async (ctx) => {
-    const upcomingSubs = await ctx.runQuery(internal.subscriptions.getUpcomingForSweep);
+    const upcomingSubs = await ctx.runQuery(
+      internal.subscriptions.getUpcomingForSweep,
+    );
     for (const sub of upcomingSubs) {
-      await ctx.runMutation(internal.notifications.scheduleNudgesForSubscription, {
-        subscriptionId: sub._id,
-      });
+      await ctx.runMutation(
+        internal.notifications.scheduleNudgesForSubscription,
+        {
+          subscriptionId: sub._id,
+        },
+      );
     }
   },
 });

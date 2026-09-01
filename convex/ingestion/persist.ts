@@ -44,6 +44,7 @@ export const persistExtracted = internalMutation({
     messageId: v.optional(v.string()),
     source: v.string(),
     sourceEmail: v.optional(v.string()),
+    sourceConnectionId: v.optional(v.id("connections")),
   },
   returns: v.object({
     subscriptionId: v.union(v.id("subscriptions"), v.null()),
@@ -125,7 +126,12 @@ export const persistExtracted = internalMutation({
           svixId: args.svixId,
           messageId: args.messageId,
         });
-        return { subscriptionId: match._id, evidenceId, isNew: false, isDuplicate: false };
+        return {
+          subscriptionId: match._id,
+          evidenceId,
+          isNew: false,
+          isDuplicate: false,
+        };
       }
 
       // No prior subscription — create a cancelled placeholder if we have price, otherwise just log
@@ -149,6 +155,7 @@ export const persistExtracted = internalMutation({
           trialEndsAt: ex.trialEndsAt,
           billingProvider: ex.billingProvider,
           sourceEmail: args.sourceEmail,
+          sourceConnectionId: args.sourceConnectionId,
           cancellationMethod: "unknown",
           cancellationDifficulty: getDifficulty(
             "unknown",
@@ -167,27 +174,57 @@ export const persistExtracted = internalMutation({
           svixId: args.svixId,
           messageId: args.messageId,
         });
-        return { subscriptionId: id, evidenceId, isNew: true, isDuplicate: false };
+        return {
+          subscriptionId: id,
+          evidenceId,
+          isNew: true,
+          isDuplicate: false,
+        };
       }
 
-      return { subscriptionId: null, evidenceId: null, isNew: false, isDuplicate: false };
+      return {
+        subscriptionId: null,
+        evidenceId: null,
+        isNew: false,
+        isDuplicate: false,
+      };
     }
 
     // Normal receipt / trial branch — require merchant (or product as fallback) + price
     let merchant = ex.merchant?.trim();
     if (!merchant && ex.product?.trim()) merchant = ex.product.trim();
     if (!merchant || ex.price === undefined || ex.price === null) {
-      return { subscriptionId: null, evidenceId: null, isNew: false, isDuplicate: false };
+      return {
+        subscriptionId: null,
+        evidenceId: null,
+        isNew: false,
+        isDuplicate: false,
+      };
     }
     const price = ex.price;
     const currency = (ex.currency ?? "USD").toUpperCase().slice(0, 3);
     if (Number.isNaN(price) || price <= 0 || price > 100000) {
-      return { subscriptionId: null, evidenceId: null, isNew: false, isDuplicate: false };
+      return {
+        subscriptionId: null,
+        evidenceId: null,
+        isNew: false,
+        isDuplicate: false,
+      };
     }
     // Guard: one-time payments (exam fees, purchases) look like merchant+price but have no renewal/trial.
     // Only create subscription if it has a billing interval or a future date.
-    if (ex.billingInterval === "unknown" && !ex.nextRenewalAt && !ex.trialEndsAt && !ex.isConfirmation) {
-      return { subscriptionId: null, evidenceId: null, isNew: false, isDuplicate: false };
+    if (
+      ex.billingInterval === "unknown" &&
+      !ex.nextRenewalAt &&
+      !ex.trialEndsAt &&
+      !ex.isConfirmation
+    ) {
+      return {
+        subscriptionId: null,
+        evidenceId: null,
+        isNew: false,
+        isDuplicate: false,
+      };
     }
 
     const key = dedupKey({
@@ -245,8 +282,12 @@ export const persistExtracted = internalMutation({
         patch.trialEndsAt = ex.trialEndsAt;
       }
       if (ex.product && !existing.product) patch.product = ex.product;
-      // Preserve the first-known source email if we don't have one yet
-      if (args.sourceEmail && !existing.sourceEmail) patch.sourceEmail = args.sourceEmail;
+      // Preserve the first-known source inbox if we don't have one yet.
+      if (args.sourceEmail && !existing.sourceEmail)
+        patch.sourceEmail = args.sourceEmail;
+      if (args.sourceConnectionId && !existing.sourceConnectionId) {
+        patch.sourceConnectionId = args.sourceConnectionId;
+      }
       const addedProvider = !!(ex.billingProvider && !existing.billingProvider);
       if (addedProvider) {
         patch.billingProvider = ex.billingProvider;
@@ -261,9 +302,13 @@ export const persistExtracted = internalMutation({
         await ctx.db.patch(existing._id, patch as never);
       }
       if (addedProvider && existing.researchStatus !== "pending") {
-        await ctx.scheduler.runAfter(0, internal.research.researchCancellationRoute, {
-          subscriptionId: existing._id,
-        });
+        await ctx.scheduler.runAfter(
+          0,
+          internal.research.researchCancellationRoute,
+          {
+            subscriptionId: existing._id,
+          },
+        );
       }
       subscriptionId = existing._id;
     } else {
@@ -279,6 +324,7 @@ export const persistExtracted = internalMutation({
         trialEndsAt: ex.trialEndsAt,
         billingProvider: ex.billingProvider,
         sourceEmail: args.sourceEmail,
+        sourceConnectionId: args.sourceConnectionId,
         cancellationDifficulty: difficulty,
         cancellationMethod: "unknown",
         dedupKey: key,

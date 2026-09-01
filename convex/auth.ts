@@ -2,6 +2,12 @@ import Google from "@auth/core/providers/google";
 import { Password } from "@convex-dev/auth/providers/Password";
 import { convexAuth } from "@convex-dev/auth/server";
 
+function userIdCandidates(userId: string) {
+  const parts = userId.split("|");
+  const uid = parts.length >= 2 ? parts[1] : userId;
+  return new Set([userId, uid, `user:${uid}`]);
+}
+
 export const { auth, signIn, signOut, store, isAuthenticated } = convexAuth({
   providers: [
     Password({
@@ -71,16 +77,16 @@ export const { auth, signIn, signOut, store, isAuthenticated } = convexAuth({
 
       if (existingUserId !== null) {
         if (emailNorm) {
+          const ownerIds = userIdCandidates(existingUserId);
           const connectedRows = await (ctx.db.query("connections") as any)
-            .withIndex("by_accountEmail", (q: any) =>
-              q.eq("accountEmail", emailNorm),
+            .withIndex("by_accountEmail_status", (q: any) =>
+              q.eq("accountEmail", emailNorm).eq("status", "connected"),
             )
             .collect();
           const connectedElsewhere = connectedRows.find(
             (connection: any) =>
               connection.provider === "google" &&
-              connection.status === "connected" &&
-              connection.userId !== existingUserId,
+              !ownerIds.has(connection.userId),
           );
           if (connectedElsewhere) {
             throw new Error(
@@ -144,14 +150,12 @@ export const { auth, signIn, signOut, store, isAuthenticated } = convexAuth({
       // account to another user — that email "belongs" to an existing account.
       if (emailNorm) {
         const connectedRows = await (ctx.db.query("connections") as any)
-          .withIndex("by_accountEmail", (q: any) =>
-            q.eq("accountEmail", emailNorm),
+          .withIndex("by_accountEmail_status", (q: any) =>
+            q.eq("accountEmail", emailNorm).eq("status", "connected"),
           )
           .collect();
         const connectedElsewhere = connectedRows.find(
-          (connection: any) =>
-            connection.provider === "google" &&
-            connection.status === "connected",
+          (connection: any) => connection.provider === "google",
         );
         if (connectedElsewhere) {
           throw new Error(

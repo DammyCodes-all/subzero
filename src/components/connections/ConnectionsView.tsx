@@ -38,7 +38,7 @@ export function ConnectionsView() {
   const handleScan = async (connId: string) => {
     setScanningId(connId);
     try {
-      const res = await scan({});
+      const res = await scan({ connectionId: connId as never });
       const r = res as { scanned: number; created: number; reason?: string };
       if (r.reason) {
         const desc =
@@ -226,7 +226,7 @@ export function ConnectionsView() {
                         size={14}
                         color="currentColor"
                       />
-                      Scan Now
+                      Scan This Inbox
                     </>
                   )}
                 </Button>

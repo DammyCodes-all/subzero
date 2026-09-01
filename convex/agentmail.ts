@@ -1,3 +1,4 @@
+import { getAuthUserId } from "@convex-dev/auth/server";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
@@ -10,7 +11,201 @@ import {
   query,
 } from "./_generated/server";
 
-import { getAuthUserId } from "@convex-dev/auth/server";
+function extractEmail(raw: string): string | null {
+  if (!raw) return null;
+  const emailMatch = raw.match(/<([^>]+)>/);
+  const extracted = emailMatch ? emailMatch[1] : raw;
+  const emailOnly = extracted.split(",")[0].trim().split(" ")[0].trim();
+  const atMatch = raw.match(/([A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,})/);
+  const norm = (emailOnly || atMatch?.[1] || "").toLowerCase();
+  return norm.includes("@") ? norm : null;
+}
+
+function userIdCandidates(userId: string) {
+  const parts = userId.split("|");
+  const uid = parts.length >= 2 ? parts[1] : userId;
+  return new Set([userId, uid, `user:${uid}`]);
+}
+
+async function getSourceConnectionForUser(
+  ctx: any,
+  userId: string,
+  preferredEmail?: string | null,
+) {
+  const candidates = userIdCandidates(userId);
+  if (preferredEmail) {
+    const matches = await ctx.db
+      .query("connections")
+      .withIndex("by_accountEmail_status", (q: any) =>
+        q.eq("accountEmail", preferredEmail).eq("status", "connected"),
+      )
+      .collect();
+    const match = matches.find(
+      (c: any) => c.provider === "google" && candidates.has(c.userId),
+    );
+    if (match?.accountEmail) return match;
+  }
+
+  for (const uid of candidates) {
+    const rows = await ctx.db
+      .query("connections")
+      .withIndex("by_user", (q: any) => q.eq("userId", uid))
+      .collect();
+    const match = rows.find(
+      (c: any) =>
+        c.provider === "google" && c.status === "connected" && c.accountEmail,
+    );
+    if (match) return match;
+  }
+  return null;
+}
+
+async function resolveRouting(
+  ctx: any,
+  args: {
+    inboxId: string;
+    fallbackFrom?: string;
+    fallbackTo?: string;
+  },
+) {
+  const inboxNorm = args.inboxId.trim().toLowerCase();
+  const fromEmail = extractEmail(args.fallbackFrom ?? "");
+  const toEmail = extractEmail(args.fallbackTo ?? "");
+
+  const byInboxCandidates = await ctx.db
+    .query("connections")
+    .withIndex("by_agentmailInbox", (q: any) =>
+      q.eq("agentmailInbox", inboxNorm),
+    )
+    .collect();
+  const validByInbox: typeof byInboxCandidates = [];
+  for (const c of byInboxCandidates) {
+    try {
+      const u: any = await ctx.db.get(c.userId as any);
+      if (u) validByInbox.push(c);
+    } catch {}
+  }
+  const candidates = validByInbox.length ? validByInbox : byInboxCandidates;
+
+  if (candidates.length === 1) {
+    const candidate = candidates[0];
+    const sourceConn = await getSourceConnectionForUser(
+      ctx,
+      candidate.userId,
+      fromEmail,
+    );
+    return {
+      userId: candidate.userId,
+      sourceEmail: sourceConn?.accountEmail ?? candidate.accountEmail,
+      sourceConnectionId: sourceConn?._id,
+    };
+  }
+
+  if (candidates.length > 1) {
+    if (fromEmail) {
+      const byAccountEmail = await ctx.db
+        .query("connections")
+        .withIndex("by_accountEmail_status", (q: any) =>
+          q.eq("accountEmail", fromEmail).eq("status", "connected"),
+        )
+        .collect();
+      const candidateIds = new Set(candidates.map((c: any) => c.userId));
+      const matchByFrom = byAccountEmail.find(
+        (c: any) => c.provider === "google" && candidateIds.has(c.userId),
+      );
+      if (matchByFrom) {
+        return {
+          userId: matchByFrom.userId,
+          sourceEmail: matchByFrom.accountEmail,
+          sourceConnectionId: matchByFrom._id,
+        };
+      }
+    }
+    console.error(
+      `[agentmail] Shared inbox with ${candidates.length} candidate users and ${fromEmail ? `unrecognized from "${fromEmail}"` : "no from-address"}. Refusing to guess.`,
+    );
+    return null;
+  }
+
+  if (toEmail && toEmail !== inboxNorm) {
+    const byRecipientEmail = await ctx.db
+      .query("connections")
+      .withIndex("by_accountEmail_status", (q: any) =>
+        q.eq("accountEmail", toEmail).eq("status", "connected"),
+      )
+      .collect();
+    const byRecipientGoogle = byRecipientEmail.find(
+      (c: any) => c.provider === "google",
+    );
+    if (byRecipientGoogle) {
+      return {
+        userId: byRecipientGoogle.userId,
+        sourceEmail: byRecipientGoogle.accountEmail,
+        sourceConnectionId: byRecipientGoogle._id,
+      };
+    }
+
+    const byTo = await ctx.db
+      .query("connections")
+      .withIndex("by_agentmailInbox", (q: any) =>
+        q.eq("agentmailInbox", toEmail),
+      )
+      .first();
+    if (byTo) {
+      try {
+        const u: any = await ctx.db.get(byTo.userId as any);
+        if (u) {
+          const sourceConn = await getSourceConnectionForUser(
+            ctx,
+            byTo.userId,
+            fromEmail,
+          );
+          return {
+            userId: byTo.userId,
+            sourceEmail: sourceConn?.accountEmail ?? byTo.accountEmail,
+            sourceConnectionId: sourceConn?._id,
+          };
+        }
+      } catch {}
+    }
+  }
+
+  if (fromEmail) {
+    const byAccountEmail = await ctx.db
+      .query("connections")
+      .withIndex("by_accountEmail_status", (q: any) =>
+        q.eq("accountEmail", fromEmail).eq("status", "connected"),
+      )
+      .collect();
+    const byGoogle = byAccountEmail.find((c: any) => c.provider === "google");
+    if (byGoogle) {
+      return {
+        userId: byGoogle.userId,
+        sourceEmail: byGoogle.accountEmail,
+        sourceConnectionId: byGoogle._id,
+      };
+    }
+
+    const userMatch = await ctx.db
+      .query("users")
+      .withIndex("email", (q: any) => q.eq("email", fromEmail))
+      .first();
+    if (userMatch) {
+      const sourceConn = await getSourceConnectionForUser(
+        ctx,
+        userMatch._id,
+        fromEmail,
+      );
+      return {
+        userId: userMatch._id,
+        sourceEmail: sourceConn?.accountEmail ?? userMatch.email,
+        sourceConnectionId: sourceConn?._id,
+      };
+    }
+  }
+
+  return null;
+}
 
 export const getInbox = query({
   args: {},
@@ -20,7 +215,10 @@ export const getInbox = query({
     if (!userId) return null;
     const all = await ctx.db.query("connections").collect();
     const agentmail = all.find(
-      (c) => (c.userId === userId || c.userId.includes(userId)) && c.provider === "agentmail" && c.agentmailInbox,
+      (c) =>
+        (c.userId === userId || c.userId.includes(userId)) &&
+        c.provider === "agentmail" &&
+        c.agentmailInbox,
     );
     return agentmail?.agentmailInbox ?? null;
   },
@@ -35,12 +233,16 @@ export const getOrCreateInbox = mutation({
     const identity = await ctx.auth.getUserIdentity();
 
     const all = await ctx.db.query("connections").collect();
-    const rows = all.filter((c) => c.userId === userId || c.userId.includes(userId));
+    const rows = all.filter(
+      (c) => c.userId === userId || c.userId.includes(userId),
+    );
     const existing = rows.find(
       (c) => c.provider === "agentmail" && c.agentmailInbox,
     );
     // Derive accountEmail: identity.email → users table → Google connection → any existing
-    const googleConn = rows.find((c) => c.provider === "google" && c.accountEmail);
+    const googleConn = rows.find(
+      (c) => c.provider === "google" && c.accountEmail,
+    );
     let userEmail: string | undefined = identity?.email;
     if (!userEmail) {
       try {
@@ -57,7 +259,9 @@ export const getOrCreateInbox = mutation({
       userEmail ??
       googleConn?.accountEmail ??
       rows.find((c) => c.accountEmail)?.accountEmail
-    )?.trim().toLowerCase();
+    )
+      ?.trim()
+      .toLowerCase();
 
     // Read the inbox address from the deployment env (AGENTMAIL_INBOX).
     const defaultInbox =
@@ -67,7 +271,9 @@ export const getOrCreateInbox = mutation({
     const inboxAddr = defaultInbox.trim().toLowerCase();
 
     if (existing?.agentmailInbox) {
-      console.log(`[agentmail] getOrCreateInbox: existing row found, existing.accountEmail="${existing.accountEmail ?? "null"}", identity.email="${identity?.email ?? "null"}", derived accountEmail="${accountEmail ?? "null"}"`);
+      console.log(
+        `[agentmail] getOrCreateInbox: existing row found, existing.accountEmail="${existing.accountEmail ?? "null"}", identity.email="${identity?.email ?? "null"}", derived accountEmail="${accountEmail ?? "null"}"`,
+      );
       const patch: Record<string, unknown> = {};
       if (existing.userId !== userId) {
         patch.userId = userId;
@@ -77,16 +283,24 @@ export const getOrCreateInbox = mutation({
       }
       // If the stored inbox differs from the env, update it
       if (existing.agentmailInbox.toLowerCase() !== inboxAddr) {
-        console.log(`[agentmail] Updating agentmailInbox from "${existing.agentmailInbox}" to "${inboxAddr}"`);
+        console.log(
+          `[agentmail] Updating agentmailInbox from "${existing.agentmailInbox}" to "${inboxAddr}"`,
+        );
         patch.agentmailInbox = inboxAddr;
       }
       if (Object.keys(patch).length > 0) {
         await ctx.db.patch(existing._id, patch);
       }
-      return { inbox: (patch.agentmailInbox as string) ?? existing.agentmailInbox.toLowerCase() };
+      return {
+        inbox:
+          (patch.agentmailInbox as string) ??
+          existing.agentmailInbox.toLowerCase(),
+      };
     }
 
-    console.log(`[agentmail] getOrCreateInbox: using inbox="${inboxAddr}", accountEmail="${accountEmail ?? "null"}"`);
+    console.log(
+      `[agentmail] getOrCreateInbox: using inbox="${inboxAddr}", accountEmail="${accountEmail ?? "null"}"`,
+    );
 
     await ctx.db.insert("connections", {
       userId,
@@ -113,7 +327,8 @@ export const provisionInbox = internalMutation({
       .query("connections")
       .withIndex("by_agentmailInbox", (q) => q.eq("agentmailInbox", inboxNorm))
       .unique();
-    if (existing) return { inbox: (existing.agentmailInbox as string).toLowerCase() };
+    if (existing)
+      return { inbox: (existing.agentmailInbox as string).toLowerCase() };
 
     await ctx.db.insert("connections", {
       userId: args.userId,
@@ -126,6 +341,25 @@ export const provisionInbox = internalMutation({
   },
 });
 
+export const resolveRoutingByInbox = internalQuery({
+  args: {
+    inboxId: v.string(),
+    fallbackFrom: v.optional(v.string()),
+    fallbackTo: v.optional(v.string()),
+  },
+  returns: v.union(
+    v.object({
+      userId: v.string(),
+      sourceEmail: v.optional(v.string()),
+      sourceConnectionId: v.optional(v.id("connections")),
+    }),
+    v.null(),
+  ),
+  handler: async (ctx, args) => {
+    return await resolveRouting(ctx, args);
+  },
+});
+
 export const resolveUserByInbox = internalQuery({
   args: {
     inboxId: v.string(),
@@ -134,94 +368,8 @@ export const resolveUserByInbox = internalQuery({
   },
   returns: v.union(v.string(), v.null()),
   handler: async (ctx, args) => {
-    const inboxNorm = args.inboxId.trim().toLowerCase();
-
-    // Helper: extract a normalized email from a from-address string
-    const extractEmail = (raw: string): string | null => {
-      if (!raw) return null;
-      const emailMatch = raw.match(/<([^>]+)>/);
-      const extracted = emailMatch ? emailMatch[1] : raw;
-      const emailOnly = extracted.split(",")[0].trim().split(" ")[0].trim();
-      const atMatch = raw.match(/([A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,})/);
-      const norm = (emailOnly || atMatch?.[1] || "").toLowerCase();
-      return norm.includes("@") ? norm : null;
-    };
-
-    const fromEmail = extractEmail(args.fallbackFrom ?? "");
-    const toEmail = extractEmail(args.fallbackTo ?? "");
-
-    // 1. Try matching by agentmailInbox — but inbox is global (subzero-agent@) shared by all users, so prefer existing user + fromEmail match when multiple
-    const byInboxCandidates = await ctx.db
-      .query("connections")
-      .withIndex("by_agentmailInbox", (q) => q.eq("agentmailInbox", inboxNorm))
-      .collect();
-    // Filter to only connections whose user still exists (skip orphaned deleted users)
-    const validByInbox: typeof byInboxCandidates = [];
-    for (const c of byInboxCandidates) {
-      try {
-        const u: any = await ctx.db.get(c.userId as any);
-        if (u) validByInbox.push(c);
-      } catch {}
-    }
-    const candidates = validByInbox.length ? validByInbox : byInboxCandidates;
-    if (candidates.length === 1) {
-      return candidates[0].userId;
-    }
-    if (candidates.length > 1 && fromEmail) {
-      const matchByFrom = candidates.find((c) => c.accountEmail?.toLowerCase() === fromEmail);
-      if (matchByFrom) return matchByFrom.userId;
-      // Shared inbox + no from-address match — do NOT guess. Reject.
-      console.error(
-        `[agentmail] Shared inbox with ${candidates.length} candidate users and unrecognized from "${fromEmail}". Refusing to guess.`,
-      );
-      return null;
-    }
-    if (candidates.length > 1) {
-      // Shared inbox with no from-address at all — cannot disambiguate. Reject.
-      console.error(
-        `[agentmail] Shared inbox with ${candidates.length} candidate users and no from-address. Refusing to guess.`,
-      );
-      return null;
-    }
-    if (candidates.length === 1) return candidates[0].userId;
-
-    if (toEmail && toEmail !== inboxNorm) {
-      const byTo = await ctx.db
-        .query("connections")
-        .withIndex("by_agentmailInbox", (q) => q.eq("agentmailInbox", toEmail))
-        .first();
-      if (byTo) {
-        try {
-          const u: any = await ctx.db.get(byTo.userId as any);
-          if (u) return byTo.userId;
-        } catch {}
-      }
-    }
-
-    // 2. Try matching fromEmail -> accountEmail in connections table (indexed lookup only)
-    if (fromEmail) {
-      const byAccountEmail = await ctx.db
-        .query("connections")
-        .withIndex("by_accountEmail", (q) => q.eq("accountEmail", fromEmail))
-        .first();
-      if (byAccountEmail) return byAccountEmail.userId;
-
-      // Check users table directly (indexed lookup by email)
-      const userMatch = await ctx.db
-        .query("users")
-        .withIndex("email", (q: any) => q.eq("email", fromEmail))
-        .first();
-      if (userMatch) {
-        const userConn = await ctx.db
-          .query("connections")
-          .withIndex("by_user", (q: any) => q.eq("userId", userMatch._id))
-          .first();
-        if (userConn) return userConn.userId;
-        return userMatch._id as any;
-      }
-    }
-
-    return null;
+    const routing = await resolveRouting(ctx, args);
+    return routing?.userId ?? null;
   },
 });
 
@@ -249,10 +397,14 @@ export const sendCancellationEmail = action({
     if (!identity) throw new Error("Not authenticated");
 
     // Verify researched route allows email — don't invent support@ address
-    const sub = await ctx.runQuery(internal.subscriptions.getInternal, { id: args.subscriptionId });
+    const sub = await ctx.runQuery(internal.subscriptions.getInternal, {
+      id: args.subscriptionId,
+    });
     if (!sub) throw new Error("Subscription not found");
     if (sub.cancellationMethod !== "send_email") {
-      throw new Error(`Cannot send email: researched method is ${sub.cancellationMethod ?? "unknown"} (expected send_email). No verified email route.`);
+      throw new Error(
+        `Cannot send email: researched method is ${sub.cancellationMethod ?? "unknown"} (expected send_email). No verified email route.`,
+      );
     }
     // Prefer researched cancellationUrl (mailto: or https with email) — never synthesize support@<merchant>.com
     let recipient: string | null = null;
@@ -265,7 +417,9 @@ export const sendCancellationEmail = action({
       }
     }
     if (!recipient) {
-      throw new Error("No verified support email found in research (cancellationUrl missing mailto). Check How to cancel for contact details.");
+      throw new Error(
+        "No verified support email found in research (cancellationUrl missing mailto). Check How to cancel for contact details.",
+      );
     }
 
     // Include the source email context (which inbox this subscription was detected from)
@@ -294,12 +448,18 @@ export const sendCancellationEmail = action({
           throw new Error("Failed to send via AgentMail");
         }
       } catch (err) {
-        if (err instanceof Error && err.message === "Failed to send via AgentMail") throw err;
+        if (
+          err instanceof Error &&
+          err.message === "Failed to send via AgentMail"
+        )
+          throw err;
         console.error("AgentMail send error:", err);
         throw err;
       }
     } else if (recipient) {
-      console.log(`[Mock AgentMail] Sent to ${recipient} (${args.merchant}):\n${args.body}${sourceHint}`);
+      console.log(
+        `[Mock AgentMail] Sent to ${recipient} (${args.merchant}):\n${args.body}${sourceHint}`,
+      );
     }
 
     await ctx.runMutation(internal.agentmail.markCancellationSent, {
@@ -316,7 +476,9 @@ export const markCancellationSent = internalMutation({
     });
     const actionRec = await ctx.db
       .query("cancellationActions")
-      .withIndex("by_subscription", (q) => q.eq("subscriptionId", args.subscriptionId))
+      .withIndex("by_subscription", (q) =>
+        q.eq("subscriptionId", args.subscriptionId),
+      )
       .first();
     if (actionRec) {
       await ctx.db.patch(actionRec._id, { status: "pending" });

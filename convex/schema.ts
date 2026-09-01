@@ -18,7 +18,9 @@ export default defineSchema({
   })
     .index("by_user", ["userId"])
     .index("by_agentmailInbox", ["agentmailInbox"])
-    .index("by_accountEmail", ["accountEmail"]),
+    .index("by_accountEmail", ["accountEmail"])
+    .index("by_accountEmail_status", ["accountEmail", "status"])
+    .index("by_user_accountEmail", ["userId", "accountEmail"]),
 
   subscriptions: defineTable({
     userId: v.string(),
@@ -63,13 +65,10 @@ export default defineSchema({
     cancellationUrl: v.optional(v.string()),
     billingProvider: v.optional(v.string()),
     sourceEmail: v.optional(v.string()),
+    sourceConnectionId: v.optional(v.id("connections")),
     dedupKey: v.string(),
     researchStatus: v.optional(
-      v.union(
-        v.literal("pending"),
-        v.literal("done"),
-        v.literal("failed"),
-      ),
+      v.union(v.literal("pending"), v.literal("done"), v.literal("failed")),
     ),
     researchedAt: v.optional(v.number()),
   })
@@ -162,6 +161,7 @@ export default defineSchema({
     ),
     subscriptionId: v.optional(v.id("subscriptions")),
     sourceEmail: v.optional(v.string()),
+    sourceConnectionId: v.optional(v.id("connections")),
     reason: v.optional(v.string()),
     receivedAt: v.number(),
     updatedAt: v.number(),

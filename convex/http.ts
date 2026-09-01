@@ -250,20 +250,26 @@ http.route({
     // Resolve user before inserting to avoid orphan rows visible to wrong user.
     let attemptId: Id<"ingestionAttempts"> | undefined = undefined;
     try {
-      const userId: string | null = await ctx.runQuery(
-        internal.agentmail.resolveUserByInbox,
-        { inboxId, fallbackTo: toVal || undefined, fallbackFrom: fromVal || undefined },
-      );
-      if (userId) {
+      const routing: {
+        userId: string;
+        sourceEmail?: string;
+        sourceConnectionId?: Id<"connections">;
+      } | null = await ctx.runQuery(internal.agentmail.resolveRoutingByInbox, {
+        inboxId,
+        fallbackTo: toVal || undefined,
+        fallbackFrom: fromVal || undefined,
+      });
+      if (routing) {
         const created: { attemptId: Id<"ingestionAttempts">; isNew: boolean } =
           await ctx.runMutation(internal.ingestionAttempts.createProcessingAttempt, {
-            userId,
+            userId: routing.userId,
             svixId,
             messageId,
             inboxId,
             from: fromVal || undefined,
             subject: subjectVal || undefined,
-            sourceEmail: toVal || undefined,
+            sourceEmail: routing.sourceEmail,
+            sourceConnectionId: routing.sourceConnectionId,
           });
         if (!created.isNew) {
           // Svix retry — idempotent, no need to re-schedule
@@ -358,18 +364,24 @@ http.route({
       let isLegacyNew = true;
       try {
         const legacyFrom = typeof body.from === "string" ? body.from : "";
-        const legacyUserId: string | null = await ctx.runQuery(
-          internal.agentmail.resolveUserByInbox,
-          { inboxId: recipient, fallbackTo: recipient || undefined, fallbackFrom: legacyFrom || undefined },
-        );
-        if (legacyUserId) {
+        const legacyRouting: {
+          userId: string;
+          sourceEmail?: string;
+          sourceConnectionId?: Id<"connections">;
+        } | null = await ctx.runQuery(internal.agentmail.resolveRoutingByInbox, {
+          inboxId: recipient,
+          fallbackTo: recipient || undefined,
+          fallbackFrom: legacyFrom || undefined,
+        });
+        if (legacyRouting) {
           const created: { attemptId: Id<"ingestionAttempts">; isNew: boolean } =
             await ctx.runMutation(internal.ingestionAttempts.createProcessingAttempt, {
-              userId: legacyUserId,
+              userId: legacyRouting.userId,
               inboxId: recipient,
               from: legacyFrom || undefined,
               subject: subject || undefined,
-              sourceEmail: recipient || undefined,
+              sourceEmail: legacyRouting.sourceEmail,
+              sourceConnectionId: legacyRouting.sourceConnectionId,
             });
           if (!created.isNew) isLegacyNew = false;
           else legacyAttemptId = created.attemptId;

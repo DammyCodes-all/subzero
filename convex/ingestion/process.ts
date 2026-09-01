@@ -56,7 +56,16 @@ export const processForwardedEmail = internalAction({
     const to = args.to.trim();
 
     const markAttempt = async (
-      status: "processing" | "created" | "merged" | "duplicate" | "skipped" | "unparsed" | "no_user" | "cancelled" | "failed",
+      status:
+        | "processing"
+        | "created"
+        | "merged"
+        | "duplicate"
+        | "skipped"
+        | "unparsed"
+        | "no_user"
+        | "cancelled"
+        | "failed",
       extra?: { subscriptionId?: Id<"subscriptions"> | null; reason?: string },
     ) => {
       if (!args.attemptId) return;
@@ -74,17 +83,25 @@ export const processForwardedEmail = internalAction({
 
     try {
       // 1. Resolve user (prefer inboxId, then to, then from as last resort)
-      console.log(`[ingestion] Resolving user: inboxId=${inboxId}, from=${from.slice(0, 50)}, to=${to.slice(0, 50)}`);
-      const userId: string | null = await ctx.runQuery(
-        internal.agentmail.resolveUserByInbox,
-        { inboxId, fallbackTo: to || undefined, fallbackFrom: from || undefined },
+      console.log(
+        `[ingestion] Resolving user: inboxId=${inboxId}, from=${from.slice(0, 50)}, to=${to.slice(0, 50)}`,
       );
-      console.log(`[ingestion] Resolved userId: ${userId ?? "NULL"}`);
-      if (!userId) {
+      const routing: {
+        userId: string;
+        sourceEmail?: string;
+        sourceConnectionId?: Id<"connections">;
+      } | null = await ctx.runQuery(internal.agentmail.resolveRoutingByInbox, {
+        inboxId,
+        fallbackTo: to || undefined,
+        fallbackFrom: from || undefined,
+      });
+      console.log(`[ingestion] Resolved userId: ${routing?.userId ?? "NULL"}`);
+      if (!routing) {
         console.log("[ingestion] No user found — returning no_user");
         await markAttempt("no_user", { reason: "no_user" });
         return { subscriptionId: null, evidenceId: null, status: "no_user" };
       }
+      const userId = routing.userId;
 
       // 2. Dedupe is handled atomically inside persistExtracted transaction.
       // Do not pre-check here — that creates a TOCTOU window between read and
@@ -115,10 +132,14 @@ export const processForwardedEmail = internalAction({
       // 4. Normalize
       const normalized = normalizeEmail({ text, html, subject: args.subject });
       const bodyForKeyword = `${normalized.text} ${normalized.subject}`.trim();
-      console.log(`[ingestion] Keyword check: textLen=${normalized.text.length}, subject="${normalized.subject.slice(0, 60)}", hasKeyword=${KEYWORDS.test(bodyForKeyword)}`);
+      console.log(
+        `[ingestion] Keyword check: textLen=${normalized.text.length}, subject="${normalized.subject.slice(0, 60)}", hasKeyword=${KEYWORDS.test(bodyForKeyword)}`,
+      );
       if (!KEYWORDS.test(bodyForKeyword)) {
         console.log("[ingestion] No keyword match — returning skipped");
-        await markAttempt("skipped", { reason: `skipped: no keyword in "${args.subject.slice(0, 60)}"` });
+        await markAttempt("skipped", {
+          reason: `skipped: no keyword in "${args.subject.slice(0, 60)}"`,
+        });
         return { subscriptionId: null, evidenceId: null, status: "skipped" };
       }
 
@@ -139,9 +160,13 @@ export const processForwardedEmail = internalAction({
         text: normalized.text,
         subject: normalized.subject,
       });
-      console.log(`[ingestion] Extraction result: merchant="${extracted.merchant ?? "null"}", price=${extracted.price ?? "null"}, currency="${extracted.currency}", isConfirmation=${extracted.isConfirmation}, confidence=${extracted.confidence}, quote="${extracted.quote.slice(0, 80)}"`);
+      console.log(
+        `[ingestion] Extraction result: merchant="${extracted.merchant ?? "null"}", price=${extracted.price ?? "null"}, currency="${extracted.currency}", isConfirmation=${extracted.isConfirmation}, confidence=${extracted.confidence}, quote="${extracted.quote.slice(0, 80)}"`,
+      );
 
-      console.log(`[ingestion] Persisting: merchant="${extracted.merchant}", price=${extracted.price}, interval="${extracted.billingInterval}"`);
+      console.log(
+        `[ingestion] Persisting: merchant="${extracted.merchant}", price=${extracted.price}, interval="${extracted.billingInterval}"`,
+      );
       const source = `${extracted.merchant ?? args.subject.slice(0, 40) ?? "Forwarded email"} via forward`;
       const excerpt =
         extracted.quote || normalized.text.slice(0, 500) || args.subject;
@@ -151,15 +176,16 @@ export const processForwardedEmail = internalAction({
         !extracted.isConfirmation &&
         (!extracted.merchant || extracted.price === undefined)
       ) {
-        console.log(`[ingestion] Missing merchant or price — merchant="${extracted.merchant ?? "null"}", price=${extracted.price ?? "null"} — returning unparsed`);
-        await markAttempt("unparsed", { reason: `unparsed: missing merchant/price` });
+        console.log(
+          `[ingestion] Missing merchant or price — merchant="${extracted.merchant ?? "null"}", price=${extracted.price ?? "null"} — returning unparsed`,
+        );
+        await markAttempt("unparsed", {
+          reason: `unparsed: missing merchant/price`,
+        });
         return { subscriptionId: null, evidenceId: null, status: "unparsed" };
       }
 
       // 7. Persist
-      // Determine source email for routing/delivery: prefer the resolved recipient of the
-      // email (routed from inbox/from), fall back to the sender.
-      const sourceEmail = (args.to.includes("@") ? args.to : from).trim().toLowerCase() || undefined;
       const result = (await ctx.runMutation(
         internal.ingestion.persist.persistExtracted,
         {
@@ -168,7 +194,8 @@ export const processForwardedEmail = internalAction({
           svixId: args.svixId,
           messageId: args.messageId,
           source,
-          sourceEmail,
+          sourceEmail: routing.sourceEmail,
+          sourceConnectionId: routing.sourceConnectionId,
         },
       )) as {
         subscriptionId: Id<"subscriptions"> | null;
@@ -178,7 +205,9 @@ export const processForwardedEmail = internalAction({
       };
 
       if (result.isDuplicate) {
-        await markAttempt("duplicate", { reason: extracted.merchant ?? args.subject.slice(0, 32) ?? "receipt" });
+        await markAttempt("duplicate", {
+          reason: extracted.merchant ?? args.subject.slice(0, 32) ?? "receipt",
+        });
         return {
           subscriptionId: null,
           evidenceId: null,
@@ -212,13 +241,22 @@ export const processForwardedEmail = internalAction({
       }
 
       if (result.isNew) {
-        await ctx.scheduler.runAfter(0, internal.research.researchCancellationRoute, {
-          subscriptionId: result.subscriptionId,
-        });
+        await ctx.scheduler.runAfter(
+          0,
+          internal.research.researchCancellationRoute,
+          {
+            subscriptionId: result.subscriptionId,
+          },
+        );
       }
 
-      const finalStatus = result.isNew ? "created" as const : "merged" as const;
-      await markAttempt(finalStatus, { subscriptionId: result.subscriptionId, reason: extracted.merchant });
+      const finalStatus = result.isNew
+        ? ("created" as const)
+        : ("merged" as const);
+      await markAttempt(finalStatus, {
+        subscriptionId: result.subscriptionId,
+        reason: extracted.merchant,
+      });
       return {
         subscriptionId: result.subscriptionId,
         evidenceId: result.evidenceId,

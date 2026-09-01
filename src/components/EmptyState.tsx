@@ -3,7 +3,7 @@
 import { useAuthActions } from "@convex-dev/auth/react";
 import { CheckmarkCircle01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { useAction, useConvexAuth, useMutation, useQuery } from "convex/react";
+import { useAction, useConvexAuth, useQuery } from "convex/react";
 import { useEffect, useState } from "react";
 import { sileo } from "sileo";
 import { ConnectGmailButton } from "@/components/ConnectGmailButton";
@@ -77,7 +77,6 @@ export function NoSubscriptionsState() {
 function AuthenticatedEmptyState() {
   const status = useQuery(api.gmail.getGmailStatus);
   const scan = useAction(api.gmailActions.scanGmail);
-  const disconnect = useMutation(api.gmail.disconnectGmail);
   const [scanning, setScanning] = useState(false);
   const [autoTried, setAutoTried] = useState(false);
 
@@ -200,13 +199,6 @@ function AuthenticatedEmptyState() {
                 className="flex-1"
               >
                 {scanning ? "Scanning..." : "Scan now"}
-              </Button>
-              <Button
-                onClick={() => void disconnect({})}
-                size="sm"
-                variant="ghost"
-              >
-                Disconnect
               </Button>
             </div>
             {status.lastGmailScanAt && (

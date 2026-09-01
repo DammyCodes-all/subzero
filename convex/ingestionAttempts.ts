@@ -1,6 +1,6 @@
+import { getAuthUserId } from "@convex-dev/auth/server";
 import { v } from "convex/values";
 import { internalMutation, query } from "./_generated/server";
-import { getAuthUserId } from "@convex-dev/auth/server";
 
 export const createProcessingAttempt = internalMutation({
   args: {
@@ -11,8 +11,12 @@ export const createProcessingAttempt = internalMutation({
     from: v.optional(v.string()),
     subject: v.optional(v.string()),
     sourceEmail: v.optional(v.string()),
+    sourceConnectionId: v.optional(v.id("connections")),
   },
-  returns: v.object({ attemptId: v.id("ingestionAttempts"), isNew: v.boolean() }),
+  returns: v.object({
+    attemptId: v.id("ingestionAttempts"),
+    isNew: v.boolean(),
+  }),
   handler: async (ctx, args) => {
     const now = Date.now();
     const subject = args.subject?.slice(0, 120);
@@ -41,6 +45,7 @@ export const createProcessingAttempt = internalMutation({
       from,
       subject,
       sourceEmail: args.sourceEmail,
+      sourceConnectionId: args.sourceConnectionId,
       status: "processing",
       receivedAt: now,
       updatedAt: now,

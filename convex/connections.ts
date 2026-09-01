@@ -1,6 +1,6 @@
+import { getAuthUserId } from "@convex-dev/auth/server";
 import { v } from "convex/values";
 import { internalQuery, query } from "./_generated/server";
-import { getAuthUserId } from "@convex-dev/auth/server";
 
 export const getUserIdForEmail = internalQuery({
   args: { email: v.string() },
@@ -13,9 +13,13 @@ export const getUserIdForEmail = internalQuery({
     if (byInbox) return byInbox.userId;
     const byAccount = await ctx.db
       .query("connections")
-      .withIndex("by_accountEmail", (q) => q.eq("accountEmail", emailNorm))
-      .first();
-    if (byAccount) return byAccount.userId;
+      .withIndex("by_accountEmail_status", (q) =>
+        q.eq("accountEmail", emailNorm).eq("status", "connected"),
+      )
+      .collect();
+    const googleAccount = byAccount.find((c) => c.provider === "google");
+    if (googleAccount) return googleAccount.userId;
+    if (byAccount[0]) return byAccount[0].userId;
     return null;
   },
 });
@@ -31,7 +35,7 @@ export const getMyConnections = query({
       agentmailInbox: v.optional(v.string()),
       lastGmailScanAt: v.optional(v.number()),
       gmailScopeGranted: v.optional(v.boolean()),
-    })
+    }),
   ),
   handler: async (ctx) => {
     const userId = await getAuthUserId(ctx);
