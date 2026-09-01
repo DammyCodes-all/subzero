@@ -1,8 +1,10 @@
 "use client";
 
 import { useState } from "react";
+import { Toaster } from "sileo";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { Topbar } from "@/components/layout/Topbar";
+import { IngestionToasts } from "@/components/ingestion/IngestionToasts";
 import { motion, AnimatePresence } from "framer-motion";
 
 export function DashboardLayoutShell({
@@ -57,6 +59,8 @@ export function DashboardLayoutShell({
           <div className="mx-auto max-w-6xl space-y-6">{children}</div>
         </main>
       </div>
+      <Toaster position="bottom-right" theme="dark" />
+      <IngestionToasts />
     </div>
   );
 }
