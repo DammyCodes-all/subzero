@@ -3,6 +3,7 @@ import { Webhook } from "svix";
 import { internal } from "./_generated/api";
 import { env, httpAction } from "./_generated/server";
 import { auth } from "./auth";
+import type { Id } from "./_generated/dataModel";
 
 const http = httpRouter();
 
@@ -241,6 +242,34 @@ http.route({
       return new Response(null, { status: 204 });
     }
 
+    // Create processing attempt synchronously so dashboard shows instantly via Convex reactivity.
+    // Resolve user before inserting to avoid orphan rows visible to wrong user.
+    let attemptId: Id<"ingestionAttempts"> | undefined = undefined;
+    try {
+      const userId: string | null = await ctx.runQuery(
+        internal.agentmail.resolveUserByInbox,
+        { inboxId, fallbackTo: toVal || undefined, fallbackFrom: fromVal || undefined },
+      );
+      if (userId) {
+        const created: { attemptId: Id<"ingestionAttempts">; isNew: boolean } =
+          await ctx.runMutation(internal.ingestionAttempts.createProcessingAttempt, {
+            userId,
+            svixId,
+            messageId,
+            inboxId,
+            from: fromVal || undefined,
+            subject: subjectVal || undefined,
+          });
+        if (!created.isNew) {
+          // Svix retry — idempotent, no need to re-schedule
+          return new Response(null, { status: 204 });
+        }
+        attemptId = created.attemptId;
+      }
+    } catch (e) {
+      console.error("ingestionAttempts create failed", String(e));
+    }
+
     await ctx.scheduler.runAfter(
       0,
       internal.ingestion.process.processForwardedEmail,
@@ -254,6 +283,7 @@ http.route({
         svixId,
         svixTimestamp,
         messageId,
+        ...(attemptId ? { attemptId } : {}),
       },
     );
 
@@ -318,6 +348,35 @@ http.route({
         });
       }
 
+      // Create processing attempt for instant feedback (same as /agentmail/inbound)
+      let legacyAttemptId: Id<"ingestionAttempts"> | undefined = undefined;
+      let isLegacyNew = true;
+      try {
+        const legacyFrom = typeof body.from === "string" ? body.from : "";
+        const legacyUserId: string | null = await ctx.runQuery(
+          internal.agentmail.resolveUserByInbox,
+          { inboxId: recipient, fallbackTo: recipient || undefined, fallbackFrom: legacyFrom || undefined },
+        );
+        if (legacyUserId) {
+          const created: { attemptId: Id<"ingestionAttempts">; isNew: boolean } =
+            await ctx.runMutation(internal.ingestionAttempts.createProcessingAttempt, {
+              userId: legacyUserId,
+              inboxId: recipient,
+              from: legacyFrom || undefined,
+              subject: subject || undefined,
+            });
+          if (!created.isNew) isLegacyNew = false;
+          else legacyAttemptId = created.attemptId;
+        }
+      } catch (e) {
+        console.error("legacy ingestionAttempts create failed", String(e));
+      }
+      if (!isLegacyNew) {
+        return new Response(JSON.stringify({ status: "queued", dedup: true }), {
+          status: 202,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
       // Reuse the canonical forwarding pipeline (same Groq provider, same persist, same svix dedup).
       // Fire-and-forget via scheduler to keep webhook fast, then return 202.
       await ctx.scheduler.runAfter(0, internal.ingestion.process.processForwardedEmail, {
@@ -329,6 +388,7 @@ http.route({
         html,
         svixId: undefined,
         messageId: undefined,
+        ...(legacyAttemptId ? { attemptId: legacyAttemptId } : {}),
       });
 
       return new Response(JSON.stringify({ status: "queued" }), {
