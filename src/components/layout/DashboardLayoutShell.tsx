@@ -59,7 +59,7 @@ export function DashboardLayoutShell({
           <div className="mx-auto max-w-6xl space-y-6">{children}</div>
         </main>
       </div>
-      <Toaster position="bottom-right" theme="dark" />
+      <Toaster position="top-right" theme="dark" />
       <IngestionToasts />
     </div>
   );

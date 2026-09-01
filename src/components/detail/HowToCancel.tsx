@@ -2,7 +2,7 @@
 
 import { HugeiconsIcon } from "@hugeicons/react";
 import { ExternalLinkIcon } from "@hugeicons/core-free-icons";
-import { Loader2 } from "lucide-react";
+import { Loading03Icon } from "@hugeicons/core-free-icons";
 import { Button } from "@/components/ui/button";
 import { openExternalUrl } from "@/lib/cancellation";
 import { frictionLabel } from "@/lib/format";
@@ -47,7 +47,7 @@ export function HowToCancel({
       <div className="space-y-4">
         {difficultyBlock}
         <div className="rounded-lg border border-dashed bg-card p-5 flex items-center gap-3">
-          <Loader2 className="size-4 animate-spin text-muted-foreground" />
+          <HugeiconsIcon icon={Loading03Icon as unknown as Parameters<typeof HugeiconsIcon>[0]["icon"]} size={16} strokeWidth={1.8} color="currentColor" className="animate-spin text-muted-foreground" />
           <div>
             <p className="text-sm font-medium">Researching cancellation route…</p>
             <p className="text-xs text-muted-foreground">Checking {sub.merchant} help center via Firecrawl. This takes ~5s.</p>

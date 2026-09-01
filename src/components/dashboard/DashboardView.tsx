@@ -1,25 +1,24 @@
 "use client";
 
-import { useMutation, useQuery } from "convex/react";
+import { ArrowRight02Icon } from "@hugeicons/core-free-icons";
+import { HugeiconsIcon } from "@hugeicons/react";
+import { useQuery } from "convex/react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect } from "react";
+import { sileo } from "sileo";
 import { ActionCard } from "@/components/ActionCard";
 import { CompactAttentionRow } from "@/components/CompactAttentionRow";
 import { NoSubscriptionsState } from "@/components/EmptyState";
+import { ProcessingRows } from "@/components/ingestion/ProcessingRows";
 import { DashboardSkeleton } from "@/components/Skeleton";
 import { SummaryHeader } from "@/components/SummaryHeader";
-import { ProcessingRows } from "@/components/ingestion/ProcessingRows";
-import { HugeiconsIcon } from "@hugeicons/react";
-import { ArrowRight02Icon } from "@hugeicons/core-free-icons";
-import { Button } from "@/components/ui/button";
 import { api } from "../../../convex/_generated/api";
 import type { Doc } from "../../../convex/_generated/dataModel";
 
 export function DashboardView() {
   const attention = useQuery(api.subscriptions.needsAttention, { days: 7 });
   const all = useQuery(api.subscriptions.list);
-  const seed = useMutation(api.seed.seed);
 
   const isLoading = attention === undefined || all === undefined;
 
@@ -30,17 +29,31 @@ export function DashboardView() {
   const gmailConnected = searchParams.get("gmail_connected");
 
   useEffect(() => {
-    if (gmailError || gmailConnected) {
-      const t = setTimeout(() => {
-        const url = new URL(window.location.href);
-        url.searchParams.delete("gmail_error");
-        url.searchParams.delete("gmail_connected");
-        router.replace(
-          url.pathname + (url.search ? `?${url.searchParams}` : "") + url.hash,
-          { scroll: false },
-        );
-      }, 8000);
-      return () => clearTimeout(t);
+    if (gmailError) {
+      sileo.error({
+        title: "Gmail connection failed",
+        description: gmailError,
+      });
+      const url = new URL(window.location.href);
+      url.searchParams.delete("gmail_error");
+      url.searchParams.delete("gmail_connected");
+      router.replace(
+        url.pathname + (url.search ? `?${url.searchParams}` : "") + url.hash,
+        { scroll: false },
+      );
+    } else if (gmailConnected) {
+      sileo.success({
+        title: "Gmail connected successfully",
+        description:
+          "We're now scanning your inbox for subscription receipts and trial emails",
+      });
+      const url = new URL(window.location.href);
+      url.searchParams.delete("gmail_error");
+      url.searchParams.delete("gmail_connected");
+      router.replace(
+        url.pathname + (url.search ? `?${url.searchParams}` : "") + url.hash,
+        { scroll: false },
+      );
     }
   }, [gmailError, gmailConnected, router]);
 
@@ -64,46 +77,6 @@ export function DashboardView() {
   return (
     <div className="space-y-8">
       <ProcessingRows />
-      {/* Gmail OAuth banners — not the forwarded processing banner; kept for Gmail connect feedback */}
-      {gmailError && (
-        <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3">
-          <p className="text-sm font-medium text-destructive">
-            Couldn&apos;t connect Gmail
-          </p>
-          <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
-            {gmailError}
-          </p>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="mt-2 h-7 text-xs"
-            onClick={() => {
-              const url = new URL(window.location.href);
-              url.searchParams.delete("gmail_error");
-              url.searchParams.delete("gmail_connected");
-              router.replace(
-                url.pathname +
-                  (url.search ? `?${url.searchParams}` : "") +
-                  url.hash,
-                { scroll: false },
-              );
-            }}
-          >
-            Dismiss
-          </Button>
-        </div>
-      )}
-      {gmailConnected && !gmailError && (
-        <div className="rounded-lg border border-green-500/20 bg-green-500/10 px-4 py-3">
-          <p className="text-sm font-medium text-green-700 dark:text-green-300">
-            Gmail connected
-          </p>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Scanning your inbox for receipts and trials…
-          </p>
-        </div>
-      )}
-
       {isLoading ? (
         <DashboardSkeleton />
       ) : (all?.length ?? 0) === 0 ? (
@@ -111,18 +84,6 @@ export function DashboardView() {
         <div className="space-y-8">
           <SummaryHeader subscriptions={[]} attentionCount={0} />
           <NoSubscriptionsState />
-          {process.env.NODE_ENV !== "production" && (
-            <div className="flex justify-center">
-              <Button
-                variant="outline"
-                size="sm"
-                className="font-mono text-xs"
-                onClick={() => void seed({})}
-              >
-                Seed 8 mocks (dev)
-              </Button>
-            </div>
-          )}
         </div>
       ) : (
         /* ── Populated state ── */
@@ -144,7 +105,11 @@ export function DashboardView() {
               >
                 View all
                 <HugeiconsIcon
-                  icon={ArrowRight02Icon as unknown as Parameters<typeof HugeiconsIcon>[0]["icon"]}
+                  icon={
+                    ArrowRight02Icon as unknown as Parameters<
+                      typeof HugeiconsIcon
+                    >[0]["icon"]
+                  }
                   size={14}
                   strokeWidth={2}
                   color="currentColor"
@@ -182,23 +147,9 @@ export function DashboardView() {
                     </div>
                   </div>
                 )}
-
               </div>
             ) : null}
           </section>
-
-          {process.env.NODE_ENV !== "production" && (
-            <div className="flex justify-center">
-              <Button
-                variant="outline"
-                size="sm"
-                className="font-mono text-xs"
-                onClick={() => void seed({})}
-              >
-                Seed 8 mocks (dev)
-              </Button>
-            </div>
-          )}
         </div>
       )}
     </div>

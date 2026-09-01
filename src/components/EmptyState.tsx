@@ -1,20 +1,24 @@
 "use client";
 
 import { useAuthActions } from "@convex-dev/auth/react";
-import { HugeiconsIcon } from "@hugeicons/react";
 import { CheckmarkCircle01Icon } from "@hugeicons/core-free-icons";
-import { useConvexAuth } from "convex/react";
-import { useAction, useMutation, useQuery } from "convex/react";
+import { HugeiconsIcon } from "@hugeicons/react";
+import { useAction, useConvexAuth, useMutation, useQuery } from "convex/react";
 import { useEffect, useState } from "react";
-import { Button } from "@/components/ui/button";
+import { sileo } from "sileo";
 import { ConnectGmailButton } from "@/components/ConnectGmailButton";
+import { Button } from "@/components/ui/button";
 import { api } from "../../convex/_generated/api";
 
 export function ZeroAttentionState() {
   return (
     <div className="flex items-center justify-center gap-2 rounded-lg border border-primary/20 bg-primary/5 px-4 py-6 text-center">
       <HugeiconsIcon
-        icon={CheckmarkCircle01Icon as unknown as Parameters<typeof HugeiconsIcon>[0]["icon"]}
+        icon={
+          CheckmarkCircle01Icon as unknown as Parameters<
+            typeof HugeiconsIcon
+          >[0]["icon"]
+        }
         size={16}
         strokeWidth={1.8}
         color="currentColor"
@@ -68,7 +72,6 @@ function AuthenticatedEmptyState() {
   const scan = useAction(api.gmailActions.scanGmail);
   const disconnect = useMutation(api.gmail.disconnectGmail);
   const [scanning, setScanning] = useState(false);
-  const [result, setResult] = useState<null | { scanned: number; created: number; reason?: string }>(null);
   const [autoTried, setAutoTried] = useState(false);
 
   useEffect(() => {
@@ -84,8 +87,36 @@ function AuthenticatedEmptyState() {
       setAutoTried(true);
       setScanning(true);
       scan({})
-        .then((r) => setResult(r as any))
-        .catch((e) => setResult({ scanned: 0, created: 0, reason: String(e).slice(0, 200) }))
+        .then((r) => {
+          const res = r as {
+            scanned: number;
+            created: number;
+            reason?: string;
+          };
+          if (res.reason) {
+            const desc =
+              res.reason === "cooldown"
+                ? "You scanned recently. Wait a few minutes and try again."
+                : res.reason === "no_consent"
+                  ? "Gmail access not granted. Reconnect your Google account from the Connections page."
+                  : res.reason;
+            sileo.error({
+              title: "Couldn't complete Gmail scan",
+              description: desc,
+            });
+          } else {
+            sileo.success({
+              title: "Gmail scan finished",
+              description: `Checked ${res.scanned} recent emails and found ${res.created} new subscription${res.created === 1 ? "" : "s"}`,
+            });
+          }
+        })
+        .catch((e) =>
+          sileo.error({
+            title: "Gmail scan failed",
+            description: `Something went wrong while scanning your inbox: ${String(e).slice(0, 200)}`,
+          }),
+        )
         .finally(() => setScanning(false));
     } else {
       setAutoTried(true);
@@ -98,9 +129,29 @@ function AuthenticatedEmptyState() {
     setScanning(true);
     try {
       const r = await scan({});
-      setResult(r as any);
-    } catch (e: any) {
-      setResult({ scanned: 0, created: 0, reason: String(e).slice(0, 200) });
+      const res = r as { scanned: number; created: number; reason?: string };
+      if (res.reason) {
+        const desc =
+          res.reason === "cooldown"
+            ? "You scanned recently. Wait a few minutes and try again."
+            : res.reason === "no_consent"
+              ? "Gmail access not granted. Reconnect your Google account from the Connections page."
+              : res.reason;
+        sileo.error({
+          title: "Couldn't complete Gmail scan",
+          description: desc,
+        });
+      } else {
+        sileo.success({
+          title: "Gmail scan finished",
+          description: `Checked ${res.scanned} recent emails and found ${res.created} new subscription${res.created === 1 ? "" : "s"}`,
+        });
+      }
+    } catch (e: unknown) {
+      sileo.error({
+        title: "Gmail scan failed",
+        description: `Something went wrong while scanning your inbox: ${String(e).slice(0, 200)}`,
+      });
     } finally {
       setScanning(false);
     }
@@ -108,10 +159,13 @@ function AuthenticatedEmptyState() {
 
   return (
     <div className="rounded-lg border border-dashed bg-card p-10 text-center">
-        <h3 className="font-heading text-base font-semibold">No subscriptions yet</h3>
-        <p className="mx-auto mt-2 max-w-md text-sm text-muted-foreground">
-          You&apos;re signed in. Connect Gmail to auto-find receipts/trials (last 60 days), or forward an email. Results appear here.
-        </p>
+      <h3 className="font-heading text-base font-semibold">
+        No subscriptions yet
+      </h3>
+      <p className="mx-auto mt-2 max-w-md text-sm text-muted-foreground">
+        You&apos;re signed in. Connect Gmail to auto-find receipts/trials (last
+        60 days), or forward an email. Results appear here.
+      </p>
 
       <div className="mx-auto mt-6 max-w-sm space-y-3 text-left">
         {status === undefined ? (
@@ -122,17 +176,29 @@ function AuthenticatedEmptyState() {
           <>
             <div className="flex items-center justify-between">
               <p className="text-sm text-muted-foreground">
-                {status.accountEmail ? `Connected as ${status.accountEmail}` : "Gmail connected"}
+                {status.accountEmail
+                  ? `Connected as ${status.accountEmail}`
+                  : "Gmail connected"}
               </p>
               <span className="text-xs font-mono px-2 py-0.5 rounded-full bg-green-500/15 text-green-700 dark:text-green-300">
                 Connected
               </span>
             </div>
             <div className="flex gap-2">
-              <Button onClick={handleScan} disabled={scanning} size="sm" variant="outline" className="flex-1">
+              <Button
+                onClick={handleScan}
+                disabled={scanning}
+                size="sm"
+                variant="outline"
+                className="flex-1"
+              >
                 {scanning ? "Scanning..." : "Scan now"}
               </Button>
-              <Button onClick={() => void disconnect({})} size="sm" variant="ghost">
+              <Button
+                onClick={() => void disconnect({})}
+                size="sm"
+                variant="ghost"
+              >
                 Disconnect
               </Button>
             </div>
@@ -144,18 +210,11 @@ function AuthenticatedEmptyState() {
           </>
         )}
 
-        {result && (
-          <p className="text-xs font-mono text-muted-foreground text-center">
-            {result.reason === "cooldown"
-              ? "Recently scanned — try again in a few minutes."
-              : result.reason === "no_consent"
-                ? "No Gmail permission — connect first."
-                : result.reason
-                  ? `Error: ${result.reason}`
-                  : `Scanned ${result.scanned} · created ${result.created}`}
+        {scanning && (
+          <p className="text-xs text-muted-foreground text-center">
+            Scanning Gmail for subscription mails…
           </p>
         )}
-        {scanning && <p className="text-xs text-muted-foreground text-center">Scanning Gmail for subscription mails…</p>}
       </div>
     </div>
   );

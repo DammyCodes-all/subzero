@@ -164,38 +164,27 @@ export const storeByEmail = mutation({
   },
   returns: v.object({ ok: v.boolean() }),
   handler: async (ctx, args) => {
-    const ident = await ctx.auth.getUserIdentity();
-    if (!ident) throw new Error("Not authenticated");
+    const userId = await getAuthUserId(ctx);
+    if (!userId) throw new Error("Not authenticated");
     const emailNorm = args.accountEmail.trim().toLowerCase();
     if (!emailNorm || !emailNorm.includes("@")) throw new Error("Invalid accountEmail");
     // Allow Gmail different from sign-in email — Google OAuth already proves ownership of `emailNorm`.
-    // Previously strict check caused "Email mismatch" when user signed in with A but connected Gmail B.
     const refreshToken = args.refreshToken.trim();
     if (!refreshToken) throw new Error("Missing refreshToken");
-    const userId = ident.tokenIdentifier;
-    // Find existing google connection for this user (check canonical + legacy)
-    let existing: any = null;
-    const byToken = await ctx.db.query("connections").withIndex("by_user", (q) => q.eq("userId", userId)).collect();
-    existing = byToken.find((c: any) => c.provider === "google");
-    if (!existing) {
-      const parts = userId.split("|");
-      const uid = parts.length >= 2 ? parts[1] : userId;
-      const byPlain = await ctx.db.query("connections").withIndex("by_user", (q) => q.eq("userId", uid)).collect();
-      existing = byPlain.find((c: any) => c.provider === "google");
-    }
-    if (!existing) {
-      const byEmail = await ctx.db.query("connections").withIndex("by_accountEmail", (q) => q.eq("accountEmail", emailNorm)).first();
-      if (byEmail && byEmail.provider === "google") existing = byEmail;
-    }
+    // Find existing google connection for this user
+    const rows = await ctx.db.query("connections").withIndex("by_user", (q) => q.eq("userId", userId)).collect();
+    const existing = rows.find((c: any) => c.provider === "google" && c.accountEmail === emailNorm);
     if (existing) {
+      // Same email reconnecting — update tokens in place
       await ctx.db.patch(existing._id, {
-        userId, // normalize to canonical tokenIdentifier
+        userId,
         gmailRefreshToken: refreshToken,
         gmailScopeGranted: true,
         accountEmail: emailNorm,
         status: "connected",
       });
     } else {
+      // New email or no existing connection — insert a separate row
       await ctx.db.insert("connections", {
         userId,
         provider: "google",

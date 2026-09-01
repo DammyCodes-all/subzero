@@ -8,8 +8,6 @@ import { Button } from "@/components/ui/button";
 import { ForwardingCardSkeleton } from "@/components/Skeleton";
 import { api } from "../../convex/_generated/api";
 
-const FALLBACK_INBOX = "subzero-agent@agentmail.to";
-
 export function ForwardingCard() {
   const inbox = useQuery(api.agentmail.getInbox);
   const getOrCreate = useMutation(api.agentmail.getOrCreateInbox);
@@ -24,7 +22,18 @@ export function ForwardingCard() {
     return <ForwardingCardSkeleton />;
   }
 
-  const displayInbox = inbox ?? FALLBACK_INBOX;
+  if (!inbox) {
+    return (
+      <div className="rounded-md border border-dashed border-border/60 bg-transparent p-5">
+        <h3 className="text-sm font-medium text-foreground">Forward any receipt</h3>
+        <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">
+          Your forwarding address is being set up. Check back in a moment.
+        </p>
+      </div>
+    );
+  }
+
+  const displayInbox = inbox;
 
   async function handleCopy() {
     try {
