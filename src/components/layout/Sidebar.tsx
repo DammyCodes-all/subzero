@@ -14,7 +14,7 @@ import {
 import { cn } from "@/lib/utils";
 import { NAV_ITEMS } from "./navigation";
 import { SidebarTooltip } from "./SidebarTooltip";
-import { SubzeroMark } from "@/components/brand/SubzeroLogo";
+import { SubzeroMark, SubzeroWithWordmark } from "@/components/brand/SubzeroLogo";
 import type { SidebarProps } from "./types";
 
 export function Sidebar({ collapsed, onToggle }: SidebarProps) {
@@ -48,16 +48,15 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
         <Link
           href="/dashboard"
           className={cn(
-            "flex min-w-0 items-center gap-3",
-            collapsed && "justify-center"
+            "flex min-w-0 items-center",
+            collapsed ? "justify-center" : "gap-2"
           )}
           aria-label="SubZero dashboard"
         >
-          <SubzeroMark size={collapsed ? 28 : 40} className={cn(collapsed ? "h-7 w-7" : "h-10 w-10")} />
-          {!collapsed && (
-            <span className="whitespace-nowrap overflow-hidden font-heading text-sm font-bold tracking-tight text-foreground">
-              SubZero
-            </span>
+          {collapsed ? (
+            <SubzeroMark size={28} className="h-7 w-7" />
+          ) : (
+            <SubzeroWithWordmark className="h-7 w-auto max-w-[144px]" width={144} height={32} />
           )}
         </Link>
 
