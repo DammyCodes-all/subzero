@@ -22,4 +22,16 @@ crons.interval(
   internal.ingestionAttempts.cleanupOldAttempts,
 );
 
+crons.interval(
+  "gmail incremental poll",
+  { minutes: 15 },
+  internal.gmailWatch.pollAllUsersIncremental,
+);
+
+crons.daily(
+  "gmail watch renewal",
+  { hourUTC: 2 },
+  internal.gmailWatch.renewWatchesForAll,
+);
+
 export default crons;
