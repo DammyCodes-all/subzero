@@ -27,6 +27,17 @@ export const metadata: Metadata = {
   title: "SubZero — Your subscriptions shouldn't surprise you",
   description:
     "SubZero automatically finds your subscriptions, warns you before they renew, and researches exactly how to cancel them.",
+  icons: {
+    icon: [
+      { url: "/icon", type: "image/svg+xml" },
+      { url: "/icon.svg", type: "image/svg+xml" },
+      { url: "/subzero-logo.svg", type: "image/svg+xml" },
+    ],
+    apple: [
+      { url: "/apple-icon", type: "image/svg+xml" },
+      { url: "/apple-icon.svg", type: "image/svg+xml" },
+    ],
+  },
 };
 
 export default function RootLayout({

@@ -14,6 +14,7 @@ import {
 import { cn } from "@/lib/utils";
 import { NAV_ITEMS } from "./navigation";
 import { SidebarTooltip } from "./SidebarTooltip";
+import { SubzeroMark } from "@/components/brand/SubzeroLogo";
 import type { SidebarProps } from "./types";
 
 export function Sidebar({ collapsed, onToggle }: SidebarProps) {
@@ -41,21 +42,24 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
       <div
         className={cn(
           "flex h-16 items-center border-b border-border transition-all",
-          collapsed ? "justify-center px-0" : "justify-between px-4"
+          collapsed ? "justify-center gap-1 px-1" : "justify-between px-4"
         )}
       >
-        {!collapsed && (
-          <Link href="/dashboard" className="flex min-w-0 items-center gap-3">
-            <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-primary">
-              <span className="font-heading text-xs font-bold text-primary-foreground leading-none">
-                SZ
-              </span>
-            </div>
+        <Link
+          href="/dashboard"
+          className={cn(
+            "flex min-w-0 items-center gap-3",
+            collapsed && "justify-center"
+          )}
+          aria-label="SubZero dashboard"
+        >
+          <SubzeroMark size={collapsed ? 28 : 40} className={cn(collapsed ? "h-7 w-7" : "h-10 w-10")} />
+          {!collapsed && (
             <span className="whitespace-nowrap overflow-hidden font-heading text-sm font-bold tracking-tight text-foreground">
               SubZero
             </span>
-          </Link>
-        )}
+          )}
+        </Link>
 
         {/* Collapse toggle */}
         <SidebarTooltip label={collapsed ? "Expand sidebar" : "Collapse sidebar"} disabled={!collapsed}>
@@ -63,7 +67,10 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
             type="button"
             onClick={onToggle}
             aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-            className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+            className={cn(
+              "flex flex-shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground",
+              collapsed ? "h-6 w-6" : "h-8 w-8"
+            )}
           >
             <HugeiconsIcon
               icon={collapsed ? LayoutRightIcon : LayoutLeftIcon}

@@ -8,6 +8,7 @@ import { sileo, Toaster } from "sileo";
 import { LoginForm } from "@/components/auth/LoginForm";
 import { SignupForm } from "@/components/auth/SignupForm";
 import { Button } from "@/components/ui/button";
+import { SubzeroMark } from "@/components/brand/SubzeroLogo";
 import {
   clearGoogleOAuthAttempt,
   GOOGLE_OAUTH_REDIRECT,
@@ -83,6 +84,10 @@ export function AuthView() {
 
   return (
     <main className="flex min-h-screen flex-col items-center justify-center gap-8 bg-background p-8">
+      <a href="/" aria-label="SubZero home" className="flex flex-col items-center gap-3">
+        <SubzeroMark size={48} className="h-12 w-12" />
+        <span className="font-heading text-xs font-bold tracking-[0.18em] text-muted-foreground">SUBZERO</span>
+      </a>
       <h1 className="font-heading text-2xl font-bold">
         {mode === "signup" ? "Create account" : "Log in"}
       </h1>

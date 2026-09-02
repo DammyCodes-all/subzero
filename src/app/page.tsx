@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { UserMenu } from "@/components/UserMenu";
 import { Button } from "@/components/ui/button";
+import { SubzeroMark } from "@/components/brand/SubzeroLogo";
 
 export default function Home() {
   return (
@@ -8,7 +9,10 @@ export default function Home() {
       <div className="absolute top-4 right-4">
         <UserMenu />
       </div>
-      <div className="text-center space-y-4 max-w-2xl">
+      <div className="flex flex-col items-center gap-5 text-center max-w-2xl">
+        <Link href="/" aria-label="SubZero home">
+          <SubzeroMark size={72} className="h-[72px] w-[72px] drop-shadow-[0_8px_24px_rgba(230,255,43,0.12)]" />
+        </Link>
         <h1 className="text-4xl font-heading font-bold tracking-tight">
           Meet SubZero
         </h1>
