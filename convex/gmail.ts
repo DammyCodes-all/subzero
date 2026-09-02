@@ -594,21 +594,22 @@ export const listAllGmailConnectionsInternal = internalQuery({
     }),
   ),
   handler: async (ctx) => {
-    const rows = await ctx.db.query("connections").collect();
-    return rows
-      .filter((c) => c.provider === "google")
-      .map((c) => ({
-        _id: c._id,
-        userId: c.userId,
-        gmailRefreshToken: c.gmailRefreshToken,
-        gmailScopeGranted: c.gmailScopeGranted,
-        status: c.status,
-        accountEmail: c.accountEmail,
-        lastGmailScanAt: c.lastGmailScanAt,
-        gmailHistoryId: c.gmailHistoryId,
-        gmailWatchExpiration: (c as any).gmailWatchExpiration,
-        gmailWatchTopic: (c as any).gmailWatchTopic,
-      }));
+    const rows = await ctx.db
+      .query("connections")
+      .withIndex("by_provider", (q) => q.eq("provider", "google"))
+      .collect();
+    return rows.map((c) => ({
+      _id: c._id,
+      userId: c.userId,
+      gmailRefreshToken: c.gmailRefreshToken,
+      gmailScopeGranted: c.gmailScopeGranted,
+      status: c.status,
+      accountEmail: c.accountEmail,
+      lastGmailScanAt: c.lastGmailScanAt,
+      gmailHistoryId: c.gmailHistoryId,
+      gmailWatchExpiration: (c as any).gmailWatchExpiration,
+      gmailWatchTopic: (c as any).gmailWatchTopic,
+    }));
   },
 });
 

@@ -18,6 +18,109 @@ http.route({
 });
 
 http.route({
+  path: "/gmail/push",
+  method: "GET",
+  handler: httpAction(async () => {
+    return new Response("ok", { status: 200 });
+  }),
+});
+
+http.route({
+  path: "/gmail/push",
+  method: "POST",
+  handler: httpAction(async (ctx, req) => {
+    const url = new URL(req.url);
+    const querySecret = url.searchParams.get("secret");
+    const pushSecret = (env as any).GMAIL_PUSH_SECRET ?? process.env.GMAIL_PUSH_SECRET;
+    const apiKey = env.AGENTMAIL_API_KEY ?? process.env.AGENTMAIL_API_KEY;
+    const isProd = env.NODE_ENV === "production" || process.env.NODE_ENV === "production";
+    // In prod, require explicit GMAIL_PUSH_SECRET (don't fallback to AGENTMAIL_API_KEY to avoid cross-service forgery)
+    const expected = isProd ? pushSecret : (pushSecret ?? apiKey);
+    if (isProd) {
+      if (!expected) return new Response("missing push secret", { status: 500 });
+      if (querySecret !== expected) {
+        if (!querySecret) return new Response("missing secret", { status: 401 });
+        return new Response("invalid secret", { status: 401 });
+      }
+    } else {
+      // Dev: soft-continue if secret mismatched, but log
+      if (expected && querySecret && querySecret !== expected) {
+        console.error("gmail push invalid secret (dev soft-continue)");
+      }
+    }
+
+    let body: any;
+    try {
+      body = await req.json();
+    } catch {
+      return new Response("invalid json", { status: 400 });
+    }
+
+    const msg = body?.message;
+    if (!msg?.data) {
+      // Ack even if malformed — avoid Pub/Sub retry storm
+      console.error("gmail push missing data", JSON.stringify(body).slice(0, 500));
+      return new Response(null, { status: 204 });
+    }
+
+    let decoded: string;
+    try {
+      // Pub/Sub data is base64 (sometimes base64url) — normalize
+      const b64 = String(msg.data).replace(/-/g, "+").replace(/_/g, "/");
+      const pad = b64.length % 4 === 0 ? "" : "=".repeat(4 - (b64.length % 4));
+      decoded = Buffer.from(b64 + pad, "base64").toString("utf-8");
+    } catch {
+      console.error("gmail push base64 decode failed");
+      return new Response(null, { status: 204 });
+    }
+
+    let payload: any;
+    try {
+      payload = JSON.parse(decoded);
+    } catch {
+      console.error("gmail push payload not json", decoded.slice(0, 300));
+      return new Response(null, { status: 204 });
+    }
+
+    const emailAddress = typeof payload.emailAddress === "string" ? payload.emailAddress.toLowerCase().trim() : "";
+    const historyId = typeof payload.historyId === "string" ? payload.historyId : typeof payload.historyId === "number" ? String(payload.historyId) : "";
+    if (!emailAddress || !historyId) {
+      console.error("gmail push missing emailAddress/historyId", payload);
+      return new Response(null, { status: 204 });
+    }
+
+    console.log("gmail push received", JSON.stringify({ emailAddress, historyId, msgId: msg.messageId ?? msg.message_id }));
+
+    // Lookup connections by accountEmail (connected gmail accounts)
+    let conns: any[] = [];
+    try {
+      conns = await ctx.runQuery(internal.gmail.getConnectionsByEmailInternal, { email: emailAddress });
+    } catch (e) {
+      console.error("gmail push query failed", String(e));
+    }
+    const active = conns.filter((c) => c.status === "connected" && c.gmailScopeGranted && c.gmailRefreshToken);
+    if (active.length === 0) {
+      console.log("gmail push no active conn for", emailAddress);
+      return new Response(null, { status: 204 });
+    }
+
+    for (const conn of active) {
+      try {
+        await ctx.scheduler.runAfter(0, internal.gmailWatch.ingestIncremental, {
+          userId: conn.userId,
+          connId: conn._id,
+        });
+      } catch (e) {
+        console.error("gmail push schedule failed", conn._id, String(e));
+      }
+    }
+
+    // Must ack fast — Pub/Sub expects 2xx within deadline, process continues async
+    return new Response(null, { status: 204 });
+  }),
+});
+
+http.route({
   path: "/agentmail/inbound",
   method: "GET",
   handler: httpAction(async () => {

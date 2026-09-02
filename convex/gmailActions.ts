@@ -5,81 +5,16 @@ import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { action, internalAction } from "./_generated/server";
-import { normalizeEmail } from "./ingestion/normalize";
 import {
   buildGmailQuery,
   getAccessToken,
   getMessage,
+  getProfileHistoryId,
   listMessages,
 } from "./lib/gmail";
+import { processOneEmail } from "./lib/processEmail";
 
 const COOLDOWN_MS = 10 * 60 * 1000;
-const PRICE_HINT =
-  /(\$|€|£|₦|₹|¥)\s*[\d,]+|[\d,]+\s*(USD|EUR|GBP|NGN|INR|JPY|CAD|AUD)/i;
-const KEYWORDS =
-  /receipt|trial|renewal|subscription|invoice|charged|billed|cancelled|canceled|payment|plan|order number|GPA\./i;
-
-async function processOneEmail(
-  ctx: any,
-  userId: string,
-  subject: string,
-  text: string,
-  html: string,
-  messageId: string,
-  sourceEmail?: string,
-  sourceConnectionId?: Id<"connections">,
-): Promise<{ status: string; subscriptionId?: string }> {
-  const normalized = normalizeEmail({ text, html, subject });
-  const hay = `${normalized.text} ${normalized.subject}`;
-  if (!KEYWORDS.test(hay)) return { status: "skipped" };
-  if (!PRICE_HINT.test(hay) && !/cancelled|canceled/i.test(hay)) {
-    if (!/trial|renewal|subscription/i.test(hay)) return { status: "skipped" };
-  }
-  const extracted: any = await ctx.runAction(
-    internal.ingestion.extract.extractSubscription,
-    {
-      text: normalized.text,
-      subject: normalized.subject,
-    },
-  );
-  if (
-    !extracted.isConfirmation &&
-    (!extracted.merchant || extracted.price === undefined)
-  ) {
-    return { status: "unparsed" };
-  }
-  const source = `Gmail: ${subject.slice(0, 80)}`;
-  const result: any = await ctx.runMutation(
-    internal.ingestion.persist.persistExtracted,
-    {
-      userId,
-      extracted,
-      svixId: `gmail:${messageId}`,
-      messageId: `gmail:${messageId}`,
-      source,
-      sourceEmail,
-      sourceConnectionId,
-    },
-  );
-  if (result.isDuplicate) return { status: "duplicate" };
-  if (result.isNew && result.subscriptionId && !extracted.isConfirmation) {
-    await ctx.scheduler.runAfter(
-      0,
-      internal.research.researchCancellationRoute,
-      {
-        subscriptionId: result.subscriptionId,
-      },
-    );
-  }
-  return {
-    status: extracted.isConfirmation
-      ? "cancelled"
-      : result.isNew
-        ? "created"
-        : "merged",
-    subscriptionId: result.subscriptionId,
-  };
-}
 
 export const scanGmail = action({
   args: { connectionId: v.optional(v.id("connections")) },
@@ -250,10 +185,23 @@ export const scanGmail = action({
         if (!pageToken) break;
       } while (pages < maxPages);
 
-      if (conn?._id)
+      if (conn?._id) {
         await ctx.runMutation(internal.gmail.touchScan as any, {
           connId: conn._id,
         });
+        // Seed historyId for future incremental poll (proactive watching)
+        try {
+          const hid = await getProfileHistoryId(accessToken);
+          await ctx.runMutation(internal.gmail.updateHistoryId as any, {
+            connId: conn._id,
+            historyId: hid,
+          });
+        } catch {}
+        // Best-effort ensure watch if topic configured
+        try {
+          await ctx.scheduler.runAfter(0, internal.gmailWatch.ensureWatchForConn as any, { connId: conn._id });
+        } catch {}
+      }
     }
 
     if (!anyScanned && scanned === 0) {
@@ -360,8 +308,14 @@ export const scanForUser = internalAction({
           if (r.status === "created") created++;
           await new Promise((rr) => setTimeout(rr, 450));
         }
-        if (conn?._id)
+        if (conn?._id) {
           await ctx.runMutation(internal.gmail.touchScan, { connId: conn._id });
+          try {
+            const tok2 = await getAccessToken(conn.gmailRefreshToken);
+            const hid = await getProfileHistoryId(tok2.accessToken);
+            await ctx.runMutation(internal.gmail.updateHistoryId as any, { connId: conn._id, historyId: hid });
+          } catch {}
+        }
       } catch (e: any) {}
     }
     return { scanned, created };
