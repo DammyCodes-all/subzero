@@ -197,18 +197,24 @@ SubZero Protection Engine`;
 
     if (apiKey) {
       try {
-        const res = await fetch("https://api.agentmail.to/v1/messages/send", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${apiKey}`,
+        const inboxId =
+          (process.env.AGENTMAIL_INBOX as string | undefined) ??
+          "subzero-agent@agentmail.to";
+        const res = await fetch(
+          `https://api.agentmail.to/v0/inboxes/${encodeURIComponent(inboxId)}/messages/send`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${apiKey}`,
+            },
+            body: JSON.stringify({
+              to: recipient,
+              subject,
+              text: body,
+            }),
           },
-          body: JSON.stringify({
-            to: recipient,
-            subject,
-            text: body,
-          }),
-        });
+        );
 
         if (res.ok) {
           await ctx.runMutation(internal.notifications.markNotificationSent, {

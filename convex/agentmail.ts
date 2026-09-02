@@ -431,18 +431,24 @@ export const sendCancellationEmail = action({
     const apiKey = process.env.AGENTMAIL_API_KEY;
     if (apiKey && recipient) {
       try {
-        const res = await fetch("https://api.agentmail.to/v1/messages/send", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${apiKey}`,
+        const inboxId =
+          (process.env.AGENTMAIL_INBOX as string | undefined) ??
+          "subzero-agent@agentmail.to";
+        const res = await fetch(
+          `https://api.agentmail.to/v0/inboxes/${encodeURIComponent(inboxId)}/messages/send`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${apiKey}`,
+            },
+            body: JSON.stringify({
+              to: recipient,
+              subject: `Cancellation Request: ${args.merchant} Subscription`,
+              text: `${args.body}${sourceHint}`,
+            }),
           },
-          body: JSON.stringify({
-            to: recipient,
-            subject: `Cancellation Request: ${args.merchant} Subscription`,
-            text: `${args.body}${sourceHint}`,
-          }),
-        });
+        );
         if (!res.ok) {
           console.error("AgentMail send failed:", await res.text());
           throw new Error("Failed to send via AgentMail");
