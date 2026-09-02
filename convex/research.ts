@@ -12,10 +12,11 @@ export const researchCancellationRoute = internalAction({
 
     const firecrawlKey = (env as unknown as { FIRECRAWL_API_KEY?: string }).FIRECRAWL_API_KEY;
     const groqKey = (env as unknown as { GROQ_API_KEY?: string }).GROQ_API_KEY;
+    const openrouterKey = (env as unknown as { OPENROUTER_API_KEY?: string }).OPENROUTER_API_KEY ?? (process.env as unknown as { OPENROUTER_API_KEY?: string }).OPENROUTER_API_KEY;
     const openaiKey = (env as unknown as { OPENAI_API_KEY?: string }).OPENAI_API_KEY;
 
     // No keys → never invent. Persist as unknown, let UI show "No verified route".
-    if (!firecrawlKey || (!groqKey && !openaiKey)) {
+    if (!firecrawlKey || (!groqKey && !openrouterKey && !openaiKey)) {
       await ctx.runMutation(internal.subscriptions.saveResearchResult, {
         subscriptionId: args.subscriptionId,
         cancellationMethod: "unknown",
@@ -312,10 +313,12 @@ VALIDATION: Raw JSON only. All keys present. No trailing commas. No single quote
 HELP CONTENT:
 ${markdownContent.slice(0, 8000)}`;
 
-    const provider = groqKey ? "groq" : "openai";
-    const apiKey = groqKey ?? openaiKey;
-    const endpoint = provider === "groq" ? "https://api.groq.com/openai/v1/chat/completions" : "https://api.openai.com/v1/chat/completions";
-    const model = provider === "groq" ? GROQ_EXTRACTION_MODEL : "gpt-4o-mini";
+    type ProviderCfg = { id: string; key: string; endpoint: string; model: string };
+    const providers: ProviderCfg[] = [];
+    if (groqKey) providers.push({ id: "groq", key: groqKey, endpoint: "https://api.groq.com/openai/v1/chat/completions", model: GROQ_EXTRACTION_MODEL });
+    if (openrouterKey) providers.push({ id: "openrouter", key: openrouterKey, endpoint: "https://openrouter.ai/api/v1/chat/completions", model: (env as unknown as { OPENROUTER_MODEL?: string }).OPENROUTER_MODEL ?? (process.env as unknown as { OPENROUTER_MODEL?: string }).OPENROUTER_MODEL ?? "openrouter/free" });
+    if (openaiKey) providers.push({ id: "openai", key: openaiKey, endpoint: "https://api.openai.com/v1/chat/completions", model: "gpt-4o-mini" });
+    const primaryProvider = providers[0]?.id ?? "none";
 
     type LLMOutput = {
       cancellationMethod: string | null;
@@ -325,30 +328,85 @@ ${markdownContent.slice(0, 8000)}`;
     };
     let parsed: LLMOutput | null = null;
     try {
-      const controller = new AbortController();
-      const t = setTimeout(() => controller.abort(), 20000);
-      const res = await fetch(endpoint, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${apiKey}`,
-        },
-        body: JSON.stringify({
-          model,
-          response_format: { type: "json_object" },
-          messages: [
-            { role: "system", content: system },
-            { role: "user", content: userContent },
-          ],
-          temperature: 0,
-        }),
-        signal: controller.signal,
-      });
-      clearTimeout(t);
-
-      if (!res.ok) {
-        throw new Error(`AI extraction failed: ${res.statusText}`);
+      // Try providers Groq -> OpenRouter -> OpenAI with 429 backoff and fallback
+      let res: Response | null = null;
+      let lastErr: unknown = null;
+      let usedProvider = primaryProvider;
+      providerLoop: for (const prov of providers) {
+        usedProvider = prov.id;
+        console.log(`[research] Trying provider ${prov.id} model ${prov.model}`);
+        for (let attempt = 0; attempt < 3; attempt++) {
+          const controller = new AbortController();
+          const t = setTimeout(() => controller.abort(), 20000);
+          try {
+            const headers: Record<string, string> = {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${prov.key}`,
+            };
+            if (prov.id === "openrouter") {
+              headers["HTTP-Referer"] = process.env.SITE_URL ?? "http://localhost:3000";
+              headers["X-Title"] = "SubZero";
+            }
+            const r = await fetch(prov.endpoint, {
+              method: "POST",
+              headers,
+              body: JSON.stringify({
+                model: prov.model,
+                response_format: { type: "json_object" },
+                messages: [
+                  { role: "system", content: system },
+                  { role: "user", content: userContent },
+                ],
+                temperature: 0,
+              }),
+              signal: controller.signal,
+            });
+            clearTimeout(t);
+            if (r.ok) {
+              res = r;
+              break providerLoop;
+            }
+            lastErr = new Error(`AI extraction failed: ${r.status} ${r.statusText}`);
+            // Retry only on 429 or 5xx
+            if ((r.status === 429 || r.status >= 500) && attempt < 2) {
+              const backoff = 1500 * (attempt + 1) + Math.random() * 500;
+              await new Promise((rr) => setTimeout(rr, backoff));
+              continue;
+            }
+            if (r.status === 429 && attempt === 2) {
+              console.log(`[research] Provider ${prov.id} 429 exhausted, trying next`);
+              break;
+            }
+            throw lastErr;
+          } catch (e) {
+            clearTimeout(t);
+            lastErr = e;
+            const msg = String(e);
+            const isRateLimit = msg.includes("429") || msg.includes("Rate limit");
+            if (isRateLimit && attempt < 2) {
+              const backoff = 1500 * (attempt + 1) + Math.random() * 500;
+              await new Promise((rr) => setTimeout(rr, backoff));
+              continue;
+            }
+            if (isRateLimit && attempt === 2) {
+              console.log(`[research] Provider ${prov.id} rate limit, falling back`);
+              break;
+            }
+            if (attempt === 2) throw e;
+            if (e instanceof Error && e.name === "AbortError" && attempt < 2) {
+              await new Promise((rr) => setTimeout(rr, 800));
+              continue;
+            }
+            throw e;
+          }
+        }
+        if (!res && lastErr && String(lastErr).includes("429")) {
+          console.log(`[research] Falling back from ${prov.id} to next provider`);
+          continue;
+        }
+        if (!res) break;
       }
+      if (!res) throw lastErr ?? new Error("AI extraction failed after retries");
 
       const data = (await res.json()) as unknown as { choices?: Array<{ message?: { content?: string } }> };
       const content = data.choices?.[0]?.message?.content ?? "{}";

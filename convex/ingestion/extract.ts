@@ -50,7 +50,7 @@ function mockExtract(
   const combined = `${subject} ${text}`.toLowerCase();
   const combinedRaw = `${subject} ${text}`; // keep original case for symbol detection
   const isConfirmation =
-    /cancelled|canceled|subscription.*cancel|cancellation confirmed/i.test(
+    /cancellation confirmed|subscription.*has been cancell?ed|has been cancell?ed|successfully cancell?ed|your subscription.*cancell?ed/i.test(
       combined,
     );
 
@@ -122,8 +122,9 @@ function mockExtract(
     }
   }
 
-  // Merchant from subject or common names
+  // Merchant from subject or common names — snap before google so "Snap Inc on Google Play" doesn't become Google
   const merchants = [
+    "snap",
     "adobe",
     "canva",
     "spotify",
@@ -140,6 +141,7 @@ function mockExtract(
     if (combined.includes(m)) {
       merchant = m.charAt(0).toUpperCase() + m.slice(1);
       if (m === "chatgpt") merchant = "ChatGPT";
+      if (m === "snap") merchant = "Snap Inc";
       break;
     }
   }
@@ -194,14 +196,17 @@ export const extractSubscription = internalAction({
     const groqKey =
       (env as unknown as { GROQ_API_KEY?: string }).GROQ_API_KEY ??
       process.env.GROQ_API_KEY;
+    const openrouterKey =
+      (env as unknown as { OPENROUTER_API_KEY?: string }).OPENROUTER_API_KEY ??
+      process.env.OPENROUTER_API_KEY;
     const openaiKey =
       (env as unknown as { OPENAI_API_KEY?: string }).OPENAI_API_KEY ??
       process.env.OPENAI_API_KEY;
-    // Prefer Groq (free tier) if set, else OpenAI, else mock
-    const provider = groqKey ? "groq" : openaiKey ? "openai" : null;
-    const apiKey = groqKey ?? openaiKey;
-    console.log(`[extract] Provider: ${provider ?? "MOCK (no API key)"}, subject="${args.subject.slice(0, 60)}", textLen=${args.text.length}`);
-    if (!apiKey || !provider) {
+    // Prefer Groq -> OpenRouter -> OpenAI -> mock
+    const hasAnyKey = !!(groqKey || openrouterKey || openaiKey);
+    const primaryProvider = groqKey ? "groq" : openrouterKey ? "openrouter" : openaiKey ? "openai" : null;
+    console.log(`[extract] Provider: ${primaryProvider ?? "MOCK (no API key)"}, subject="${args.subject.slice(0, 60)}", textLen=${args.text.length}`);
+    if (!hasAnyKey || !primaryProvider) {
       console.log("[extract] No API key — using mock extraction");
       const m = mockExtract(args.text, args.subject);
       console.log(`[extract] Mock result: merchant="${m.merchant ?? "null"}", price=${m.price ?? "null"}, currency="${m.currency}"`);
@@ -278,55 +283,95 @@ Document: Subject: Your trial ends soon Body: Spotify Premium $9.99/month renews
 VALIDATION: Respond with raw JSON only. No markdown, no code fences, no extra text. All keys present, no trailing commas, no single quotes.`;
 
     const userContent = `Subject: ${args.subject}\n\nBody:\n${args.text.slice(0, 15000)}`;
-    const endpoint =
-      provider === "groq"
-        ? "https://api.groq.com/openai/v1/chat/completions"
-        : "https://api.openai.com/v1/chat/completions";
-    const model = provider === "groq" ? GROQ_EXTRACTION_MODEL : "gpt-4o-mini";
+    type ProviderCfg = { id: string; key: string; endpoint: string; model: string };
+    const providers: ProviderCfg[] = [];
+    if (groqKey) providers.push({ id: "groq", key: groqKey, endpoint: "https://api.groq.com/openai/v1/chat/completions", model: GROQ_EXTRACTION_MODEL });
+    if (openrouterKey) providers.push({ id: "openrouter", key: openrouterKey, endpoint: "https://openrouter.ai/api/v1/chat/completions", model: (env as unknown as { OPENROUTER_MODEL?: string }).OPENROUTER_MODEL ?? process.env.OPENROUTER_MODEL ?? "openrouter/free" });
+    if (openaiKey) providers.push({ id: "openai", key: openaiKey, endpoint: "https://api.openai.com/v1/chat/completions", model: "gpt-4o-mini" });
 
     try {
-      const res = await fetch(endpoint, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          model,
-          temperature: 0,
-          ...(provider === "openai"
-            ? { response_format: { type: "json_object" } }
-            : { response_format: { type: "json_object" } }),
-          messages: [
-            { role: "system", content: system },
-            { role: "user", content: userContent },
-          ],
-        }),
-      });
-
-      if (!res.ok) {
-        const errText = await res.text();
-        console.error(`[extract] LLM API error: ${res.status} ${errText.slice(0, 200)}`);
-        const m = mockExtract(args.text, args.subject);
-        console.log(`[extract] Falling back to mock: merchant="${m.merchant ?? "null"}", price=${m.price ?? "null"}`);
-        return {
-          merchant: m.merchant,
-          product: m.product,
-          price: m.price,
-          currency: m.currency,
-          billingInterval: m.billingInterval as
-            | "monthly"
-            | "yearly"
-            | "weekly"
-            | "unknown",
-          nextRenewalAt: m.nextRenewalAt,
-          trialEndsAt: m.trialEndsAt,
-          billingProvider: m.billingProvider,
-          isConfirmation: m.isConfirmation,
-          confidence: m.confidence,
-          quote: m.quote,
-        };
+      // Try providers in order Groq -> OpenRouter -> OpenAI, with 429 backoff and fallback
+      let res: Response | null = null;
+      let lastErrText = "";
+      let usedProvider: string = primaryProvider ?? "unknown";
+    providerLoop: for (const prov of providers) {
+      usedProvider = prov.id;
+      console.log(`[extract] Trying provider ${prov.id} model ${prov.model}`);
+      for (let attempt = 0; attempt < 3; attempt++) {
+        try {
+          const headers: Record<string, string> = {
+            Authorization: `Bearer ${prov.key}`,
+            "Content-Type": "application/json",
+          };
+          if (prov.id === "openrouter") {
+            headers["HTTP-Referer"] = process.env.SITE_URL ?? "http://localhost:3000";
+            headers["X-Title"] = "SubZero";
+          }
+          const r = await fetch(prov.endpoint, {
+            method: "POST",
+            headers,
+            body: JSON.stringify({
+              model: prov.model,
+              temperature: 0,
+              response_format: { type: "json_object" },
+              messages: [
+                { role: "system", content: system },
+                { role: "user", content: userContent },
+              ],
+            }),
+          });
+          if (r.ok) {
+            res = r;
+            break providerLoop;
+          }
+          lastErrText = await r.text();
+          console.error(`[extract] LLM API error ${prov.id}: ${r.status} ${lastErrText.slice(0, 200)} attempt ${attempt + 1}/3`);
+          if (r.status === 429 && attempt < 2) {
+            const backoff = 1200 * (attempt + 1) + Math.random() * 400;
+            await new Promise((rr) => setTimeout(rr, backoff));
+            continue;
+          }
+          if (r.status === 429 && attempt === 2) {
+            console.log(`[extract] Provider ${prov.id} exhausted 429, trying next provider`);
+            break; // break inner, outer will try next provider
+          }
+          break; // non-429 failure -> try next provider as well
+        } catch (e) {
+          lastErrText = String(e).slice(0, 200);
+          console.error(`[extract] LLM fetch failed ${prov.id} attempt ${attempt + 1}/3: ${lastErrText}`);
+          if (attempt < 2) await new Promise((rr) => setTimeout(rr, 800 * (attempt + 1)));
+          else break;
+        }
       }
+      // if we exhausted attempts for this provider without success, continue to next provider if last error was rate limit or fetch error
+      if (!res && (lastErrText.includes("429") || lastErrText.includes("Rate limit") || lastErrText.includes("fetch failed"))) {
+        console.log(`[extract] Falling back from ${prov.id} to next provider`);
+        continue;
+      }
+      if (!res) break;
+    }
+    if (!res || !res.ok) {
+      console.error(`[extract] LLM failed after retries: ${lastErrText.slice(0, 200)}`);
+      const m = mockExtract(args.text, args.subject);
+      console.log(`[extract] Falling back to mock: merchant="${m.merchant ?? "null"}", price=${m.price ?? "null"}`);
+      return {
+        merchant: m.merchant,
+        product: m.product,
+        price: m.price,
+        currency: m.currency,
+        billingInterval: m.billingInterval as
+          | "monthly"
+          | "yearly"
+          | "weekly"
+          | "unknown",
+        nextRenewalAt: m.nextRenewalAt,
+        trialEndsAt: m.trialEndsAt,
+        billingProvider: m.billingProvider,
+        isConfirmation: m.isConfirmation,
+        confidence: m.confidence,
+        quote: m.quote,
+      };
+    }
 
       const json = (await res.json()) as {
         choices?: { message?: { content?: string } }[];
