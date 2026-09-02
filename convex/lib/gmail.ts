@@ -15,8 +15,8 @@ function b64UrlDecode(s: string): string {
 }
 
 export function buildGmailQuery(days = 90): string {
-  // Narrow: subscription receipts, exclude newsletters — 90d per plan v2, keep -unsubscribe
-  return `subject:(receipt OR invoice OR trial OR renewal OR subscription) newer_than:${days}d -unsubscribe`;
+  // Narrow: subscription receipts in inbox only — exclude sent forwards to avoid duplicate evidence
+  return `subject:(receipt OR invoice OR trial OR renewal OR subscription) in:inbox newer_than:${days}d -unsubscribe`;
 }
 
 export async function getAccessToken(refreshToken: string): Promise<{ accessToken: string; expiresAt: number }> {

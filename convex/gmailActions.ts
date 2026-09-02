@@ -243,6 +243,8 @@ export const scanGmail = action({
             } catch {
               unparsed++;
             }
+            // Throttle to stay under Groq 8000 TPM when scanning 30 mails
+            await new Promise((rr) => setTimeout(rr, 450));
           }
         }
         if (!pageToken) break;
@@ -356,6 +358,7 @@ export const scanForUser = internalAction({
             conn._id,
           ).catch(() => ({ status: "unparsed" }));
           if (r.status === "created") created++;
+          await new Promise((rr) => setTimeout(rr, 450));
         }
         if (conn?._id)
           await ctx.runMutation(internal.gmail.touchScan, { connId: conn._id });
