@@ -91,6 +91,99 @@ function collectBodies(payload: GmailPayload | undefined, out: { text: string[];
   }
 }
 
+export async function watchGmail(
+  accessToken: string,
+  topicName: string,
+): Promise<{ historyId: string; expiration: number }> {
+  const res = await fetch("https://gmail.googleapis.com/gmail/v1/users/me/watch", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      topicName,
+      labelIds: ["INBOX"],
+      labelFilterBehavior: "INCLUDE",
+    }),
+  });
+  if (!res.ok) {
+    const t = await res.text();
+    throw new Error(`gmail watch ${res.status}: ${t.slice(0, 500)}`);
+  }
+  const j = (await res.json()) as { historyId: string; expiration: string };
+  return { historyId: j.historyId, expiration: Number(j.expiration) || Date.now() + 7 * 24 * 60 * 60 * 1000 };
+}
+
+export async function stopWatch(accessToken: string): Promise<void> {
+  const res = await fetch("https://gmail.googleapis.com/gmail/v1/users/me/stop", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  if (!res.ok) {
+    const t = await res.text();
+    throw new Error(`gmail stop ${res.status}: ${t.slice(0, 300)}`);
+  }
+}
+
+export async function getProfileHistoryId(accessToken: string): Promise<string> {
+  const res = await fetch("https://gmail.googleapis.com/gmail/v1/users/me/profile", {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  if (!res.ok) {
+    const t = await res.text();
+    throw new Error(`gmail profile ${res.status}: ${t.slice(0, 300)}`);
+  }
+  const j = (await res.json()) as { historyId?: string };
+  if (!j.historyId) throw new Error("gmail profile missing historyId");
+  return j.historyId;
+}
+
+export async function getHistory(
+  accessToken: string,
+  startHistoryId: string,
+): Promise<{ historyId: string; messagesAdded: { id: string; threadId: string }[] }> {
+  const messagesAdded: { id: string; threadId: string }[] = [];
+  let pageToken: string | undefined;
+  let latestHistoryId = startHistoryId;
+  do {
+    const url = new URL("https://gmail.googleapis.com/gmail/v1/users/me/history");
+    url.searchParams.set("startHistoryId", startHistoryId);
+    url.searchParams.set("historyTypes", "messageAdded");
+    url.searchParams.set("labelId", "INBOX");
+    if (pageToken) url.searchParams.set("pageToken", pageToken);
+    const res = await fetch(url.toString(), {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    if (!res.ok) {
+      const t = await res.text();
+      if (res.status === 404) {
+        const err: any = new Error(`gmail history 404: ${t.slice(0, 300)}`);
+        err.code = "INVALID_HISTORY";
+        throw err;
+      }
+      throw new Error(`gmail history ${res.status}: ${t.slice(0, 500)}`);
+    }
+    const j = (await res.json()) as {
+      history?: Array<{ messagesAdded?: Array<{ message: { id: string; threadId: string } }> }>;
+      nextPageToken?: string;
+      historyId?: string;
+    };
+    if (j.history) {
+      for (const h of j.history) {
+        if (h.messagesAdded) {
+          for (const ma of h.messagesAdded) {
+            if (ma.message?.id) messagesAdded.push(ma.message);
+          }
+        }
+      }
+    }
+    if (j.historyId) latestHistoryId = j.historyId;
+    pageToken = j.nextPageToken;
+  } while (pageToken);
+  return { historyId: latestHistoryId, messagesAdded };
+}
+
 export async function getMessage(
   accessToken: string,
   id: string,

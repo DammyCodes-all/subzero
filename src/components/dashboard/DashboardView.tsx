@@ -24,6 +24,7 @@ import type { Doc } from "../../../convex/_generated/dataModel";
 export function DashboardView() {
   const attention = useQuery(api.subscriptions.needsAttention, { days: 7 });
   const all = useQuery(api.subscriptions.list);
+  const gmailStatus = useQuery(api.gmail.getGmailStatus);
 
   const isLoading = attention === undefined || all === undefined;
 
@@ -81,6 +82,14 @@ export function DashboardView() {
   return (
     <div className="space-y-8">
       <ProcessingRows />
+      {gmailStatus?.connected && (
+        <div className="flex items-center gap-2 text-[11px] font-mono text-muted-foreground">
+          <span className="inline-flex h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-500" aria-hidden />
+          {gmailStatus.gmailWatchExpiration && gmailStatus.gmailWatchExpiration > Date.now()
+            ? `Watching Gmail · push active · last sync ${gmailStatus.lastGmailScanAt ? new Date(gmailStatus.lastGmailScanAt).toLocaleTimeString() : "just now"}`
+            : `Auto-watching Gmail · syncs every 15m${gmailStatus.lastGmailScanAt ? ` · last ${new Date(gmailStatus.lastGmailScanAt).toLocaleTimeString()}` : ""}`}
+        </div>
+      )}
       {isLoading ? (
         <DashboardSkeleton />
       ) : (all?.length ?? 0) === 0 ? (
