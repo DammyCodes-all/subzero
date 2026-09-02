@@ -14,6 +14,11 @@ import { Button } from "@/components/ui/button";
 import { SubscriptionRow } from "@/components/SubscriptionRow";
 import { ActionCard } from "@/components/ActionCard";
 import { DashboardSkeleton } from "@/components/Skeleton";
+import {
+  LinkPendingDot,
+  LinkPendingOverlay,
+  PendingWrap,
+} from "@/components/ui/LinkPending";
 import { formatPrice, formatRenewalDate, frictionLabel } from "@/lib/format";
 import { api } from "../../../convex/_generated/api";
 import type { Doc } from "../../../convex/_generated/dataModel";
@@ -189,8 +194,17 @@ export function SubscriptionsView() {
           {viewMode === "grid" ? (
             <div className="grid gap-4 sm:grid-cols-2">
               {paginatedSubs.map((sub) => (
-                <Link key={sub._id} href={`/subscriptions/${sub._id}`} className="block">
-                  <ActionCard sub={sub} />
+                <Link
+                  key={sub._id}
+                  href={`/subscriptions/${sub._id}`}
+                  className="group relative block"
+                >
+                  <span className="relative block rounded-lg">
+                    <PendingWrap>
+                      <ActionCard sub={sub} />
+                    </PendingWrap>
+                    <LinkPendingOverlay variant="card" />
+                  </span>
                 </Link>
               ))}
             </div>
@@ -218,9 +232,12 @@ export function SubscriptionsView() {
                         <td className="px-4 py-3 font-medium text-foreground">
                           <Link
                             href={`/subscriptions/${sub._id}`}
-                            className="hover:underline"
+                            className="inline-flex items-center gap-1.5 hover:underline"
                           >
-                            {sub.merchant}
+                            <PendingWrap className="inline-flex items-center gap-1">
+                              {sub.merchant}
+                            </PendingWrap>
+                            <LinkPendingDot />
                           </Link>
                         </td>
                         <td className="px-4 py-3 font-mono text-foreground">
@@ -246,9 +263,15 @@ export function SubscriptionsView() {
                           </span>
                         </td>
                         <td className="px-4 py-3 text-right">
-                          <Link href={`/subscriptions/${sub._id}`}>
-                            <Button variant="ghost" size="xs" className="h-7 text-xs">
-                              Inspect
+                          <Link
+                            href={`/subscriptions/${sub._id}`}
+                            className="inline-flex items-center"
+                          >
+                            <Button variant="ghost" size="xs" className="h-7 gap-1 text-xs">
+                              <PendingWrap className="inline-flex items-center gap-1">
+                                Inspect
+                              </PendingWrap>
+                              <LinkPendingDot />
                             </Button>
                           </Link>
                         </td>

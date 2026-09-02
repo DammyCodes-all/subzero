@@ -86,35 +86,38 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
           const active = isActive(item.href, item.exact);
           return (
             <SidebarTooltip key={item.href} label={item.label} disabled={!collapsed}>
+              {/* Instant shell: prefetched once per route via partialPrefetching + delayed pending (no flicker on instant) */}
               <Link
                 href={item.href}
                 className={cn(
-                  "group flex h-[42px] items-center gap-3 rounded-lg px-3.5 text-sm font-medium transition-colors",
+                  "group relative flex h-[42px] items-center gap-3 rounded-lg px-3.5 text-sm font-medium transition-colors",
                   "text-muted-foreground hover:bg-secondary hover:text-foreground",
                   active && "bg-primary/10 text-primary hover:bg-primary/15",
                   collapsed && "w-full justify-center px-0",
                 )}
               >
-                <HugeiconsIcon
-                  icon={item.icon as unknown as Parameters<typeof HugeiconsIcon>[0]["icon"]}
-                  size={18}
-                  strokeWidth={active ? 2 : 1.6}
-                  color="currentColor"
-                  className="flex-shrink-0"
-                />
-                <AnimatePresence>
-                  {!collapsed && (
-                    <motion.span
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      exit={{ opacity: 0 }}
-                      transition={{ duration: 0.12 }}
-                      className="whitespace-nowrap overflow-hidden"
-                    >
-                      {item.label}
-                    </motion.span>
-                  )}
-                </AnimatePresence>
+                <span className="flex items-center gap-3">
+                  <HugeiconsIcon
+                    icon={item.icon as unknown as Parameters<typeof HugeiconsIcon>[0]["icon"]}
+                    size={18}
+                    strokeWidth={active ? 2 : 1.6}
+                    color="currentColor"
+                    className="flex-shrink-0"
+                  />
+                  <AnimatePresence>
+                    {!collapsed && (
+                      <motion.span
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        transition={{ duration: 0.12 }}
+                        className="whitespace-nowrap overflow-hidden"
+                      >
+                        {item.label}
+                      </motion.span>
+                    )}
+                  </AnimatePresence>
+                </span>
               </Link>
             </SidebarTooltip>
           );

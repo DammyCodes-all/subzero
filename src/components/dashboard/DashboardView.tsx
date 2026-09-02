@@ -13,6 +13,11 @@ import { NoSubscriptionsState } from "@/components/EmptyState";
 import { ProcessingRows } from "@/components/ingestion/ProcessingRows";
 import { DashboardSkeleton } from "@/components/Skeleton";
 import { SummaryHeader } from "@/components/SummaryHeader";
+import {
+  LinkPendingDot,
+  LinkPendingOverlay,
+  PendingWrap,
+} from "@/components/ui/LinkPending";
 import { api } from "../../../convex/_generated/api";
 import type { Doc } from "../../../convex/_generated/dataModel";
 
@@ -22,7 +27,6 @@ export function DashboardView() {
 
   const isLoading = attention === undefined || all === undefined;
 
-  // Gmail OAuth banner state (kept — not the forwarded processing banner)
   const searchParams = useSearchParams();
   const router = useRouter();
   const gmailError = searchParams.get("gmail_error");
@@ -101,7 +105,7 @@ export function DashboardView() {
               </h1>
               <Link
                 href="/dashboard/subscriptions"
-                className="font-mono text-xs text-muted-foreground transition-colors hover:text-foreground"
+                className="inline-flex items-center gap-1 font-mono text-xs text-muted-foreground transition-colors hover:text-foreground"
               >
                 View all
                 <HugeiconsIcon
@@ -115,6 +119,7 @@ export function DashboardView() {
                   color="currentColor"
                   className="ml-0.5 inline"
                 />
+                <LinkPendingDot />
               </Link>
             </div>
 
@@ -123,9 +128,14 @@ export function DashboardView() {
                 {/* Hero card */}
                 <Link
                   href={`/subscriptions/${hero._id}`}
-                  className="block rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                  className="group relative block rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
                 >
-                  <ActionCard sub={hero} />
+                  <span className="relative block rounded-lg">
+                    <PendingWrap>
+                      <ActionCard sub={hero} />
+                    </PendingWrap>
+                    <LinkPendingOverlay variant="card" />
+                  </span>
                 </Link>
 
                 {/* Rest as compact rows */}
@@ -139,9 +149,14 @@ export function DashboardView() {
                         <Link
                           key={sub._id}
                           href={`/subscriptions/${sub._id}`}
-                          className="block rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                          className="group relative block rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
                         >
-                          <CompactAttentionRow sub={sub} />
+                          <span className="relative block rounded-md">
+                            <PendingWrap>
+                              <CompactAttentionRow sub={sub} />
+                            </PendingWrap>
+                            <LinkPendingOverlay variant="row" />
+                          </span>
                         </Link>
                       ))}
                     </div>

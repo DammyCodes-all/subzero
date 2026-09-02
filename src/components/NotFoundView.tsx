@@ -4,6 +4,7 @@ import Link from "next/link";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { Search01Icon, ArrowLeft02Icon } from "@hugeicons/core-free-icons";
 import { Button } from "@/components/ui/button";
+import { LinkPendingDot, PendingWrap } from "@/components/ui/LinkPending";
 
 export function NotFoundView() {
   return (
@@ -32,7 +33,7 @@ export function NotFoundView() {
 
       {/* Primary navigation CTA */}
       <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
-        <Link href="/dashboard">
+        <Link href="/dashboard" className="inline-flex">
           <Button size="sm" className="h-9 gap-2 rounded-lg bg-primary px-4 text-xs font-semibold text-primary-foreground hover:bg-primary/90">
             <HugeiconsIcon
               icon={ArrowLeft02Icon as unknown as Parameters<typeof HugeiconsIcon>[0]["icon"]}
@@ -40,7 +41,8 @@ export function NotFoundView() {
               strokeWidth={1.8}
               color="currentColor"
             />
-            Back to Dashboard
+            <PendingWrap>Back to Dashboard</PendingWrap>
+            <LinkPendingDot />
           </Button>
         </Link>
       </div>

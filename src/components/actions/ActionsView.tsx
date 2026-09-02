@@ -14,6 +14,10 @@ import {
   TaskDone01Icon,
 } from "@hugeicons/core-free-icons";
 import { Button } from "@/components/ui/button";
+import {
+  LinkPendingDot,
+  PendingWrap,
+} from "@/components/ui/LinkPending";
 import { formatPrice, formatRenewalDate, frictionLabel } from "@/lib/format";
 import { api } from "../../../convex/_generated/api";
 import {
@@ -83,9 +87,12 @@ function ActionCard({ item }: { item: ActionItem }) {
           <div className="flex flex-wrap items-center gap-2">
             <Link
               href={`/subscriptions/${item._id}`}
-              className="font-heading text-base font-semibold hover:underline"
+              className="inline-flex items-center gap-1.5 font-heading text-base font-semibold hover:underline"
             >
-              {item.merchant}
+              <PendingWrap className="inline-flex">
+                {item.merchant}
+              </PendingWrap>
+              <LinkPendingDot />
             </Link>
             <span
               className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium ${statusColor}`}
@@ -269,9 +276,12 @@ export function ActionsView() {
             Once SubZero researches cancellation routes for your subscriptions,
             actionable items will appear here.
           </p>
-          <Link href="/dashboard/subscriptions">
-            <Button variant="outline" size="sm" className="mt-5 text-xs">
-              View all subscriptions
+          <Link href="/dashboard/subscriptions" className="inline-flex items-center">
+            <Button variant="outline" size="sm" className="mt-5 gap-1.5 text-xs">
+              <PendingWrap className="inline-flex items-center gap-1.5">
+                View all subscriptions
+              </PendingWrap>
+              <LinkPendingDot />
             </Button>
           </Link>
         </div>

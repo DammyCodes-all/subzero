@@ -11,6 +11,10 @@ import { EvidenceBlock } from "@/components/detail/EvidenceBlock";
 import { HowToCancel } from "@/components/detail/HowToCancel";
 import { Header } from "@/components/Header";
 import { Button } from "@/components/ui/button";
+import {
+  LinkPendingDot,
+  PendingWrap,
+} from "@/components/ui/LinkPending";
 import { getCancellationCTA, openExternalUrl } from "@/lib/cancellation";
 import { formatPrice, formatRenewalDate, isUrgent, needsAttention } from "@/lib/format";
 import { ReviewAndSendModal } from "@/components/detail/ReviewAndSendModal";
@@ -56,7 +60,10 @@ export function SubscriptionDetailView() {
           href="/dashboard"
           className="inline-flex items-center gap-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground"
         >
-          ← All subscriptions
+          <PendingWrap className="inline-flex items-center gap-1.5">
+            ← All subscriptions
+          </PendingWrap>
+          <LinkPendingDot />
         </Link>
         <div className="mt-8 rounded-lg border border-dashed p-10 text-center">
           <p className="text-sm font-medium">Subscription not found</p>
@@ -64,8 +71,9 @@ export function SubscriptionDetailView() {
             It may have been removed or you don&apos;t have access.
           </p>
           <Link href="/dashboard" className="mt-4 inline-block">
-            <Button variant="outline" size="sm">
-              Back to dashboard
+            <Button variant="outline" size="sm" className="gap-1.5">
+              <PendingWrap>Back to dashboard</PendingWrap>
+              <LinkPendingDot />
             </Button>
           </Link>
         </div>
@@ -87,7 +95,10 @@ export function SubscriptionDetailView() {
             href="/dashboard"
             className="inline-flex items-center gap-1.5 font-mono text-xs text-muted-foreground transition-colors hover:text-foreground"
           >
-            ← All subscriptions
+            <PendingWrap className="inline-flex items-center gap-1.5">
+              ← All subscriptions
+            </PendingWrap>
+            <LinkPendingDot />
           </Link>
 
           {/* Identity */}
@@ -196,9 +207,10 @@ export function SubscriptionDetailView() {
           <div className="mt-10 flex justify-center border-t border-border/40 pt-6">
             <Link
               href="/dashboard"
-              className="font-mono text-xs text-muted-foreground transition-colors hover:text-foreground"
+              className="inline-flex items-center gap-1 font-mono text-xs text-muted-foreground transition-colors hover:text-foreground"
             >
-              Back to dashboard →
+              <PendingWrap>Back to dashboard →</PendingWrap>
+              <LinkPendingDot />
             </Link>
           </div>
 

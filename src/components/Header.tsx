@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { ScanEmailDialog } from "./ScanEmailDialog";
 import { UserMenu } from "./UserMenu";
+import { LinkPendingDot, PendingWrap } from "@/components/ui/LinkPending";
 
 export function Header() {
   return (
@@ -10,9 +11,10 @@ export function Header() {
       <div className="mx-auto flex h-full max-w-[680px] items-center justify-between px-6">
         <Link
           href="/"
-          className="font-heading text-[17px] font-bold tracking-tight text-primary"
+          className="inline-flex items-center gap-1 font-heading text-[17px] font-bold tracking-tight text-primary"
         >
-          SubZero
+          <PendingWrap>SubZero</PendingWrap>
+          <LinkPendingDot />
         </Link>
         <div className="flex items-center gap-3">
           <ScanEmailDialog />
