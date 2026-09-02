@@ -15,12 +15,17 @@ export default defineSchema({
     agentmailInbox: v.optional(v.string()),
     lastGmailScanAt: v.optional(v.number()),
     gmailHistoryId: v.optional(v.string()),
+    gmailWatchExpiration: v.optional(v.number()),
+    gmailWatchTopic: v.optional(v.string()),
+    gmailWatchLastRenewedAt: v.optional(v.number()),
+    gmailWatchHistoryIdAtWatch: v.optional(v.string()),
   })
     .index("by_user", ["userId"])
     .index("by_agentmailInbox", ["agentmailInbox"])
     .index("by_accountEmail", ["accountEmail"])
     .index("by_accountEmail_status", ["accountEmail", "status"])
-    .index("by_user_accountEmail", ["userId", "accountEmail"]),
+    .index("by_user_accountEmail", ["userId", "accountEmail"])
+    .index("by_provider", ["provider"]),
 
   subscriptions: defineTable({
     userId: v.string(),
