@@ -2,8 +2,10 @@
 
 import { useState } from "react";
 
-// Merchant identity mark — real favicon when we have one, initial-letter
-// disc otherwise (and while loading / on error, with no layout shift).
+// Merchant identity mark in three states:
+// - loading (favicon known): skeleton shimmer, same shape
+// - loaded: real favicon, faded in
+// - failed / unknown: initial-letter disc
 export function MerchantAvatar({
   merchant,
   faviconUrl,
@@ -13,7 +15,10 @@ export function MerchantAvatar({
   faviconUrl?: string | null;
   size?: number;
 }) {
-  const [failed, setFailed] = useState(false);
+  const [status, setStatus] = useState<"loading" | "loaded" | "failed">(
+    "loading",
+  );
+  const showImg = !!faviconUrl && status !== "failed";
 
   return (
     <span
@@ -21,16 +26,22 @@ export function MerchantAvatar({
       className="relative flex shrink-0 items-center justify-center overflow-hidden rounded-full bg-secondary font-semibold text-foreground"
       style={{ width: size, height: size, fontSize: Math.round(size * 0.42) }}
     >
-      {merchant.charAt(0).toUpperCase()}
-      {faviconUrl && !failed && (
+      {showImg && status === "loading" && (
+        <span className="absolute inset-0 animate-pulse rounded-full bg-border/60" />
+      )}
+      {(!faviconUrl || status === "failed") && merchant.charAt(0).toUpperCase()}
+      {showImg && (
         <img
           src={faviconUrl}
           alt=""
           loading="lazy"
           width={size}
           height={size}
-          onError={() => setFailed(true)}
-          className="absolute inset-0 h-full w-full bg-card object-cover"
+          onLoad={() => setStatus("loaded")}
+          onError={() => setStatus("failed")}
+          className={`absolute inset-0 h-full w-full bg-card object-cover transition-opacity ${
+            status === "loaded" ? "opacity-100" : "opacity-0"
+          }`}
         />
       )}
     </span>
