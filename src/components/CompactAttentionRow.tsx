@@ -1,9 +1,8 @@
 "use client";
 
+import { ArrowRight02Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { ExternalLinkIcon } from "@hugeicons/core-free-icons";
-import { Button } from "@/components/ui/button";
-import { formatCountdownShort, formatPrice } from "@/lib/format";
+import { daysUntil, formatPrice } from "@/lib/format";
 
 type Sub = {
   _id: string;
@@ -13,83 +12,63 @@ type Sub = {
   currency: string;
   billingInterval: string;
   nextRenewalAt?: number;
-  cancellationMethod?: string;
-  cancellationUrl?: string;
-  billingProvider?: string;
 };
 
-function getCompactCTA(sub: Sub) {
-  const method = sub.cancellationMethod ?? "unknown";
-  if (method === "open_web")
-    return { label: "Open", href: sub.cancellationUrl };
-  if (method === "open_provider")
-    return { label: "Open", href: sub.cancellationUrl };
-  if (method === "send_email") return { label: "Send", href: undefined };
-  if (method === "contact_support")
-    return { label: "Contact", href: sub.cancellationUrl };
-  if (method === "manual") return { label: "Steps", href: undefined };
-  return { label: "—", href: undefined, disabled: true };
+function countdownLabel(ts?: number): string {
+  const d = daysUntil(ts);
+  if (d === null) return "—";
+  if (d <= 0) return "Today";
+  if (d === 1) return "Tomorrow";
+  return `In ${d} days`;
 }
 
+// Upcoming-list row — lives inside the single list container, separated by
+// hairlines. Initial disc for identity, price and countdown in Lato, arrow
+// that wakes lime on hover.
 export function CompactAttentionRow({ sub }: { sub: Sub }) {
-  const cta = getCompactCTA(sub);
-  const countdown = formatCountdownShort(sub.nextRenewalAt);
+  const price = formatPrice(sub.price, sub.currency, sub.billingInterval);
+  const countdown = countdownLabel(sub.nextRenewalAt);
 
   return (
-    <div className="flex items-center justify-between gap-3 rounded-md border border-dashed border-border/60 bg-transparent px-3 py-2.5 hover:bg-card/50 hover:border-border transition-colors">
-      <div className="flex min-w-0 items-center gap-2.5">
-        <span className="truncate text-[13px] font-medium leading-none">
-          {sub.merchant}
+    <div className="group grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 px-5 py-4 transition-colors hover:bg-white/[0.02] sm:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_120px_16px] sm:gap-x-6">
+      <div className="flex min-w-0 items-center gap-3">
+        <span
+          aria-hidden="true"
+          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-secondary text-xs font-semibold text-foreground"
+        >
+          {sub.merchant.charAt(0).toUpperCase()}
         </span>
-        <span className="hidden sm:inline text-xs text-muted-foreground">
-          ·
-        </span>
-        <span className="font-mono text-xs font-medium tabular-nums text-foreground hidden sm:inline">
-          {formatPrice(sub.price, sub.currency, sub.billingInterval)}
-        </span>
-        <span className="font-mono text-xs font-medium tabular-nums text-foreground sm:hidden">
-          {formatPrice(sub.price, sub.currency, sub.billingInterval)}
-        </span>
+        <div className="min-w-0">
+          <p className="truncate text-sm font-medium text-foreground">
+            {sub.merchant}
+          </p>
+          <p className="font-numeric mt-1 text-[13px] tabular-nums leading-none text-muted-foreground sm:hidden">
+            {price}
+          </p>
+        </div>
       </div>
-      <div className="flex shrink-0 items-center gap-3">
-        <span className="font-mono text-xs tabular-nums text-muted-foreground">
+      <p className="font-numeric hidden text-right text-sm tabular-nums text-foreground sm:block">
+        {price}
+      </p>
+      <p className="font-numeric hidden text-right text-xs tabular-nums text-muted-foreground sm:block">
+        {countdown}
+      </p>
+      <span className="flex items-center gap-2">
+        <span className="font-numeric text-xs tabular-nums text-muted-foreground sm:hidden">
           {countdown}
         </span>
-        {cta.href ? (
-          <Button
-            variant="outline"
-            size="xs"
-            className="h-6 gap-1 px-2 text-xs font-medium"
-            onClick={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              window.open(cta.href!, "_blank", "noopener,noreferrer");
-            }}
-          >
-            {cta.label}
-            <HugeiconsIcon
-              icon={ExternalLinkIcon as unknown as Parameters<typeof HugeiconsIcon>[0]["icon"]}
-              size={12}
-              strokeWidth={1.8}
-              color="currentColor"
-              className="opacity-60"
-            />
-          </Button>
-        ) : (
-          <Button
-            variant="outline"
-            size="xs"
-            disabled={cta.disabled}
-            className="h-6 gap-1 px-2 text-xs font-medium"
-            onClick={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-            }}
-          >
-            {cta.label}
-          </Button>
-        )}
-      </div>
+        <HugeiconsIcon
+          icon={
+            ArrowRight02Icon as unknown as Parameters<
+              typeof HugeiconsIcon
+            >[0]["icon"]
+          }
+          size={14}
+          strokeWidth={2}
+          color="currentColor"
+          className="shrink-0 text-muted-foreground/40 transition-all group-hover:translate-x-0.5 group-hover:text-primary"
+        />
+      </span>
     </div>
   );
 }
