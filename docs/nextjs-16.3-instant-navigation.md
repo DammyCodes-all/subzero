@@ -5,9 +5,9 @@ Next 16.3 ships **Instant Navigations**: server-driven App Router with SPA-like 
 
 Applied to SubZero (was `16.2.10` → `16.3.4`):
 - `next.config.ts:3` `cacheComponents: true` + `partialPrefetching: true`
-- 6 `loading.tsx` App Shells (`src/app/dashboard/loading.tsx:1`, `src/app/dashboard/subscriptions/loading.tsx:1`, `src/app/dashboard/actions/loading.tsx:1`, `src/app/dashboard/connections/loading.tsx:1`, `src/app/dashboard/settings/loading.tsx:1`, `src/app/subscriptions/[id]/loading.tsx:1`) — static, no `use client`, prefetched once per route
+- 5 `loading.tsx` App Shells (`src/app/dashboard/loading.tsx:1`, `src/app/dashboard/subscriptions/loading.tsx:1`, `src/app/dashboard/connections/loading.tsx:1`, `src/app/dashboard/settings/loading.tsx:1`, `src/app/subscriptions/[id]/loading.tsx:1`) — static, no `use client`, prefetched once per route
 - `src/components/ui/LinkPending.tsx:1` `useLinkStatus()` pending UI (`LinkPendingDot`, `PendingWrap`, `LinkPendingOverlay`) — slow-network feedback per [Prefetching](https://nextjs.org/docs/app/guides/prefetching) / [Link](https://nextjs.org/docs/app/api-reference/components/link)
-- Wired `src/components/layout/Sidebar.tsx:90` + `src/components/dashboard/DashboardView.tsx:124` + `src/components/subscriptions/SubscriptionsView.tsx:192` + `src/components/actions/ActionsView.tsx:84` for instant pending states
+- Wired `src/components/layout/Sidebar.tsx` + `src/components/dashboard/DashboardView.tsx` + `src/components/subscriptions/SubscriptionsView.tsx` for instant pending states
 - Build `next 16.3.4 (Turbopack)` ✓ `Cache Components enabled` `Partial Prefetching enabled` — routes `○` static + `/subscriptions/[id]` `◐ Partial Prerender` (13.1s)
 
 ## Research
