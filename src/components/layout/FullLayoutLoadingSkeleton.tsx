@@ -6,9 +6,9 @@ import { DashboardSkeleton } from "@/components/Skeleton";
 export function FullLayoutLoadingSkeleton() {
   return (
     <div className="flex h-screen w-full overflow-hidden bg-background text-foreground">
-      {/* Desktop Sidebar Skeleton */}
+      {/* Desktop Sidebar Skeleton — collapsed rail is the default */}
       <div className="hidden md:flex">
-        <SidebarSkeleton />
+        <SidebarSkeleton collapsed />
       </div>
 
       {/* Main View Area Skeleton */}

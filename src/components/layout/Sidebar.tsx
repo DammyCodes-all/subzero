@@ -184,7 +184,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
             "flex flex-1 flex-col",
             collapsed
               ? "items-center justify-center gap-6 overflow-visible"
-              : "justify-center gap-1.5 overflow-y-auto py-6",
+              : "gap-1.5 overflow-y-auto pt-6 pb-6",
           )}
         >
           <nav aria-label="Primary" className="contents">
