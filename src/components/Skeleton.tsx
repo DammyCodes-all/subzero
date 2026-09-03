@@ -24,52 +24,56 @@ function SkeletonCard({
 
 export function DashboardSkeleton() {
   return (
-    <div className="space-y-6">
-      {/* Summary strip skeleton */}
-      <div className="flex items-center gap-2 border-b border-border/30 pb-5">
-        <SkeletonLine className="h-5 w-10" />
-        <SkeletonLine className="h-4 w-16" />
-        <SkeletonLine className="h-4 w-3" />
-        <SkeletonLine className="h-5 w-20" />
-        <SkeletonLine className="h-4 w-12" />
-        <SkeletonLine className="h-4 w-3" />
-        <SkeletonLine className="h-5 w-14" />
-        <SkeletonLine className="h-4 w-14" />
+    <div className="space-y-8">
+      {/* Greeting skeleton */}
+      <div className="space-y-2">
+        <SkeletonLine className="h-7 w-64" />
+        <SkeletonLine className="h-4 w-72" />
       </div>
 
-      {/* Section heading */}
-      <SkeletonLine className="h-7 w-56" />
+      {/* Overview strip skeleton — borderless */}
+      <div className="grid grid-cols-1 gap-6 sm:grid-cols-3 sm:gap-0 sm:divide-x sm:divide-border/40">
+        {[0, 1, 2].map((i) => (
+          <div key={i} className="space-y-2 sm:px-6 sm:first:pl-0">
+            <SkeletonLine className="h-3 w-24" />
+            <SkeletonLine className="h-7 w-32" />
+            <SkeletonLine className="h-3 w-20" />
+          </div>
+        ))}
+      </div>
 
       {/* Hero card skeleton */}
-      <SkeletonCard className="p-6">
-        <div className="flex items-start justify-between gap-6">
-          <div className="flex-1 space-y-3">
-            <SkeletonLine className="h-5 w-40" />
-            <SkeletonLine className="h-4 w-52" />
-            <SkeletonLine className="h-4 w-36" />
+      <div className="space-y-4">
+        <SkeletonLine className="h-3 w-44" />
+        <SkeletonCard className="space-y-3 p-6">
+          <SkeletonLine className="h-5 w-48" />
+          <SkeletonLine className="h-4 w-56" />
+          <SkeletonLine className="h-4 w-64" />
+          <div className="flex justify-end pt-2">
+            <SkeletonLine className="h-8 w-36" />
           </div>
-          <SkeletonLine className="h-7 w-28" />
-        </div>
-      </SkeletonCard>
-
-      {/* "Also due this week" heading */}
-      <SkeletonLine className="h-4 w-36" />
-
-      {/* Compact rows */}
-      <div className="space-y-2">
-        <SkeletonCard className="h-12 w-full" />
-        <SkeletonCard className="h-12 w-full" />
+        </SkeletonCard>
       </div>
 
-      {/* Section heading */}
-      <SkeletonLine className="h-5 w-44" />
-
-      {/* Subscription rows */}
-      <div className="space-y-2">
-        <SkeletonCard className="h-14 w-full" />
-        <SkeletonCard className="h-14 w-full" />
-        <SkeletonCard className="h-14 w-full" />
-        <SkeletonCard className="h-14 w-full" />
+      {/* Upcoming list skeleton */}
+      <div className="space-y-4">
+        <SkeletonLine className="h-3 w-24" />
+        <SkeletonCard>
+          <div className="divide-y divide-border/40">
+            {[0, 1, 2].map((i) => (
+              <div
+                key={i}
+                className="flex items-center justify-between gap-4 px-5 py-4"
+              >
+                <div className="space-y-2">
+                  <SkeletonLine className="h-4 w-28" />
+                  <SkeletonLine className="h-3 w-20" />
+                </div>
+                <SkeletonLine className="h-3 w-16" />
+              </div>
+            ))}
+          </div>
+        </SkeletonCard>
       </div>
     </div>
   );

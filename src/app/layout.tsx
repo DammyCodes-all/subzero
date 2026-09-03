@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { IBM_Plex_Mono, Inter, Space_Grotesk } from "next/font/google";
+import { IBM_Plex_Mono, Inter, Lato, Space_Grotesk } from "next/font/google";
 import { ThemeProvider } from "next-themes";
 import { ConvexClientProvider } from "@/components/ConvexClientProvider";
 import "./globals.css";
@@ -20,6 +20,14 @@ const plexMono = IBM_Plex_Mono({
   subsets: ["latin"],
   weight: ["400", "500"],
   variable: "--font-plex-mono",
+  display: "swap",
+});
+
+// Lato — all numeric display (prices, totals, counts, countdowns)
+const lato = Lato({
+  subsets: ["latin"],
+  weight: ["400", "700", "900"],
+  variable: "--font-lato",
   display: "swap",
 });
 
@@ -53,7 +61,7 @@ export default function RootLayout({
     <html
       lang="en"
       suppressHydrationWarning
-      className={`${spaceGrotesk.variable} ${inter.variable} ${plexMono.variable} dark`}
+      className={`${spaceGrotesk.variable} ${inter.variable} ${plexMono.variable} ${lato.variable} dark`}
     >
       <body>
         <ConvexClientProvider>
