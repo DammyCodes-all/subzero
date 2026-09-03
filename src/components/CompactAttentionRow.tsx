@@ -2,7 +2,9 @@
 
 import { ArrowRight02Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { daysUntil, formatPrice } from "@/lib/format";
+import { formatPrice, daysUntil } from "@/lib/format";
+import { merchantFaviconUrl } from "@/lib/merchantFavicon";
+import { MerchantAvatar } from "@/components/MerchantAvatar";
 
 type Sub = {
   _id: string;
@@ -12,6 +14,7 @@ type Sub = {
   currency: string;
   billingInterval: string;
   nextRenewalAt?: number;
+  cancellationUrl?: string;
 };
 
 function countdownLabel(ts?: number): string {
@@ -32,12 +35,11 @@ export function CompactAttentionRow({ sub }: { sub: Sub }) {
   return (
     <div className="group grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 rounded-lg px-1 py-4 transition-colors hover:bg-white/[0.02] sm:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_120px_16px] sm:gap-x-6">
       <div className="flex min-w-0 items-center gap-3">
-        <span
-          aria-hidden="true"
-          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-secondary text-xs font-semibold text-foreground"
-        >
-          {sub.merchant.charAt(0).toUpperCase()}
-        </span>
+        <MerchantAvatar
+          merchant={sub.merchant}
+          faviconUrl={merchantFaviconUrl(sub)}
+          size={28}
+        />
         <div className="min-w-0">
           <p className="truncate text-sm font-medium text-foreground">
             {sub.merchant}

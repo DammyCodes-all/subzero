@@ -11,6 +11,8 @@ import { useQuery } from "convex/react";
 import Link from "next/link";
 import { useState } from "react";
 import { ActionCard } from "@/components/ActionCard";
+import { merchantFaviconUrl } from "@/lib/merchantFavicon";
+import { MerchantAvatar } from "@/components/MerchantAvatar";
 import { DashboardSkeleton } from "@/components/Skeleton";
 import { SubscriptionRow } from "@/components/SubscriptionRow";
 import { Button } from "@/components/ui/button";
@@ -247,8 +249,13 @@ export function SubscriptionsView() {
                         <td className="px-4 py-3 font-medium text-foreground">
                           <Link
                             href={`/subscriptions/${sub._id}`}
-                            className="inline-flex items-center gap-1.5 hover:underline"
+                            className="inline-flex items-center gap-2.5 hover:underline"
                           >
+                            <MerchantAvatar
+                              merchant={sub.merchant}
+                              faviconUrl={merchantFaviconUrl(sub)}
+                              size={24}
+                            />
                             <PendingWrap className="inline-flex items-center gap-1">
                               {sub.merchant}
                             </PendingWrap>

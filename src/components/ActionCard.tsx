@@ -4,6 +4,8 @@ import { ExternalLinkIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { Button } from "@/components/ui/button";
 import { getCancellationCTA, openExternalUrl } from "@/lib/cancellation";
+import { merchantFaviconUrl } from "@/lib/merchantFavicon";
+import { MerchantAvatar } from "@/components/MerchantAvatar";
 import {
   formatPrice,
   formatRenewalDate,
@@ -38,9 +40,16 @@ export function ActionCard({ sub, evidence }: { sub: Sub; evidence?: string }) {
       <div className="flex items-start justify-between gap-6">
         <div className="min-w-0 flex-1">
           {/* Merchant — editorial, owns weight */}
-          <h3 className="truncate font-heading text-[19px] font-bold leading-none tracking-tight">
-            {sub.merchant}
-          </h3>
+          <div className="flex items-center gap-3">
+            <MerchantAvatar
+              merchant={sub.merchant}
+              faviconUrl={merchantFaviconUrl(sub)}
+              size={32}
+            />
+            <h3 className="truncate font-heading text-[19px] font-bold leading-none tracking-tight">
+              {sub.merchant}
+            </h3>
+          </div>
           {/* Product · price — collapsed to one line, denser */}
           <p className="mt-2 text-sm leading-none">
             <span className="text-xs text-muted-foreground">

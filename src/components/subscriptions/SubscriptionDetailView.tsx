@@ -14,6 +14,8 @@ import { Header } from "@/components/Header";
 import { Button } from "@/components/ui/button";
 import { LinkPendingDot, PendingWrap } from "@/components/ui/LinkPending";
 import { getCancellationCTA, openExternalUrl } from "@/lib/cancellation";
+import { merchantFaviconUrl } from "@/lib/merchantFavicon";
+import { MerchantAvatar } from "@/components/MerchantAvatar";
 import {
   formatPrice,
   formatRenewalDate,
@@ -107,9 +109,16 @@ export function SubscriptionDetailView() {
           {/* Identity */}
           <div className="mt-6 space-y-6">
             <div>
-              <h1 className="font-heading text-[28px] font-bold leading-none tracking-tight md:text-[30px]">
-                {sub.merchant}
-              </h1>
+              <div className="flex items-center gap-3">
+                <MerchantAvatar
+                  merchant={sub.merchant}
+                  faviconUrl={merchantFaviconUrl(sub)}
+                  size={36}
+                />
+                <h1 className="font-heading text-[28px] font-bold leading-none tracking-tight md:text-[30px]">
+                  {sub.merchant}
+                </h1>
+              </div>
               <p className="mt-2 text-sm leading-none">
                 <span className="text-xs text-muted-foreground">
                   {sub.product ?? "Subscription"} ·{" "}
