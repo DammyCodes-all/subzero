@@ -168,23 +168,21 @@ export function DashboardView() {
               <p className="font-mono text-[11px] uppercase tracking-widest text-muted-foreground">
                 {hasUrgent ? "Upcoming" : "Also upcoming"}
               </p>
-              <div className="overflow-hidden rounded-xl border border-border bg-card">
-                <div className="divide-y divide-border/40">
-                  {rest.map((sub: Doc<"subscriptions">) => (
-                    <Link
-                      key={sub._id}
-                      href={`/subscriptions/${sub._id}`}
-                      className="relative block focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
-                    >
-                      <span className="relative block">
-                        <PendingWrap>
-                          <CompactAttentionRow sub={sub} />
-                        </PendingWrap>
-                        <LinkPendingOverlay variant="row" />
-                      </span>
-                    </Link>
-                  ))}
-                </div>
+              <div className="divide-y divide-border/40 border-t border-border/40">
+                {rest.map((sub: Doc<"subscriptions">) => (
+                  <Link
+                    key={sub._id}
+                    href={`/subscriptions/${sub._id}`}
+                    className="relative block focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+                  >
+                    <span className="relative block">
+                      <PendingWrap>
+                        <CompactAttentionRow sub={sub} />
+                      </PendingWrap>
+                      <LinkPendingOverlay variant="row" />
+                    </span>
+                  </Link>
+                ))}
               </div>
             </section>
           )}

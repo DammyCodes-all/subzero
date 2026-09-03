@@ -16,7 +16,11 @@ export function DashboardGreeting({ name }: { name?: string | null }) {
         {name ? `, ${name}` : ""}
       </h1>
       <p className="text-sm text-muted-foreground">
-        Here&apos;s what needs your attention today.
+        {new Intl.DateTimeFormat("en-US", {
+          weekday: "long",
+          month: "long",
+          day: "numeric",
+        }).format(new Date())}
       </p>
     </div>
   );

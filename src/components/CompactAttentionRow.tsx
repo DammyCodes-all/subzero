@@ -30,7 +30,7 @@ export function CompactAttentionRow({ sub }: { sub: Sub }) {
   const countdown = countdownLabel(sub.nextRenewalAt);
 
   return (
-    <div className="group grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 px-5 py-4 transition-colors hover:bg-white/[0.02] sm:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_120px_16px] sm:gap-x-6">
+    <div className="group grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 rounded-lg px-1 py-4 transition-colors hover:bg-white/[0.02] sm:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_120px_16px] sm:gap-x-6">
       <div className="flex min-w-0 items-center gap-3">
         <span
           aria-hidden="true"
