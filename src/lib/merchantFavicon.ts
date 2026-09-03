@@ -8,7 +8,7 @@ export function merchantFaviconUrl(sub: {
   if (!raw || !/^https?:\/\//i.test(raw)) return null;
   try {
     const host = new URL(raw).hostname.toLowerCase();
-    if (!host || !host.includes(".")) return null;
+    if (!host?.includes(".")) return null;
     return `https://www.google.com/s2/favicons?domain=${encodeURIComponent(host)}&sz=64`;
   } catch {
     return null;
