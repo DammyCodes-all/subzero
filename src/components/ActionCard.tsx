@@ -1,7 +1,7 @@
 "use client";
 
-import { HugeiconsIcon } from "@hugeicons/react";
 import { ExternalLinkIcon } from "@hugeicons/core-free-icons";
+import { HugeiconsIcon } from "@hugeicons/react";
 import { Button } from "@/components/ui/button";
 import { getCancellationCTA, openExternalUrl } from "@/lib/cancellation";
 import {
@@ -46,7 +46,7 @@ export function ActionCard({ sub, evidence }: { sub: Sub; evidence?: string }) {
             <span className="text-xs text-muted-foreground">
               {sub.product ?? "Subscription"} ·{" "}
             </span>
-            <span className="font-mono text-[14px] font-semibold tabular-nums tracking-tight text-foreground">
+            <span className="font-numeric text-[14px] font-semibold tabular-nums tracking-tight text-foreground">
               {formatPrice(sub.price, sub.currency, sub.billingInterval)}
             </span>
           </p>
@@ -93,7 +93,11 @@ export function ActionCard({ sub, evidence }: { sub: Sub; evidence?: string }) {
             >
               {cta.label}
               <HugeiconsIcon
-                icon={ExternalLinkIcon as unknown as Parameters<typeof HugeiconsIcon>[0]["icon"]}
+                icon={
+                  ExternalLinkIcon as unknown as Parameters<
+                    typeof HugeiconsIcon
+                  >[0]["icon"]
+                }
                 size={14}
                 strokeWidth={1.8}
                 color="currentColor"

@@ -1,23 +1,25 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { useQuery } from "convex/react";
-import { useParams } from "next/navigation";
-import Link from "next/link";
-import { HugeiconsIcon } from "@hugeicons/react";
 import { ExternalLinkIcon } from "@hugeicons/core-free-icons";
+import { HugeiconsIcon } from "@hugeicons/react";
+import { useQuery } from "convex/react";
+import Link from "next/link";
+import { useParams } from "next/navigation";
+import { useEffect, useState } from "react";
 import { AuthGuard } from "@/components/AuthGuard";
 import { EvidenceBlock } from "@/components/detail/EvidenceBlock";
 import { HowToCancel } from "@/components/detail/HowToCancel";
+import { ReviewAndSendModal } from "@/components/detail/ReviewAndSendModal";
 import { Header } from "@/components/Header";
 import { Button } from "@/components/ui/button";
-import {
-  LinkPendingDot,
-  PendingWrap,
-} from "@/components/ui/LinkPending";
+import { LinkPendingDot, PendingWrap } from "@/components/ui/LinkPending";
 import { getCancellationCTA, openExternalUrl } from "@/lib/cancellation";
-import { formatPrice, formatRenewalDate, isUrgent, needsAttention } from "@/lib/format";
-import { ReviewAndSendModal } from "@/components/detail/ReviewAndSendModal";
+import {
+  formatPrice,
+  formatRenewalDate,
+  isUrgent,
+  needsAttention,
+} from "@/lib/format";
 import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
 
@@ -82,7 +84,8 @@ export function SubscriptionDetailView() {
   }
 
   const urgent = isUrgent(sub.nextRenewalAt) || isUrgent(sub.trialEndsAt);
-  const attention = needsAttention(sub.nextRenewalAt) || needsAttention(sub.trialEndsAt);
+  const attention =
+    needsAttention(sub.nextRenewalAt) || needsAttention(sub.trialEndsAt);
   const cta = getCancellationCTA(sub as never);
 
   return (
@@ -111,7 +114,7 @@ export function SubscriptionDetailView() {
                 <span className="text-xs text-muted-foreground">
                   {sub.product ?? "Subscription"} ·{" "}
                 </span>
-                <span className="font-mono text-[14px] font-semibold tabular-nums tracking-tight text-foreground">
+                <span className="font-numeric text-[14px] font-semibold tabular-nums tracking-tight text-foreground">
                   {formatPrice(sub.price, sub.currency, sub.billingInterval)}
                 </span>
               </p>
@@ -150,11 +153,17 @@ export function SubscriptionDetailView() {
               {cta.href ? (
                 <Button
                   className="gap-1.5 font-medium"
-                  onClick={() => openExternalUrl(cta.href!, sub.billingProvider)}
+                  onClick={() =>
+                    openExternalUrl(cta.href!, sub.billingProvider)
+                  }
                 >
                   {cta.label}
                   <HugeiconsIcon
-                    icon={ExternalLinkIcon as unknown as Parameters<typeof HugeiconsIcon>[0]["icon"]}
+                    icon={
+                      ExternalLinkIcon as unknown as Parameters<
+                        typeof HugeiconsIcon
+                      >[0]["icon"]
+                    }
                     size={14}
                     strokeWidth={1.8}
                     color="currentColor"
@@ -168,7 +177,9 @@ export function SubscriptionDetailView() {
                   className="font-medium"
                   onClick={() => {
                     if (sub.cancellationMethod === "send_email") {
-                      document.dispatchEvent(new CustomEvent("open-email-modal"));
+                      document.dispatchEvent(
+                        new CustomEvent("open-email-modal"),
+                      );
                     }
                   }}
                 >
@@ -197,8 +208,8 @@ export function SubscriptionDetailView() {
               Why we believe this
             </h2>
             <p className="text-sm leading-relaxed text-muted-foreground">
-              Every field keeps its source. If we say you renew on a date, you see
-              the email and help page it came from.
+              Every field keeps its source. If we say you renew on a date, you
+              see the email and help page it came from.
             </p>
             <EvidenceBlock evidence={evidence as never} />
           </section>

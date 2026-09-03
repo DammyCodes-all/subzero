@@ -130,7 +130,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
                 className="group relative flex h-10 items-center justify-center rounded-md transition-colors"
               >
                 <span className="flex items-center transition-opacity duration-100 group-hover:opacity-0">
-                  <SubzeroMark size={22} className="h-[22px] w-[22px]" />
+                  <SubzeroMark size={28} className="h-[28px] w-[28px]" />
                 </span>
                 <span className="absolute inset-0 flex items-center justify-center text-muted-foreground opacity-0 transition-opacity duration-100 group-hover:opacity-100">
                   <HugeiconsIcon
