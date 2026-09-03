@@ -1,26 +1,94 @@
 "use client";
 
-import { usePathname } from "next/navigation";
-import Link from "next/link";
-import { useAuthActions } from "@convex-dev/auth/react";
-import { useConvexAuth } from "convex/react";
-import { motion, AnimatePresence } from "framer-motion";
+import { LayoutLeftIcon, LayoutRightIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
+import { AnimatePresence, motion } from "framer-motion";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { Highlight, HighlightItem } from "@/components/animate-ui/highlight";
 import {
-  Logout01Icon,
-  LayoutRightIcon,
-  LayoutLeftIcon,
-} from "@hugeicons/core-free-icons";
+  SubzeroMark,
+  SubzeroWithWordmark,
+} from "@/components/brand/SubzeroLogo";
 import { cn } from "@/lib/utils";
 import { NAV_ITEMS } from "./navigation";
 import { SidebarTooltip } from "./SidebarTooltip";
-import { SubzeroMark, SubzeroWithWordmark } from "@/components/brand/SubzeroLogo";
-import type { SidebarProps } from "./types";
+import type { NavItem, SidebarProps } from "./types";
+
+// Inset the hover glow to a centered box in rail mode so the resting look
+// stays a clean icon column like the reference.
+const RAIL_GLOW_INSET = { top: -4, left: 12, width: -24, height: 8 };
+
+function ActiveEdge() {
+  return (
+    <motion.span
+      layoutId="sidebar-active-edge"
+      transition={{ duration: 0.2, ease: [0.23, 1, 0.32, 1] }}
+      className="absolute top-1/2 right-0 h-6 w-[2px] -translate-y-1/2 rounded-full bg-primary"
+      aria-hidden="true"
+    />
+  );
+}
+
+function NavLink({
+  item,
+  active,
+  collapsed,
+}: {
+  item: NavItem;
+  active: boolean;
+  collapsed: boolean;
+}) {
+  return (
+    // w-full: keeps the row full-bleed in the centered rail so the accent
+    // edge lands exactly on the neutral hairline at the rail edge.
+    <HighlightItem activeClassName="rounded-lg bg-secondary" className="w-full">
+      <SidebarTooltip label={item.label} disabled={!collapsed}>
+        <Link
+          href={item.href}
+          aria-current={active ? "page" : undefined}
+          aria-label={collapsed ? item.label : undefined}
+          className={cn(
+            "relative flex w-full items-center transition-colors",
+            collapsed ? "justify-center py-2" : "h-11 gap-3 px-5",
+            active
+              ? "text-primary"
+              : "text-muted-foreground hover:text-foreground",
+          )}
+        >
+          <HugeiconsIcon
+            icon={
+              item.icon as unknown as Parameters<
+                typeof HugeiconsIcon
+              >[0]["icon"]
+            }
+            size={20}
+            strokeWidth={active ? 2 : 1.6}
+            color="currentColor"
+            className="flex-shrink-0"
+          />
+          <AnimatePresence initial={false}>
+            {!collapsed && (
+              <motion.span
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.12 }}
+                className="overflow-hidden text-sm font-medium whitespace-nowrap"
+              >
+                {item.label}
+              </motion.span>
+            )}
+          </AnimatePresence>
+          {active && <ActiveEdge />}
+        </Link>
+      </SidebarTooltip>
+    </HighlightItem>
+  );
+}
 
 export function Sidebar({ collapsed, onToggle }: SidebarProps) {
   const pathname = usePathname();
-  const { signOut } = useAuthActions();
-  const { isAuthenticated } = useConvexAuth();
 
   const isActive = (href: string, exact: boolean) => {
     if (exact) return pathname === href;
@@ -28,145 +96,109 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
   };
 
   return (
-    <motion.aside
-      initial={false}
-      animate={{ width: collapsed ? 64 : 240 }}
-      transition={{ duration: 0.22, ease: [0.4, 0, 0.2, 1] }}
+    <aside
+      style={{ width: collapsed ? 68 : 232, flexShrink: 0 }}
+      // Width animation from animate-ui radix-sidebar (not the component):
+      // 400ms with a slight overshoot settle on collapse/expand.
       className={cn(
-        "relative flex h-screen flex-col border-r border-border bg-card",
-        collapsed ? "overflow-visible" : "overflow-hidden"
+        "relative flex h-screen flex-col py-4 transition-[width] duration-400 ease-[cubic-bezier(0.7,-0.15,0.25,1.15)]",
       )}
-      style={{ flexShrink: 0 }}
     >
-      {/* Logo / Brand */}
-      <div
-        className={cn(
-          "flex h-16 items-center border-b border-border transition-all",
-          collapsed ? "justify-center gap-1 px-1" : "justify-between px-4"
-        )}
-      >
-        <Link
-          href="/dashboard"
+      {/* Floating rail, vertically centered with air top and bottom */}
+      <div className="relative flex flex-1 flex-col overflow-hidden rounded-r-2xl bg-transparent">
+        {/* Neutral hairline the icon column lines up against — starts below
+            the logo and fades out toward the top and bottom of the rail */}
+        <div
+          aria-hidden="true"
+          className="absolute top-20 right-0 bottom-0 w-px bg-[linear-gradient(to_bottom,transparent_0%,var(--border)_15%,var(--border)_85%,transparent_100%)]"
+        />
+
+        {/* Logo — collapsed: hover swaps to the expand affordance.
+            Expanded: wordmark links home, collapse button shows inline. */}
+        <div
           className={cn(
-            "flex min-w-0 items-center",
-            collapsed ? "justify-center" : "gap-2"
+            "flex items-center pt-5 pb-2",
+            collapsed ? "justify-center px-0" : "justify-start px-5",
           )}
-          aria-label="SubZero dashboard"
         >
           {collapsed ? (
-            <SubzeroMark size={28} className="h-7 w-7" />
-          ) : (
-            <SubzeroWithWordmark className="h-7 w-auto max-w-[144px]" width={144} height={32} />
-          )}
-        </Link>
-
-        {/* Collapse toggle */}
-        <SidebarTooltip label={collapsed ? "Expand sidebar" : "Collapse sidebar"} disabled={!collapsed}>
-          <button
-            type="button"
-            onClick={onToggle}
-            aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-            className={cn(
-              "flex flex-shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground",
-              collapsed ? "h-6 w-6" : "h-8 w-8"
-            )}
-          >
-            <HugeiconsIcon
-              icon={collapsed ? LayoutRightIcon : LayoutLeftIcon}
-              size={18}
-              strokeWidth={1.8}
-              color="currentColor"
-            />
-          </button>
-        </SidebarTooltip>
-      </div>
-
-      {/* Nav items */}
-      <nav
-        className={cn(
-          "flex flex-1 flex-col gap-1.5 p-3 pt-5",
-          collapsed ? "overflow-visible" : "overflow-y-auto"
-        )}
-      >
-        {NAV_ITEMS.map((item) => {
-          const active = isActive(item.href, item.exact);
-          return (
-            <SidebarTooltip key={item.href} label={item.label} disabled={!collapsed}>
-              {/* Instant shell: prefetched once per route via partialPrefetching + delayed pending (no flicker on instant) */}
-              <Link
-                href={item.href}
-                className={cn(
-                  "group relative flex h-[42px] items-center gap-3 rounded-lg px-3.5 text-sm font-medium transition-colors",
-                  "text-muted-foreground hover:bg-secondary hover:text-foreground",
-                  active && "bg-primary/10 text-primary hover:bg-primary/15",
-                  collapsed && "w-full justify-center px-0",
-                )}
+            <SidebarTooltip label="Expand sidebar" disabled={false}>
+              <button
+                type="button"
+                onClick={onToggle}
+                aria-label="Expand sidebar"
+                className="group relative flex h-10 items-center justify-center rounded-md transition-colors"
               >
-                <span className="flex items-center gap-3">
-                  <HugeiconsIcon
-                    icon={item.icon as unknown as Parameters<typeof HugeiconsIcon>[0]["icon"]}
-                    size={18}
-                    strokeWidth={active ? 2 : 1.6}
-                    color="currentColor"
-                    className="flex-shrink-0"
-                  />
-                  <AnimatePresence>
-                    {!collapsed && (
-                      <motion.span
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        exit={{ opacity: 0 }}
-                        transition={{ duration: 0.12 }}
-                        className="whitespace-nowrap overflow-hidden"
-                      >
-                        {item.label}
-                      </motion.span>
-                    )}
-                  </AnimatePresence>
+                <span className="flex items-center transition-opacity duration-100 group-hover:opacity-0">
+                  <SubzeroMark size={22} className="h-[22px] w-[22px]" />
                 </span>
-              </Link>
+                <span className="absolute inset-0 flex items-center justify-center text-muted-foreground opacity-0 transition-opacity duration-100 group-hover:opacity-100">
+                  <HugeiconsIcon
+                    icon={LayoutRightIcon}
+                    size={20}
+                    strokeWidth={1.8}
+                    color="currentColor"
+                  />
+                </span>
+              </button>
             </SidebarTooltip>
-          );
-        })}
-      </nav>
+          ) : (
+            <div className="flex h-10 w-full items-center justify-between">
+              <Link
+                href="/dashboard"
+                aria-label="SubZero dashboard"
+                className="flex items-center"
+              >
+                <SubzeroWithWordmark
+                  className="h-7 w-auto max-w-[144px]"
+                  width={144}
+                  height={32}
+                />
+              </Link>
+              <button
+                type="button"
+                onClick={onToggle}
+                aria-label="Collapse sidebar"
+                title="Collapse sidebar"
+                className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:text-foreground"
+              >
+                <HugeiconsIcon
+                  icon={LayoutLeftIcon}
+                  size={18}
+                  strokeWidth={1.8}
+                  color="currentColor"
+                />
+              </button>
+            </div>
+          )}
+        </div>
 
-      {/* Bottom — Sign Out */}
-      <div className="border-t border-border p-3">
-        {isAuthenticated && (
-          <SidebarTooltip label="Sign out" disabled={!collapsed}>
-            <button
-              type="button"
-              onClick={() => void signOut()}
-              className={cn(
-                "flex h-[42px] w-full items-center gap-3 rounded-lg px-3.5 text-sm font-medium",
-                "text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive",
-                collapsed && "justify-center px-0",
-              )}
-            >
-              <HugeiconsIcon
-                icon={Logout01Icon}
-                size={18}
-                strokeWidth={1.6}
-                color="currentColor"
-                className="flex-shrink-0"
+        {/* Single vertically-centered icon group, like the reference */}
+        <Highlight
+          mode="parent"
+          hover
+          controlledItems
+          forceUpdateBounds
+          boundsOffset={collapsed ? RAIL_GLOW_INSET : undefined}
+          containerClassName={cn(
+            "flex flex-1 flex-col",
+            collapsed
+              ? "items-center justify-center gap-6 overflow-visible"
+              : "justify-center gap-1.5 overflow-y-auto py-6",
+          )}
+        >
+          <nav aria-label="Primary" className="contents">
+            {NAV_ITEMS.map((item) => (
+              <NavLink
+                key={item.href}
+                item={item}
+                collapsed={collapsed}
+                active={isActive(item.href, item.exact)}
               />
-              <AnimatePresence>
-                {!collapsed && (
-                  <motion.span
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                    transition={{ duration: 0.12 }}
-                    className="whitespace-nowrap"
-                  >
-                    Sign out
-                  </motion.span>
-                )}
-              </AnimatePresence>
-            </button>
-          </SidebarTooltip>
-        )}
+            ))}
+          </nav>
+        </Highlight>
       </div>
-    </motion.aside>
+    </aside>
   );
 }
