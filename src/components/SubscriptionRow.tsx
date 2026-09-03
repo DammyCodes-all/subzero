@@ -39,7 +39,7 @@ export function SubscriptionRow({ sub }: { sub: Sub }) {
         </div>
       </div>
       <div className="shrink-0 text-right">
-        <p className="font-mono text-sm font-medium tabular-nums">
+        <p className="font-numeric text-sm font-medium tabular-nums">
           {formatPrice(sub.price, sub.currency, sub.billingInterval)}
         </p>
         <p className="text-xs text-muted-foreground">

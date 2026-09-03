@@ -1,19 +1,19 @@
 "use client";
 
-import { useState } from "react";
-import { useQuery } from "convex/react";
-import Link from "next/link";
-import { HugeiconsIcon } from "@hugeicons/react";
 import {
+  FilterIcon,
   LayoutGridIcon,
   LayoutListIcon,
   Search01Icon,
-  FilterIcon,
 } from "@hugeicons/core-free-icons";
-import { Button } from "@/components/ui/button";
-import { SubscriptionRow } from "@/components/SubscriptionRow";
+import { HugeiconsIcon } from "@hugeicons/react";
+import { useQuery } from "convex/react";
+import Link from "next/link";
+import { useState } from "react";
 import { ActionCard } from "@/components/ActionCard";
 import { DashboardSkeleton } from "@/components/Skeleton";
+import { SubscriptionRow } from "@/components/SubscriptionRow";
+import { Button } from "@/components/ui/button";
 import {
   LinkPendingDot,
   LinkPendingOverlay,
@@ -56,7 +56,8 @@ export function SubscriptionsView() {
     // Search query match
     const matchesSearch =
       sub.merchant.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (sub.product && sub.product.toLowerCase().includes(searchQuery.toLowerCase()));
+      (sub.product &&
+        sub.product.toLowerCase().includes(searchQuery.toLowerCase()));
 
     if (!matchesSearch) return false;
 
@@ -116,7 +117,11 @@ export function SubscriptionsView() {
             }`}
           >
             <HugeiconsIcon
-              icon={LayoutGridIcon as unknown as Parameters<typeof HugeiconsIcon>[0]["icon"]}
+              icon={
+                LayoutGridIcon as unknown as Parameters<
+                  typeof HugeiconsIcon
+                >[0]["icon"]
+              }
               size={16}
               color="currentColor"
             />
@@ -132,7 +137,11 @@ export function SubscriptionsView() {
             }`}
           >
             <HugeiconsIcon
-              icon={LayoutListIcon as unknown as Parameters<typeof HugeiconsIcon>[0]["icon"]}
+              icon={
+                LayoutListIcon as unknown as Parameters<
+                  typeof HugeiconsIcon
+                >[0]["icon"]
+              }
               size={16}
               color="currentColor"
             />
@@ -143,28 +152,32 @@ export function SubscriptionsView() {
       {/* Filter Tabs & Search Bar */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex flex-wrap items-center gap-1.5 border-b border-border/40 pb-2 sm:border-b-0 sm:pb-0">
-          {(["all", "active", "trials", "urgent", "cancelled"] as FilterTab[]).map(
-            (tab) => (
-              <button
-                key={tab}
-                type="button"
-                onClick={() => handleFilterChange(tab)}
-                className={`rounded-lg px-3 py-1.5 text-xs font-medium capitalize transition-colors ${
-                  filter === tab
-                    ? "bg-primary/10 text-primary"
-                    : "text-muted-foreground hover:bg-secondary hover:text-foreground"
-                }`}
-              >
-                {tab === "urgent" ? "Renewing Soon" : tab}
-              </button>
-            ),
-          )}
+          {(
+            ["all", "active", "trials", "urgent", "cancelled"] as FilterTab[]
+          ).map((tab) => (
+            <button
+              key={tab}
+              type="button"
+              onClick={() => handleFilterChange(tab)}
+              className={`rounded-lg px-3 py-1.5 text-xs font-medium capitalize transition-colors ${
+                filter === tab
+                  ? "bg-primary/10 text-primary"
+                  : "text-muted-foreground hover:bg-secondary hover:text-foreground"
+              }`}
+            >
+              {tab === "urgent" ? "Renewing Soon" : tab}
+            </button>
+          ))}
         </div>
 
         {/* Search input */}
         <div className="relative w-full sm:w-64">
           <HugeiconsIcon
-            icon={Search01Icon as unknown as Parameters<typeof HugeiconsIcon>[0]["icon"]}
+            icon={
+              Search01Icon as unknown as Parameters<
+                typeof HugeiconsIcon
+              >[0]["icon"]
+            }
             size={14}
             color="currentColor"
             className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
@@ -182,7 +195,9 @@ export function SubscriptionsView() {
       {/* Subscriptions Content Grid / Table */}
       {filteredSubs.length === 0 ? (
         <div className="rounded-xl border border-dashed border-border/60 bg-card p-10 text-center">
-          <p className="text-sm font-medium text-foreground">No subscriptions found</p>
+          <p className="text-sm font-medium text-foreground">
+            No subscriptions found
+          </p>
           <p className="mt-1 text-xs text-muted-foreground">
             {searchQuery
               ? `No results match "${searchQuery}" under the "${filter}" filter.`
@@ -240,8 +255,12 @@ export function SubscriptionsView() {
                             <LinkPendingDot />
                           </Link>
                         </td>
-                        <td className="px-4 py-3 font-mono text-foreground">
-                          {formatPrice(sub.price, sub.currency, sub.billingInterval)}
+                        <td className="px-4 py-3 font-numeric text-foreground">
+                          {formatPrice(
+                            sub.price,
+                            sub.currency,
+                            sub.billingInterval,
+                          )}
                         </td>
                         <td className="px-4 py-3 text-muted-foreground">
                           {formatRenewalDate(sub.nextRenewalAt)}
@@ -267,7 +286,11 @@ export function SubscriptionsView() {
                             href={`/subscriptions/${sub._id}`}
                             className="inline-flex items-center"
                           >
-                            <Button variant="ghost" size="xs" className="h-7 gap-1 text-xs">
+                            <Button
+                              variant="ghost"
+                              size="xs"
+                              className="h-7 gap-1 text-xs"
+                            >
                               <PendingWrap className="inline-flex items-center gap-1">
                                 Inspect
                               </PendingWrap>
