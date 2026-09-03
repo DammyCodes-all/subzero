@@ -19,6 +19,10 @@ import type { NavItem, SidebarProps } from "./types";
 // stays a clean icon column like the reference.
 const RAIL_GLOW_INSET = { top: -4, left: 12, width: -24, height: 8 };
 
+// Expanded mode: inset the glow from the panel edges so the hover/active
+// pill floats with air instead of bleeding to the hairline and left edge.
+const EXPANDED_GLOW_INSET = { left: 12, width: -24 };
+
 function ActiveEdge() {
   return (
     <motion.span
@@ -179,7 +183,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
           hover
           controlledItems
           forceUpdateBounds
-          boundsOffset={collapsed ? RAIL_GLOW_INSET : undefined}
+          boundsOffset={collapsed ? RAIL_GLOW_INSET : EXPANDED_GLOW_INSET}
           containerClassName={cn(
             "flex flex-1 flex-col",
             collapsed
