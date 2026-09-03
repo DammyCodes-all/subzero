@@ -2,9 +2,9 @@
 
 import { ArrowRight02Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { formatPrice, daysUntil } from "@/lib/format";
-import { merchantFaviconUrl } from "@/lib/merchantFavicon";
 import { MerchantAvatar } from "@/components/MerchantAvatar";
+import { daysUntil, formatPrice } from "@/lib/format";
+import { merchantFaviconUrl } from "@/lib/merchantFavicon";
 
 type Sub = {
   _id: string;

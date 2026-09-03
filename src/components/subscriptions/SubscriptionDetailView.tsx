@@ -11,17 +11,17 @@ import { EvidenceBlock } from "@/components/detail/EvidenceBlock";
 import { HowToCancel } from "@/components/detail/HowToCancel";
 import { ReviewAndSendModal } from "@/components/detail/ReviewAndSendModal";
 import { Header } from "@/components/Header";
+import { MerchantAvatar } from "@/components/MerchantAvatar";
 import { Button } from "@/components/ui/button";
 import { LinkPendingDot, PendingWrap } from "@/components/ui/LinkPending";
 import { getCancellationCTA, openExternalUrl } from "@/lib/cancellation";
-import { merchantFaviconUrl } from "@/lib/merchantFavicon";
-import { MerchantAvatar } from "@/components/MerchantAvatar";
 import {
   formatPrice,
   formatRenewalDate,
   isUrgent,
   needsAttention,
 } from "@/lib/format";
+import { merchantFaviconUrl } from "@/lib/merchantFavicon";
 import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
 

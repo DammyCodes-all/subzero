@@ -11,7 +11,6 @@ import { useQuery } from "convex/react";
 import Link from "next/link";
 import { useState } from "react";
 import { ActionCard } from "@/components/ActionCard";
-import { merchantFaviconUrl } from "@/lib/merchantFavicon";
 import { MerchantAvatar } from "@/components/MerchantAvatar";
 import { DashboardSkeleton } from "@/components/Skeleton";
 import { SubscriptionRow } from "@/components/SubscriptionRow";
@@ -22,6 +21,7 @@ import {
   PendingWrap,
 } from "@/components/ui/LinkPending";
 import { formatPrice, formatRenewalDate, frictionLabel } from "@/lib/format";
+import { merchantFaviconUrl } from "@/lib/merchantFavicon";
 import { api } from "../../../convex/_generated/api";
 import type { Doc } from "../../../convex/_generated/dataModel";
 

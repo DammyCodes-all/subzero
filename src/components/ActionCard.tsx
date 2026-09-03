@@ -2,16 +2,16 @@
 
 import { ExternalLinkIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
+import { MerchantAvatar } from "@/components/MerchantAvatar";
 import { Button } from "@/components/ui/button";
 import { getCancellationCTA, openExternalUrl } from "@/lib/cancellation";
-import { merchantFaviconUrl } from "@/lib/merchantFavicon";
-import { MerchantAvatar } from "@/components/MerchantAvatar";
 import {
   formatPrice,
   formatRenewalDate,
   frictionLabel,
   isUrgent,
 } from "@/lib/format";
+import { merchantFaviconUrl } from "@/lib/merchantFavicon";
 
 type Sub = {
   _id: string;
