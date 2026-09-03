@@ -19,6 +19,50 @@ export function buildGmailQuery(days = 90): string {
   return `subject:(receipt OR invoice OR trial OR renewal OR subscription) in:inbox newer_than:${days}d -unsubscribe`;
 }
 
+export function buildBroadInboxQuery(days = 7): string {
+  // Broad fallback after history gap: all inbox mail, let processOneEmail KEYWORDS filter in code
+  return `in:inbox newer_than:${days}d -unsubscribe`;
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((r) => setTimeout(r, ms));
+}
+
+async function gmailFetchWithRetry(
+  url: string,
+  accessToken: string,
+  init?: RequestInit,
+  retries = 3,
+): Promise<Response> {
+  let lastErr: unknown = null;
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    let res: Response;
+    try {
+      res = await fetch(url, {
+        ...init,
+        headers: { ...(init?.headers ?? {}), Authorization: `Bearer ${accessToken}` },
+      });
+    } catch (e) {
+      lastErr = e;
+      if (attempt < retries) {
+        await sleep(1000 * 2 ** attempt);
+        continue;
+      }
+      throw e;
+    }
+    if (res.ok) return res;
+    // Retry only on rate limit / transient; 404 handled by caller (history gap)
+    if ((res.status === 429 || res.status >= 500) && attempt < retries) {
+      await res.text().catch(() => "");
+      await sleep(1000 * 2 ** attempt);
+      lastErr = new Error(`gmail ${res.status} retry ${attempt + 1}`);
+      continue;
+    }
+    return res;
+  }
+  throw (lastErr as Error) ?? new Error("gmail fetch failed");
+}
+
 export async function getAccessToken(refreshToken: string): Promise<{ accessToken: string; expiresAt: number }> {
   const clientId = process.env.GOOGLE_CLIENT_ID ?? process.env.AUTH_GOOGLE_ID;
   const clientSecret = process.env.GOOGLE_CLIENT_SECRET ?? process.env.AUTH_GOOGLE_SECRET;
@@ -51,9 +95,7 @@ export async function listMessages(
   url.searchParams.set("q", query);
   url.searchParams.set("maxResults", String(maxResults));
   if (pageToken) url.searchParams.set("pageToken", pageToken);
-  const res = await fetch(url.toString(), {
-    headers: { Authorization: `Bearer ${accessToken}` },
-  });
+  const res = await gmailFetchWithRetry(url.toString(), accessToken);
   if (!res.ok) {
     const t = await res.text();
     throw new Error(`gmail list ${res.status}: ${t.slice(0,500)}`);
@@ -149,12 +191,12 @@ export async function getHistory(
   do {
     const url = new URL("https://gmail.googleapis.com/gmail/v1/users/me/history");
     url.searchParams.set("startHistoryId", startHistoryId);
-    url.searchParams.set("historyTypes", "messageAdded");
+    // messageAdded covers new mail; labelsAdded covers mail moved into INBOX later (filter/auto-archive)
+    url.searchParams.append("historyTypes", "messageAdded");
+    url.searchParams.append("historyTypes", "labelsAdded");
     url.searchParams.set("labelId", "INBOX");
     if (pageToken) url.searchParams.set("pageToken", pageToken);
-    const res = await fetch(url.toString(), {
-      headers: { Authorization: `Bearer ${accessToken}` },
-    });
+    const res = await gmailFetchWithRetry(url.toString(), accessToken);
     if (!res.ok) {
       const t = await res.text();
       if (res.status === 404) {
@@ -165,7 +207,10 @@ export async function getHistory(
       throw new Error(`gmail history ${res.status}: ${t.slice(0, 500)}`);
     }
     const j = (await res.json()) as {
-      history?: Array<{ messagesAdded?: Array<{ message: { id: string; threadId: string } }> }>;
+      history?: Array<{
+        messagesAdded?: Array<{ message: { id: string; threadId: string } }>;
+        labelsAdded?: Array<{ message: { id: string; threadId: string }; labelIds?: string[] }>;
+      }>;
       nextPageToken?: string;
       historyId?: string;
     };
@@ -174,6 +219,13 @@ export async function getHistory(
         if (h.messagesAdded) {
           for (const ma of h.messagesAdded) {
             if (ma.message?.id) messagesAdded.push(ma.message);
+          }
+        }
+        if (h.labelsAdded) {
+          for (const la of h.labelsAdded) {
+            if (la.message?.id && (!la.labelIds || la.labelIds.includes("INBOX"))) {
+              messagesAdded.push(la.message);
+            }
           }
         }
       }
@@ -189,7 +241,7 @@ export async function getMessage(
   id: string,
 ): Promise<{ id: string; subject: string; from: string; text: string; html: string; internalDate: number }> {
   const url = `https://gmail.googleapis.com/gmail/v1/users/me/messages/${encodeURIComponent(id)}?format=full`;
-  const res = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
+  const res = await gmailFetchWithRetry(url, accessToken);
   if (!res.ok) {
     const t = await res.text();
     throw new Error(`gmail get ${id} ${res.status}: ${t.slice(0,500)}`);

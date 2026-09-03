@@ -24,6 +24,7 @@ export const getGmailStatus = query({
     lastGmailScanAt: v.optional(v.number()),
     gmailWatchExpiration: v.optional(v.number()),
     hasHistoryId: v.optional(v.boolean()),
+    needsReauth: v.optional(v.boolean()),
   }),
   handler: async (ctx) => {
     const userId = await getAuthUserId(ctx);
@@ -67,6 +68,8 @@ export const getGmailStatus = query({
         }, undefined);
     const watchExp = (first as any)?.gmailWatchExpiration as number | undefined;
     const hasHist = !!(first as any)?.gmailHistoryId;
+    // needsReauth: still marked connected but scope revoked (token refresh 401) — prompt reconnect
+    const needsReauth = googleRows.some((c) => c.status === "connected" && !c.gmailScopeGranted);
     return {
       connected: connectedRows.length > 0,
       gmailScopeGranted: first.gmailScopeGranted,
@@ -77,6 +80,7 @@ export const getGmailStatus = query({
       lastGmailScanAt: oldestScan,
       gmailWatchExpiration: watchExp,
       hasHistoryId: hasHist,
+      needsReauth,
     };
   },
 });
@@ -624,6 +628,7 @@ export const getConnectionsByEmailInternal = internalQuery({
       status: v.string(),
       accountEmail: v.optional(v.string()),
       gmailHistoryId: v.optional(v.string()),
+      lastGmailScanAt: v.optional(v.number()),
     }),
   ),
   handler: async (ctx, args) => {
@@ -641,7 +646,18 @@ export const getConnectionsByEmailInternal = internalQuery({
         status: c.status,
         accountEmail: c.accountEmail,
         gmailHistoryId: c.gmailHistoryId,
+        lastGmailScanAt: c.lastGmailScanAt,
       }));
+  },
+});
+
+export const markTokenInvalid = internalMutation({
+  args: { connId: v.id("connections") },
+  handler: async (ctx, args) => {
+    const c = await ctx.db.get(args.connId);
+    if (!c) return;
+    // Keep status connected but clear scope so getGmailStatus flips connected:false + needsReauth:true
+    await ctx.db.patch(args.connId, { gmailScopeGranted: false } as any);
   },
 });
 

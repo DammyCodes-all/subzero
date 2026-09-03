@@ -82,6 +82,14 @@ export function DashboardView() {
   return (
     <div className="space-y-8">
       <ProcessingRows />
+      {gmailStatus?.needsReauth && !gmailStatus?.connected && (
+        <div className="flex items-center justify-between gap-3 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-[12px]">
+          <span>Gmail needs reconnect — auto-watch paused. Reconnect to resume.</span>
+          <Link href="/dashboard/connections" className="font-mono text-[11px] underline underline-offset-2">
+            Reconnect
+          </Link>
+        </div>
+      )}
       {gmailStatus?.connected && (
         <div className="flex items-center gap-2 text-[11px] font-mono text-muted-foreground">
           <span className="inline-flex h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-500" aria-hidden />

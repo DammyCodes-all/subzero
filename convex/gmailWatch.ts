@@ -10,6 +10,7 @@ import {
   getMessage,
   listMessages,
   buildGmailQuery,
+  buildBroadInboxQuery,
   watchGmail,
   stopWatch,
 } from "./lib/gmail";
@@ -148,6 +149,13 @@ export const ingestIncremental = internalAction({
       const tok = await getAccessToken(conn.gmailRefreshToken);
       accessToken = tok.accessToken;
     } catch (e: any) {
+      // Surface revoked/expired refresh tokens so UI can prompt reconnect
+      const msg = String(e?.message ?? e);
+      if (/400|401|403|invalid_grant|revoked|expired/i.test(msg)) {
+        try {
+          await ctx.runMutation(internal.gmail.markTokenInvalid, { connId: args.connId });
+        } catch {}
+      }
       return { scanned: 0, created: 0, merged: 0, skipped: 0, unparsed: 0, duplicate: 0, cancelled: 0, reason: "token_failed" };
     }
 
@@ -184,12 +192,12 @@ export const ingestIncremental = internalAction({
       return { scanned: 0, created: 0, merged: 0, skipped: 0, unparsed: 0, duplicate: 0, cancelled: 0, historyId: latestHistoryId };
     }
 
-    // Deduplicate message ids — cap to avoid runaway actions (cron single-run guard), but process all up to 30
+    // Deduplicate message ids — process all (no silent drop); cap at 100 to bound single action
     const deduped = Array.from(new Map(messagesAdded.map((m) => [m.id, m])).values());
-    const uniq = deduped.length > 30 ? deduped.slice(0, 30) : deduped;
-    if (deduped.length > 30) {
-      console.warn("ingestIncremental truncating burst", { total: deduped.length, truncated: 30, connId: args.connId });
+    if (deduped.length > 100) {
+      console.warn("ingestIncremental large burst, capping at 100", { total: deduped.length, connId: args.connId });
     }
+    const uniq = deduped.slice(0, 100);
 
     let scanned = 0, created = 0, merged = 0, skipped = 0, unparsed = 0, duplicate = 0, cancelled = 0;
 
@@ -228,35 +236,66 @@ async function fallbackListIngest(
   conn: any,
   accessToken: string,
 ): Promise<{ scanned: number; created: number; merged: number; skipped: number; unparsed: number; duplicate: number; cancelled: number; historyId?: string; reason?: string }> {
-  const q = buildGmailQuery(7);
+  // Hybrid: narrow subject filter first (cheap), if 0 hits retry broad inbox (catches "Thanks for your payment")
+  const res = await ingestListQuery(ctx, userId, conn, accessToken, buildGmailQuery(7), 10);
+  if (res.scanned > 0 || res.messagesFound > 0) {
+    return await seedHistory(ctx, conn, accessToken, res);
+  }
+  const broad = await ingestListQuery(ctx, userId, conn, accessToken, buildBroadInboxQuery(7), 10);
+  // Merge counts so caller sees total work
+  const merged = {
+    scanned: res.scanned + broad.scanned,
+    created: res.created + broad.created,
+    merged: res.merged + broad.merged,
+    skipped: res.skipped + broad.skipped,
+    unparsed: res.unparsed + broad.unparsed,
+    duplicate: res.duplicate + broad.duplicate,
+    cancelled: res.cancelled + broad.cancelled,
+  };
+  return await seedHistory(ctx, conn, accessToken, { ...merged, messagesFound: broad.messagesFound });
+}
+
+async function ingestListQuery(
+  ctx: any,
+  userId: string,
+  conn: any,
+  accessToken: string,
+  q: string,
+  max: number,
+): Promise<{ scanned: number; created: number; merged: number; skipped: number; unparsed: number; duplicate: number; cancelled: number; messagesFound: number }> {
   let scanned = 0, created = 0, merged = 0, skipped = 0, unparsed = 0, duplicate = 0, cancelled = 0;
+  const { messages } = await listMessages(accessToken, q, max);
+  const slice = messages.slice(0, max);
+  for (const m of slice) {
+    const msg = await getMessage(accessToken, m.id).catch(() => null);
+    if (!msg) { skipped++; continue; }
+    scanned++;
+    const r = await processOneEmail(ctx, userId, msg.subject, msg.text, msg.html, msg.id, conn.accountEmail, conn._id).catch(() => ({ status: "unparsed" as const }));
+    if (r.status === "created") created++;
+    else if (r.status === "merged") merged++;
+    else if (r.status === "skipped") skipped++;
+    else if (r.status === "unparsed") unparsed++;
+    else if (r.status === "duplicate") duplicate++;
+    else if (r.status === "cancelled") cancelled++;
+    await new Promise((rr) => setTimeout(rr, 450));
+  }
+  return { scanned, created, merged, skipped, unparsed, duplicate, cancelled, messagesFound: messages.length };
+}
+
+async function seedHistory(
+  ctx: any,
+  conn: any,
+  accessToken: string,
+  counts: { scanned: number; created: number; merged: number; skipped: number; unparsed: number; duplicate: number; cancelled: number; messagesFound?: number },
+): Promise<{ scanned: number; created: number; merged: number; skipped: number; unparsed: number; duplicate: number; cancelled: number; historyId?: string; reason?: string }> {
   try {
-    const { messages } = await listMessages(accessToken, q, 10);
-    for (const m of messages.slice(0, 10)) {
-      const msg = await getMessage(accessToken, m.id).catch(() => null);
-      if (!msg) { skipped++; continue; }
-      scanned++;
-      const r = await processOneEmail(ctx, userId, msg.subject, msg.text, msg.html, msg.id, conn.accountEmail, conn._id).catch(() => ({ status: "unparsed" as const }));
-      if (r.status === "created") created++;
-      else if (r.status === "merged") merged++;
-      else if (r.status === "skipped") skipped++;
-      else if (r.status === "unparsed") unparsed++;
-      else if (r.status === "duplicate") duplicate++;
-      else if (r.status === "cancelled") cancelled++;
-      await new Promise((rr) => setTimeout(rr, 450));
-    }
-    // Seed historyId from profile
-    try {
-      const hid = await getProfileHistoryId(accessToken);
-      await ctx.runMutation(internal.gmail.updateHistoryId, { connId: conn._id, historyId: hid });
-      await ctx.runMutation(internal.gmail.touchScan, { connId: conn._id });
-      return { scanned, created, merged, skipped, unparsed, duplicate, cancelled, historyId: hid, reason: "fallback_list" };
-    } catch {
-      await ctx.runMutation(internal.gmail.touchScan, { connId: conn._id });
-      return { scanned, created, merged, skipped, unparsed, duplicate, cancelled, reason: "fallback_list" };
-    }
-  } catch (e: any) {
-    return { scanned, created, merged, skipped, unparsed, duplicate, cancelled, reason: String(e).slice(0, 200) };
+    const hid = await getProfileHistoryId(accessToken);
+    await ctx.runMutation(internal.gmail.updateHistoryId, { connId: conn._id, historyId: hid });
+    await ctx.runMutation(internal.gmail.touchScan, { connId: conn._id });
+    return { ...counts, historyId: hid, reason: "fallback_list" };
+  } catch {
+    await ctx.runMutation(internal.gmail.touchScan, { connId: conn._id });
+    return { ...counts, reason: "fallback_list" };
   }
 }
 
@@ -297,33 +336,21 @@ export const pollAllUsersIncremental = internalAction({
   returns: v.object({ polled: v.number(), scanned: v.number(), created: v.number() }),
   handler: async (ctx) => {
     const conns: any[] = await ctx.runQuery(internal.gmail.listAllGmailConnectionsInternal, {} as any);
-    // Group by userId
-    const byUser = new Map<string, any[]>();
+    // Fan-out via scheduler to avoid single-run cron guard timeout at scale
+    let scheduled = 0;
     for (const c of conns) {
       if (!c.gmailRefreshToken || c.status !== "connected" || !c.gmailScopeGranted) continue;
       if (c.lastGmailScanAt && Date.now() - c.lastGmailScanAt < COOLDOWN_MS) continue;
-      const arr = byUser.get(c.userId) ?? [];
-      arr.push(c);
-      byUser.set(c.userId, arr);
-    }
-    let polled = 0, scanned = 0, created = 0;
-    for (const [userId, userConns] of byUser) {
-      for (const conn of userConns) {
-        try {
-          const res: any = await ctx.runAction(internal.gmailWatch.ingestIncremental, {
-            userId,
-            connId: conn._id,
-          });
-          polled++;
-          scanned += res.scanned;
-          created += res.created;
-          await new Promise((r) => setTimeout(r, 300));
-        } catch (e: any) {
-          console.error("pollAll conn failed", conn._id, String(e));
-          polled++;
-        }
+      try {
+        await ctx.scheduler.runAfter(0, internal.gmailWatch.ingestIncremental, {
+          userId: c.userId,
+          connId: c._id,
+        });
+        scheduled++;
+      } catch (e: any) {
+        console.error("pollAll schedule failed", c._id, String(e));
       }
     }
-    return { polled, scanned, created };
+    return { polled: scheduled, scanned: 0, created: 0 };
   },
 });

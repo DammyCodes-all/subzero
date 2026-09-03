@@ -104,7 +104,20 @@ http.route({
       return new Response(null, { status: 204 });
     }
 
-    for (const conn of active) {
+    // Dedupe multiple rows same email → one per user (newest scan wins), skip if polled <30s ago (push+poll race guard)
+    const now = Date.now();
+    const byUser = new Map<string, any>();
+    for (const c of active) {
+      const prev = byUser.get(c.userId);
+      if (!prev || (c.lastGmailScanAt ?? 0) > (prev.lastGmailScanAt ?? 0)) {
+        byUser.set(c.userId, c);
+      }
+    }
+    for (const conn of byUser.values()) {
+      if (conn.lastGmailScanAt && now - conn.lastGmailScanAt < 30 * 1000) {
+        console.log("gmail push skip recent poll", conn._id);
+        continue;
+      }
       try {
         await ctx.scheduler.runAfter(0, internal.gmailWatch.ingestIncremental, {
           userId: conn.userId,
