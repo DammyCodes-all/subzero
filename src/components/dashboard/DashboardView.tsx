@@ -8,7 +8,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect } from "react";
 import { sileo } from "sileo";
 import { CompactAttentionRow } from "@/components/CompactAttentionRow";
-import { AttentionHero } from "@/components/dashboard/AttentionHero";
+import { ActionCard } from "@/components/ActionCard";
 import { DashboardGreeting } from "@/components/dashboard/DashboardGreeting";
 import { NoSubscriptionsState } from "@/components/EmptyState";
 import { ProcessingRows } from "@/components/ingestion/ProcessingRows";
