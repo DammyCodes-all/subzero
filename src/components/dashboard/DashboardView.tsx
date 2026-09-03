@@ -7,8 +7,9 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect } from "react";
 import { sileo } from "sileo";
-import { ActionCard } from "@/components/ActionCard";
 import { CompactAttentionRow } from "@/components/CompactAttentionRow";
+import { AttentionHero } from "@/components/dashboard/AttentionHero";
+import { DashboardGreeting } from "@/components/dashboard/DashboardGreeting";
 import { NoSubscriptionsState } from "@/components/EmptyState";
 import { ProcessingRows } from "@/components/ingestion/ProcessingRows";
 import { DashboardSkeleton } from "@/components/Skeleton";
@@ -25,6 +26,7 @@ export function DashboardView() {
   const attention = useQuery(api.subscriptions.needsAttention, { days: 7 });
   const all = useQuery(api.subscriptions.list);
   const gmailStatus = useQuery(api.gmail.getGmailStatus);
+  const viewer = useQuery(api.users.getViewer);
 
   const isLoading = attention === undefined || all === undefined;
 
@@ -79,23 +81,27 @@ export function DashboardView() {
   const hero = displaySubs[0];
   const rest = displaySubs.slice(1);
 
+  const activeCount = (all ?? []).filter(
+    (s) => s.status !== "cancelled",
+  ).length;
+
+  const firstName =
+    viewer?.name?.split(" ")[0] ?? viewer?.email?.split("@")[0] ?? null;
+
   return (
-    <div className="space-y-8">
+    <div className="w-full space-y-8">
       <ProcessingRows />
       {gmailStatus?.needsReauth && !gmailStatus?.connected && (
         <div className="flex items-center justify-between gap-3 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-[12px]">
-          <span>Gmail needs reconnect — auto-watch paused. Reconnect to resume.</span>
-          <Link href="/dashboard/connections" className="font-mono text-[11px] underline underline-offset-2">
+          <span>
+            Gmail needs reconnect — auto-watch paused. Reconnect to resume.
+          </span>
+          <Link
+            href="/dashboard/connections"
+            className="font-mono text-[11px] underline underline-offset-2"
+          >
             Reconnect
           </Link>
-        </div>
-      )}
-      {gmailStatus?.connected && (
-        <div className="flex items-center gap-2 text-[11px] font-mono text-muted-foreground">
-          <span className="inline-flex h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-500" aria-hidden />
-          {gmailStatus.gmailWatchExpiration && gmailStatus.gmailWatchExpiration > Date.now()
-            ? `Watching Gmail · push active · last sync ${gmailStatus.lastGmailScanAt ? new Date(gmailStatus.lastGmailScanAt).toLocaleTimeString() : "just now"}`
-            : `Auto-watching Gmail · syncs every 15m${gmailStatus.lastGmailScanAt ? ` · last ${new Date(gmailStatus.lastGmailScanAt).toLocaleTimeString()}` : ""}`}
         </div>
       )}
       {isLoading ? (
@@ -103,86 +109,86 @@ export function DashboardView() {
       ) : (all?.length ?? 0) === 0 ? (
         /* ── Zero-state ── */
         <div className="space-y-8">
-          <SummaryHeader subscriptions={[]} attentionCount={0} />
+          <DashboardGreeting name={firstName} />
           <NoSubscriptionsState />
         </div>
       ) : (
-        /* ── Populated state ── */
-        <div className="space-y-8">
+        /* ── Populated state: greeting → overview → hero → list ── */
+        <>
+          <DashboardGreeting name={firstName} />
+
           <SummaryHeader
-            subscriptions={all as Doc<"subscriptions">[]}
+            items={displaySubs as Doc<"subscriptions">[]}
             attentionCount={urgentSubs.length}
+            activeCount={activeCount}
           />
 
-          {/* Attention / Upcoming section */}
-          <section className="space-y-5">
-            <div className="flex items-end justify-between">
-              <h1 className="font-heading text-[26px] font-bold leading-none tracking-tight md:text-[28px]">
-                {hasUrgent ? "Needs your attention" : "Coming up next"}
-              </h1>
-              <Link
-                href="/dashboard/subscriptions"
-                className="inline-flex items-center gap-1 font-mono text-xs text-muted-foreground transition-colors hover:text-foreground"
-              >
-                View all
-                <HugeiconsIcon
-                  icon={
-                    ArrowRight02Icon as unknown as Parameters<
-                      typeof HugeiconsIcon
-                    >[0]["icon"]
-                  }
-                  size={14}
-                  strokeWidth={2}
-                  color="currentColor"
-                  className="ml-0.5 inline"
-                />
-                <LinkPendingDot />
-              </Link>
-            </div>
-
-            {hero ? (
-              <div className="space-y-4">
-                {/* Hero card */}
+          {hero && (
+            <section className="space-y-4">
+              <div className="flex items-center justify-between">
+                <p className="font-mono text-[11px] uppercase tracking-widest text-muted-foreground">
+                  {hasUrgent ? "Needs your attention" : "Coming up next"}
+                </p>
                 <Link
-                  href={`/subscriptions/${hero._id}`}
-                  className="group relative block rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                  href="/dashboard/subscriptions"
+                  className="inline-flex items-center gap-1 font-mono text-xs text-muted-foreground transition-colors hover:text-foreground"
                 >
-                  <span className="relative block rounded-lg">
-                    <PendingWrap>
-                      <ActionCard sub={hero} />
-                    </PendingWrap>
-                    <LinkPendingOverlay variant="card" />
-                  </span>
+                  View all
+                  <HugeiconsIcon
+                    icon={
+                      ArrowRight02Icon as unknown as Parameters<
+                        typeof HugeiconsIcon
+                      >[0]["icon"]
+                    }
+                    size={14}
+                    strokeWidth={2}
+                    color="currentColor"
+                    className="ml-0.5 inline"
+                  />
+                  <LinkPendingDot />
                 </Link>
-
-                {/* Rest as compact rows */}
-                {rest.length > 0 && (
-                  <div className="space-y-2">
-                    <p className="text-xs text-muted-foreground">
-                      {hasUrgent ? "Also due this week" : "Also upcoming"}
-                    </p>
-                    <div className="space-y-2">
-                      {rest.map((sub: Doc<"subscriptions">) => (
-                        <Link
-                          key={sub._id}
-                          href={`/subscriptions/${sub._id}`}
-                          className="group relative block rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-                        >
-                          <span className="relative block rounded-md">
-                            <PendingWrap>
-                              <CompactAttentionRow sub={sub} />
-                            </PendingWrap>
-                            <LinkPendingOverlay variant="row" />
-                          </span>
-                        </Link>
-                      ))}
-                    </div>
-                  </div>
-                )}
               </div>
-            ) : null}
-          </section>
-        </div>
+
+              <Link
+                href={`/subscriptions/${hero._id}`}
+                className="group relative block rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+              >
+                <span className="relative block rounded-xl">
+                  <PendingWrap>
+                    <AttentionHero sub={hero} />
+                  </PendingWrap>
+                  <LinkPendingOverlay variant="card" />
+                </span>
+              </Link>
+            </section>
+          )}
+
+          {rest.length > 0 && (
+            <section className="space-y-4">
+              <p className="font-mono text-[11px] uppercase tracking-widest text-muted-foreground">
+                {hasUrgent ? "Upcoming" : "Also upcoming"}
+              </p>
+              <div className="overflow-hidden rounded-xl border border-border bg-card">
+                <div className="divide-y divide-border/40">
+                  {rest.map((sub: Doc<"subscriptions">) => (
+                    <Link
+                      key={sub._id}
+                      href={`/subscriptions/${sub._id}`}
+                      className="relative block focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+                    >
+                      <span className="relative block">
+                        <PendingWrap>
+                          <CompactAttentionRow sub={sub} />
+                        </PendingWrap>
+                        <LinkPendingOverlay variant="row" />
+                      </span>
+                    </Link>
+                  ))}
+                </div>
+              </div>
+            </section>
+          )}
+        </>
       )}
     </div>
   );

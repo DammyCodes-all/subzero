@@ -1,107 +1,69 @@
 "use client";
 
-import { HugeiconsIcon } from "@hugeicons/react";
-import {
-  Calendar01Icon,
-  AlertCircleIcon,
-  ShieldCheckIcon,
-} from "@hugeicons/core-free-icons";
+import { formatPrice } from "@/lib/format";
 import type { Doc } from "../../convex/_generated/dataModel";
 
 interface SummaryHeaderProps {
-  subscriptions: Doc<"subscriptions">[];
+  items: Doc<"subscriptions">[];
   attentionCount: number;
+  activeCount: number;
 }
 
+// Money at risk groups by currency — summing mixed currencies is wrong,
+// so "₦15,400 + $64.99" instead of a single converted figure.
+function groupedTotal(items: Doc<"subscriptions">[]): string {
+  const totals = new Map<string, number>();
+  for (const s of items) {
+    const code = (s.currency || "USD").toUpperCase();
+    totals.set(code, (totals.get(code) ?? 0) + s.price);
+  }
+  const parts = [...totals.entries()].map(([code, total]) =>
+    formatPrice(total, code),
+  );
+  return parts.length > 0 ? parts.join(" + ") : "—";
+}
+
+// Overview strip — typographic, not boxed. Three metrics separated by a
+// subtle hairline; no card borders. Numbers in Lato.
 export function SummaryHeader({
-  subscriptions,
+  items,
   attentionCount,
+  activeCount,
 }: SummaryHeaderProps) {
-  const now = Date.now();
-  const sevenDays = 7 * 24 * 60 * 60 * 1000;
-
-  // Active subscriptions
-  const activeSubs = subscriptions.filter((s) => s.status !== "cancelled");
-  // 1. Renewing in next 7 days
-  const renewingSoonCount = activeSubs.filter(
-    (s) => s.nextRenewalAt && s.nextRenewalAt <= now + sevenDays && s.nextRenewalAt >= now,
-  ).length;
-
-  // 2. Active Free Trials
-  const activeTrialsCount = activeSubs.filter(
-    (s) => s.trialEndsAt && s.trialEndsAt > now,
-  ).length;
-
   return (
-    <div className="grid grid-cols-2 gap-3.5 sm:grid-cols-3">
-      {/* 1. Renewing Soon */}
-      <div className="flex flex-col justify-between rounded-xl border border-border bg-card p-4 transition-colors hover:border-border/80">
-        <div className="flex items-center justify-between text-muted-foreground">
-          <span className="text-xs font-medium">Renewing Soon</span>
-          <HugeiconsIcon
-            icon={Calendar01Icon as unknown as Parameters<typeof HugeiconsIcon>[0]["icon"]}
-            size={16}
-            strokeWidth={1.8}
-            color="currentColor"
-            className={renewingSoonCount > 0 ? "text-amber-400" : ""}
-          />
-        </div>
-        <div className="mt-3">
-          <p className="font-mono text-xl font-bold tabular-nums text-foreground">
-            {renewingSoonCount}
-          </p>
-          <p className="mt-0.5 text-[11px] text-muted-foreground">
-            due in next 7 days
-          </p>
-        </div>
+    <div className="grid grid-cols-1 gap-6 sm:grid-cols-3 sm:gap-0 sm:divide-x sm:divide-border/40">
+      <div className="space-y-1.5 sm:pr-6">
+        <p className="font-mono text-[11px] uppercase tracking-widest text-muted-foreground">
+          At risk this week
+        </p>
+        <p className="font-numeric text-[26px] font-bold leading-none tabular-nums text-foreground">
+          {groupedTotal(items)}
+        </p>
+        <p className="text-xs text-muted-foreground">
+          {items.length} renewal{items.length === 1 ? "" : "s"}
+        </p>
       </div>
 
-      {/* 2. Action Needed */}
-      <div className="flex flex-col justify-between rounded-xl border border-border bg-card p-4 transition-colors hover:border-border/80">
-        <div className="flex items-center justify-between text-muted-foreground">
-          <span className="text-xs font-medium">Needs Attention</span>
-          <HugeiconsIcon
-            icon={AlertCircleIcon as unknown as Parameters<typeof HugeiconsIcon>[0]["icon"]}
-            size={16}
-            strokeWidth={1.8}
-            color="currentColor"
-            className={attentionCount > 0 ? "text-primary" : ""}
-          />
-        </div>
-        <div className="mt-3">
-          <p
-            className={`font-mono text-xl font-bold tabular-nums ${
-              attentionCount > 0 ? "text-primary" : "text-foreground"
-            }`}
-          >
-            {attentionCount}
-          </p>
-          <p className="mt-0.5 text-[11px] text-muted-foreground">
-            {activeTrialsCount > 0 ? `${activeTrialsCount} active free trial` : "requiring review"}
-          </p>
-        </div>
+      <div className="space-y-1.5 sm:px-6">
+        <p className="font-mono text-[11px] uppercase tracking-widest text-muted-foreground">
+          Needs attention
+        </p>
+        <p className="font-numeric text-[26px] font-bold leading-none tabular-nums text-foreground">
+          {attentionCount}
+        </p>
+        <p className="text-xs text-muted-foreground">
+          {attentionCount === 1 ? "needs action" : "need action"}
+        </p>
       </div>
 
-      {/* 3. Active Subscriptions Protection */}
-      <div className="col-span-2 flex flex-col justify-between rounded-xl border border-border bg-card p-4 transition-colors hover:border-border/80 sm:col-span-1">
-        <div className="flex items-center justify-between text-muted-foreground">
-          <span className="text-xs font-medium">Active Subs</span>
-          <HugeiconsIcon
-            icon={ShieldCheckIcon as unknown as Parameters<typeof HugeiconsIcon>[0]["icon"]}
-            size={16}
-            strokeWidth={1.8}
-            color="currentColor"
-            className="text-primary"
-          />
-        </div>
-        <div className="mt-3">
-          <p className="font-mono text-xl font-bold tabular-nums text-foreground">
-            {activeSubs.length}
-          </p>
-          <p className="mt-0.5 text-[11px] text-muted-foreground">
-            monitored by SubZero
-          </p>
-        </div>
+      <div className="space-y-1.5 sm:px-6">
+        <p className="font-mono text-[11px] uppercase tracking-widest text-muted-foreground">
+          Active
+        </p>
+        <p className="font-numeric text-[26px] font-bold leading-none tabular-nums text-foreground">
+          {activeCount}
+        </p>
+        <p className="text-xs text-muted-foreground">tracked</p>
       </div>
     </div>
   );

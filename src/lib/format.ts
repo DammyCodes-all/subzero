@@ -1,4 +1,13 @@
-const ZERO_DECIMAL = new Set(["JPY", "KRW", "VND", "CLP", "BIF", "PYG", "GNF", "MGA"]);
+const ZERO_DECIMAL = new Set([
+  "JPY",
+  "KRW",
+  "VND",
+  "CLP",
+  "BIF",
+  "PYG",
+  "GNF",
+  "MGA",
+]);
 
 export function formatPrice(
   price: number,
@@ -7,17 +16,19 @@ export function formatPrice(
 ) {
   const code = (currency || "USD").toUpperCase();
   const isZero = ZERO_DECIMAL.has(code);
+  // Whole amounts drop the decimals (₦7,700 not ₦7,700.00); fractions keep 2dp.
+  const minimumDigits = isZero || Number.isInteger(price) ? 0 : 2;
   let formatted: string;
   try {
     formatted = new Intl.NumberFormat("en-US", {
       style: "currency",
       currency: code,
-      minimumFractionDigits: isZero ? 0 : 2,
+      minimumFractionDigits: minimumDigits,
       maximumFractionDigits: isZero ? 0 : 2,
     }).format(price);
   } catch {
     // Invalid ISO (e.g. "US Dollar") — fallback to code + number
-    formatted = `${code} ${price.toFixed(isZero ? 0 : 2)}`;
+    formatted = `${code} ${price.toFixed(minimumDigits)}`;
   }
   if (interval === "monthly") return `${formatted}/mo`;
   if (interval === "yearly") return `${formatted}/yr`;
