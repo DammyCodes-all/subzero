@@ -7,8 +7,8 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect } from "react";
 import { sileo } from "sileo";
-import { CompactAttentionRow } from "@/components/CompactAttentionRow";
 import { ActionCard } from "@/components/ActionCard";
+import { CompactAttentionRow } from "@/components/CompactAttentionRow";
 import { DashboardGreeting } from "@/components/dashboard/DashboardGreeting";
 import { NoSubscriptionsState } from "@/components/EmptyState";
 import { ProcessingRows } from "@/components/ingestion/ProcessingRows";
@@ -151,11 +151,11 @@ export function DashboardView() {
 
               <Link
                 href={`/subscriptions/${hero._id}`}
-                className="group relative block rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                className="group relative block rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
               >
-                <span className="relative block rounded-xl">
+                <span className="relative block rounded-lg">
                   <PendingWrap>
-                    <AttentionHero sub={hero} />
+                    <ActionCard sub={hero} />
                   </PendingWrap>
                   <LinkPendingOverlay variant="card" />
                 </span>
