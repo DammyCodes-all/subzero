@@ -9,7 +9,8 @@ import {
 } from "./_generated/server";
 import { dedupKey } from "./lib/dedup";
 import { getDifficulty } from "./lib/difficulty";
-import { cleanProductName, healDirtyProductNames } from "./lib/product";
+import { healDirtyProductNames, refreshLegacyDifficulty } from "./lib/heal";
+import { cleanProductName } from "./lib/product";
 
 export const list = query({
   args: {},
@@ -95,11 +96,9 @@ export const upsert = mutation({
       )
       .unique();
 
-    const hasProvider = !!args.billingProvider;
     const difficulty = getDifficulty(
       args.cancellationMethod ?? "unknown",
       args.steps ?? 0,
-      hasProvider,
     );
 
     if (existing) {
@@ -193,11 +192,9 @@ export const upsertInternal = internalMutation({
         .unique();
     }
 
-    const hasProvider = !!args.billingProvider;
     const difficulty = getDifficulty(
       args.cancellationMethod ?? "unknown",
       args.steps ?? 0,
-      hasProvider,
     );
 
     if (existing) {
@@ -279,6 +276,7 @@ export const upsertInternal = internalMutation({
 
     // Self-heal rows stored before write-path cleaning (bounded, indexed).
     await healDirtyProductNames(ctx, userId);
+    await refreshLegacyDifficulty(ctx, userId);
 
     return subId;
   },
@@ -407,11 +405,7 @@ export const saveResearchResult = internalMutation({
       }
     }
 
-    const difficulty = getDifficulty(
-      finalMethod,
-      finalInstructions.length,
-      !!sub.billingProvider,
-    );
+    const difficulty = getDifficulty(finalMethod, finalInstructions.length);
 
     const hasVerifiedRoute =
       finalMethod !== "unknown" && finalInstructions.length > 0 && !!finalUrl;

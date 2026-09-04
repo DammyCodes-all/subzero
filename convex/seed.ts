@@ -131,11 +131,7 @@ export const seed = mutation({
         .unique();
       if (existing) continue;
 
-      const difficulty = getDifficulty(
-        m.cancellationMethod,
-        m.steps ?? 0,
-        !!m.billingProvider,
-      );
+      const difficulty = getDifficulty(m.cancellationMethod, m.steps ?? 0);
 
       const id = await ctx.db.insert("subscriptions", {
         userId,

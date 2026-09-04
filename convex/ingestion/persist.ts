@@ -3,7 +3,8 @@ import { internal } from "../_generated/api";
 import { internalMutation, internalQuery } from "../_generated/server";
 import { dedupKey } from "../lib/dedup";
 import { getDifficulty } from "../lib/difficulty";
-import { cleanProductName, healDirtyProductNames } from "../lib/product";
+import { healDirtyProductNames, refreshLegacyDifficulty } from "../lib/heal";
+import { cleanProductName } from "../lib/product";
 
 export const checkSvixId = internalQuery({
   args: { svixId: v.string() },
@@ -131,6 +132,7 @@ export const persistExtracted = internalMutation({
           messageId: args.messageId,
         });
         await healDirtyProductNames(ctx, args.userId);
+        await refreshLegacyDifficulty(ctx, args.userId);
         return {
           subscriptionId: match._id,
           evidenceId,
@@ -162,11 +164,7 @@ export const persistExtracted = internalMutation({
           sourceEmail: args.sourceEmail,
           sourceConnectionId: args.sourceConnectionId,
           cancellationMethod: "unknown",
-          cancellationDifficulty: getDifficulty(
-            "unknown",
-            0,
-            !!ex.billingProvider,
-          ),
+          cancellationDifficulty: getDifficulty("unknown", 0),
           dedupKey: key,
         });
         const evidenceId = await ctx.db.insert("evidence", {
@@ -266,7 +264,7 @@ export const persistExtracted = internalMutation({
         .unique();
     }
 
-    const difficulty = getDifficulty("unknown", 0, !!ex.billingProvider);
+    const difficulty = getDifficulty("unknown", 0);
 
     let subscriptionId: string;
     let isNew = true;
@@ -350,6 +348,7 @@ export const persistExtracted = internalMutation({
 
     // Self-heal rows stored before write-path cleaning (bounded, indexed).
     await healDirtyProductNames(ctx, args.userId);
+    await refreshLegacyDifficulty(ctx, args.userId);
 
     return {
       subscriptionId: subscriptionId as never,

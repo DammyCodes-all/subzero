@@ -7,14 +7,9 @@ export type ActionType =
   | "manual"
   | "unknown";
 
-export function getDifficulty(
-  type: ActionType,
-  steps: number,
-  hasProvider: boolean,
-): Difficulty {
+export function getDifficulty(type: ActionType, steps: number): Difficulty {
   if (type === "unknown") return "very_high";
   if (type === "contact_support") return "very_high";
-  if (hasProvider) return "high";
   if (steps >= 7) return "high";
   if (steps >= 4) return "medium";
   return "low";
