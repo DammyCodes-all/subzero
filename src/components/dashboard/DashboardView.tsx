@@ -166,14 +166,9 @@ export function DashboardView() {
 
               <Link
                 href={`/subscriptions/${hero._id}`}
-                className="group relative block rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                className="group block rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
               >
-                <span className="relative block rounded-lg">
-                  <PendingWrap>
-                    <ActionCard sub={hero} quiet={!hasUrgent} />
-                  </PendingWrap>
-                  <LinkPendingOverlay variant="card" />
-                </span>
+                <ActionCard sub={hero} quiet={!hasUrgent} />
               </Link>
             </section>
           )}

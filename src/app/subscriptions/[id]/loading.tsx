@@ -2,7 +2,7 @@
 // Dynamic param-specific data streams after commit; spinner handled here.
 export default function SubscriptionDetailLoading() {
   return (
-    <div className="mx-auto max-w-[680px] px-6 py-10" aria-hidden>
+    <div className="mx-auto w-full max-w-[680px]" aria-hidden>
       <div className="mb-6 h-4 w-28 animate-pulse rounded bg-border/60" />
       <div className="mb-2 h-7 w-52 animate-pulse rounded bg-border" />
       <div className="mb-2 h-4 w-64 animate-pulse rounded bg-border/60" />

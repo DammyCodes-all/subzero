@@ -119,8 +119,11 @@ export function UserMenu() {
                   aria-hidden="true"
                   className="size-1.5 shrink-0 rounded-full bg-emerald-400"
                 />
-                <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
-                  {gmailEmail}
+                <span
+                  className="min-w-0 flex-1 truncate text-xs text-muted-foreground"
+                  title={gmailEmail}
+                >
+                  Auto-sync on
                 </span>
               </div>
             ) : (

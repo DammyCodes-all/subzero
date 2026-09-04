@@ -20,11 +20,7 @@ import { MerchantAvatar } from "@/components/MerchantAvatar";
 import { DashboardSkeleton } from "@/components/Skeleton";
 import { SubscriptionRow } from "@/components/SubscriptionRow";
 import { Button } from "@/components/ui/button";
-import {
-  LinkPendingDot,
-  LinkPendingOverlay,
-  PendingWrap,
-} from "@/components/ui/LinkPending";
+import { LinkPendingDot, PendingWrap } from "@/components/ui/LinkPending";
 import { formatPrice, formatRenewalDate, frictionLabel } from "@/lib/format";
 import { merchantFaviconUrl } from "@/lib/merchantFavicon";
 import { api } from "../../../convex/_generated/api";
@@ -36,10 +32,10 @@ export function SubscriptionsView() {
   const all = useQuery(api.subscriptions.list);
   const [filter, setFilter] = useState<FilterTab>("all");
   const [viewMode, setViewMode] = useState<"grid" | "table">(() => {
-    if (typeof window === "undefined") return "table";
+    if (typeof window === "undefined") return "grid";
     const stored = localStorage.getItem("subscriptions-view-mode");
     if (stored === "grid" || stored === "table") return stored;
-    return window.innerWidth >= 640 ? "table" : "grid";
+    return "grid";
   });
   const [searchQuery, setSearchQuery] = useState("");
 
@@ -219,14 +215,9 @@ export function SubscriptionsView() {
                 <Link
                   key={sub._id}
                   href={`/subscriptions/${sub._id}`}
-                  className="group relative block"
+                  className="group block"
                 >
-                  <span className="relative block rounded-lg">
-                    <PendingWrap>
-                      <ActionCard sub={sub} />
-                    </PendingWrap>
-                    <LinkPendingOverlay variant="card" />
-                  </span>
+                  <ActionCard sub={sub} />
                 </Link>
               ))}
             </div>
