@@ -49,7 +49,7 @@ export function SummaryHeader({
     <div className="grid grid-cols-1 gap-6 sm:grid-cols-3 sm:gap-0 sm:divide-x sm:divide-border/40">
       <div className="space-y-1.5 sm:pr-6">
         <p className="font-mono text-[11px] uppercase tracking-widest text-muted-foreground">
-          At risk this week
+          {attentionCount > 0 ? "At risk this week" : "Up next"}
         </p>
         <p className="font-numeric text-[26px] font-bold leading-none tabular-nums text-foreground">
           {atRisk.primary}

@@ -40,7 +40,7 @@ export function ZeroAttentionState() {
         className="shrink-0 text-primary"
       />
       <p className="text-sm font-medium text-primary">
-        Nothing needs you right now
+        You&apos;re all caught up. Nothing renews this week.
       </p>
     </div>
   );

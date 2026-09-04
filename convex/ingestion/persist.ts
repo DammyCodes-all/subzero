@@ -3,6 +3,7 @@ import { internal } from "../_generated/api";
 import { internalMutation, internalQuery } from "../_generated/server";
 import { dedupKey } from "../lib/dedup";
 import { getDifficulty } from "../lib/difficulty";
+import { cleanProductName, healDirtyProductNames } from "../lib/product";
 
 export const checkSvixId = internalQuery({
   args: { svixId: v.string() },
@@ -85,6 +86,9 @@ export const persistExtracted = internalMutation({
     const confidence = Math.max(0, Math.min(1, ex.confidence));
     const excerpt = ex.quote.slice(0, 10000) || args.source.slice(0, 500);
     const now = Date.now();
+    // Source-level cleaning: never store raw store titles in product —
+    // every key, insert, and patch below uses the cleaned value.
+    const product = cleanProductName(ex.product);
 
     // Confirmation branch: email says cancellation confirmed
     if (ex.isConfirmation) {
@@ -126,6 +130,7 @@ export const persistExtracted = internalMutation({
           svixId: args.svixId,
           messageId: args.messageId,
         });
+        await healDirtyProductNames(ctx, args.userId);
         return {
           subscriptionId: match._id,
           evidenceId,
@@ -138,7 +143,7 @@ export const persistExtracted = internalMutation({
       if (ex.price && ex.currency) {
         const key = dedupKey({
           merchant,
-          product: ex.product,
+          product,
           billingProvider: ex.billingProvider,
           price: ex.price,
           currency: ex.currency,
@@ -146,7 +151,7 @@ export const persistExtracted = internalMutation({
         const id = await ctx.db.insert("subscriptions", {
           userId: args.userId,
           merchant,
-          product: ex.product,
+          product,
           price: ex.price,
           currency: ex.currency,
           billingInterval: ex.billingInterval,
@@ -192,7 +197,7 @@ export const persistExtracted = internalMutation({
 
     // Normal receipt / trial branch — require merchant (or product as fallback) + price
     let merchant = ex.merchant?.trim();
-    if (!merchant && ex.product?.trim()) merchant = ex.product.trim();
+    if (!merchant && product) merchant = product;
     if (!merchant || ex.price === undefined || ex.price === null) {
       return {
         subscriptionId: null,
@@ -229,7 +234,7 @@ export const persistExtracted = internalMutation({
 
     const key = dedupKey({
       merchant,
-      product: ex.product,
+      product,
       billingProvider: ex.billingProvider,
       price,
       currency,
@@ -248,7 +253,7 @@ export const persistExtracted = internalMutation({
     if (!existing && ex.billingProvider) {
       const fallbackKey = dedupKey({
         merchant,
-        product: ex.product,
+        product,
         billingProvider: undefined,
         price,
         currency,
@@ -281,7 +286,7 @@ export const persistExtracted = internalMutation({
       ) {
         patch.trialEndsAt = ex.trialEndsAt;
       }
-      if (ex.product && !existing.product) patch.product = ex.product;
+      if (product && !existing.product) patch.product = product;
       // Preserve the first-known source inbox if we don't have one yet.
       if (args.sourceEmail && !existing.sourceEmail)
         patch.sourceEmail = args.sourceEmail;
@@ -315,7 +320,7 @@ export const persistExtracted = internalMutation({
       subscriptionId = await ctx.db.insert("subscriptions", {
         userId: args.userId,
         merchant,
-        product: ex.product,
+        product,
         price,
         currency,
         billingInterval: ex.billingInterval,
@@ -342,6 +347,9 @@ export const persistExtracted = internalMutation({
       svixId: args.svixId,
       messageId: args.messageId,
     });
+
+    // Self-heal rows stored before write-path cleaning (bounded, indexed).
+    await healDirtyProductNames(ctx, args.userId);
 
     return {
       subscriptionId: subscriptionId as never,

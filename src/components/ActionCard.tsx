@@ -6,10 +6,11 @@ import { MerchantAvatar } from "@/components/MerchantAvatar";
 import { Button } from "@/components/ui/button";
 import { getCancellationCTA, openExternalUrl } from "@/lib/cancellation";
 import {
+  displayNames,
   formatPrice,
-  formatRenewalDate,
   frictionLabel,
   isUrgent,
+  urgencyLabel,
 } from "@/lib/format";
 import { merchantFaviconUrl } from "@/lib/merchantFavicon";
 
@@ -29,66 +30,84 @@ type Sub = {
   researchStatus?: string;
 };
 
-export function ActionCard({ sub, evidence }: { sub: Sub; evidence?: string }) {
+export function ActionCard({
+  sub,
+  evidence,
+  quiet = false,
+}: {
+  sub: Sub;
+  evidence?: string;
+  // Quiet mode: nothing needs doing today, so drop the prominent CTA and
+  // let the card read as information, not an alarm.
+  quiet?: boolean;
+}) {
   const cta = getCancellationCTA(sub);
   const urgent = isUrgent(sub.nextRenewalAt) || isUrgent(sub.trialEndsAt);
+  const badge = urgencyLabel(sub.nextRenewalAt, sub.trialEndsAt);
+  const { title, subtitle } = displayNames(sub.merchant, sub.product);
 
   return (
     <div
-      className={`rounded-lg border bg-card p-6 hover:bg-[var(--card-hover)] overflow-hidden transition-colors ${urgent ? "border-l border-l-destructive/70" : "border-border"}`}
+      className={`rounded-lg border bg-card hover:bg-[var(--card-hover)] overflow-hidden transition-colors ${quiet ? "p-5" : "p-6"} ${urgent ? "border-l border-l-destructive/70" : "border-border"}`}
     >
       <div className="flex items-start justify-between gap-6">
         <div className="min-w-0 flex-1">
-          {/* Merchant — editorial, owns weight */}
+          {/* Product owns the headline — it's what users recognize.
+              Merchant drops to the subtitle, only when different. */}
           <div className="flex items-center gap-3">
             <MerchantAvatar
               merchant={sub.merchant}
               faviconUrl={merchantFaviconUrl(sub)}
               size={32}
             />
-            <h3 className="truncate font-heading text-[19px] font-bold leading-none tracking-tight">
-              {sub.merchant}
-            </h3>
+            <div className="min-w-0">
+              <h3
+                className={`truncate font-heading font-bold leading-none tracking-tight ${quiet ? "text-[17px]" : "text-[19px]"}`}
+              >
+                {title}
+              </h3>
+              {subtitle && (
+                <p className="mt-1 truncate text-xs leading-none text-muted-foreground">
+                  {subtitle}
+                </p>
+              )}
+            </div>
           </div>
-          {/* Product · price — collapsed to one line, denser */}
+          {/* Price · billing route — one line */}
           <p className="mt-2 text-sm leading-none">
-            <span className="text-xs text-muted-foreground">
-              {sub.product ?? "Subscription"} ·{" "}
-            </span>
             <span className="font-numeric text-[14px] font-semibold tabular-nums tracking-tight text-foreground">
               {formatPrice(sub.price, sub.currency, sub.billingInterval)}
             </span>
-          </p>
-          {/* Renew date + friction — single line, no duplicate countdown */}
-          <p className="mt-2 text-xs leading-none text-muted-foreground">
-            Renews {formatRenewalDate(sub.nextRenewalAt)}
-            {sub.cancellationDifficulty && (
-              <>
-                <span className="mx-1.5 text-muted-foreground">·</span>
-                <span>{frictionLabel(sub.cancellationDifficulty)}</span>
-              </>
+            {sub.billingProvider && (
+              <span className="text-xs text-muted-foreground">
+                {" "}
+                via {sub.billingProvider}
+              </span>
             )}
           </p>
-          {/* Evidence / provider — only when present */}
-          {(evidence || sub.billingProvider) && (
+          {/* Cancel effort — badge owns the date, so no duplication here */}
+          {sub.cancellationDifficulty && (
+            <p className="mt-2 text-xs leading-none text-muted-foreground">
+              {frictionLabel(sub.cancellationDifficulty)}
+            </p>
+          )}
+          {/* Evidence excerpt — the closest thing to "what this gets you"
+              until extraction captures a description field */}
+          {evidence && (
             <div className="mt-3">
-              {evidence ? (
-                <p className="text-xs leading-relaxed text-muted-foreground line-clamp-1">
-                  {evidence}
-                </p>
-              ) : (
-                <p className="text-xs text-muted-foreground">
-                  Billed through {sub.billingProvider}
-                </p>
-              )}
+              <p className="text-xs leading-relaxed text-muted-foreground line-clamp-1">
+                {evidence}
+              </p>
             </div>
           )}
         </div>
         {/* CTA — sole solid chartreuse, bottom-right */}
         <div className="flex shrink-0 flex-col items-end justify-between self-stretch">
-          <span className="font-mono text-xs font-medium tabular-nums tracking-wide text-muted-foreground">
-            {urgent ? "Action needed" : "Due soon"}
-          </span>
+          {badge && (
+            <span className="font-mono text-xs font-medium tabular-nums tracking-wide text-muted-foreground">
+              {badge}
+            </span>
+          )}
           {cta.href ? (
             <Button
               variant={cta.variant}

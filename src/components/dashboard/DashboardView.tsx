@@ -10,7 +10,10 @@ import { sileo } from "sileo";
 import { ActionCard } from "@/components/ActionCard";
 import { CompactAttentionRow } from "@/components/CompactAttentionRow";
 import { DashboardGreeting } from "@/components/dashboard/DashboardGreeting";
-import { NoSubscriptionsState } from "@/components/EmptyState";
+import {
+  NoSubscriptionsState,
+  ZeroAttentionState,
+} from "@/components/EmptyState";
 import { ProcessingRows } from "@/components/ingestion/ProcessingRows";
 import { DashboardSkeleton } from "@/components/Skeleton";
 import { SummaryHeader } from "@/components/SummaryHeader";
@@ -125,6 +128,7 @@ export function DashboardView() {
 
           {hero && (
             <section className="space-y-4">
+              {!hasUrgent && <ZeroAttentionState />}
               <div className="flex items-center justify-between">
                 <p className="font-mono text-[11px] uppercase tracking-widest text-muted-foreground">
                   {hasUrgent ? "Needs your attention" : "Coming up next"}
@@ -155,7 +159,7 @@ export function DashboardView() {
               >
                 <span className="relative block rounded-lg">
                   <PendingWrap>
-                    <ActionCard sub={hero} />
+                    <ActionCard sub={hero} quiet={!hasUrgent} />
                   </PendingWrap>
                   <LinkPendingOverlay variant="card" />
                 </span>

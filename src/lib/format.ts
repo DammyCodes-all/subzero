@@ -76,16 +76,30 @@ export function frictionLabel(
 ): string {
   const base =
     difficulty === "very_high"
-      ? "Very high friction"
+      ? "Very hard to cancel"
       : difficulty === "high"
-        ? "High friction"
+        ? "Hard to cancel"
         : difficulty === "medium"
-          ? "Medium friction"
+          ? "Some effort to cancel"
           : difficulty === "low"
-            ? "Low friction"
-            : "Unknown friction";
+            ? "Easy to cancel"
+            : "Cancel effort unknown";
   if (steps && steps > 0) return `${base} · ${steps} steps`;
   return base;
+}
+
+// Display names: the product is what users recognize ("Snapchat+"), the
+// merchant is the legal entity ("Snap Inc"). Also strips raw store-listing
+// suffixes the extractor sometimes keeps ("Snapchat+ (Snapchat: Chat with
+// Friends)" — App Store titles are "Name: Tagline" inside parens).
+export function displayNames(
+  merchant: string,
+  product?: string | null,
+): { title: string; subtitle: string | null } {
+  const cleaned =
+    product?.replace(/\s*\([^()]*:[^()]*\)\s*$/, "").trim() || null;
+  const title = cleaned || merchant;
+  return { title, subtitle: title !== merchant ? merchant : null };
 }
 
 export function isUrgent(ts?: number): boolean {
@@ -96,4 +110,24 @@ export function isUrgent(ts?: number): boolean {
 export function needsAttention(ts?: number): boolean {
   const d = daysUntil(ts);
   return d !== null && d >= 0 && d <= 7;
+}
+
+// Single source of truth for urgency badges. Never hardcode "Due soon" —
+// it must reflect the actual renewal date, not the card slot.
+export function urgencyLabel(
+  nextRenewalAt?: number,
+  trialEndsAt?: number,
+): string | null {
+  if (isUrgent(nextRenewalAt) || isUrgent(trialEndsAt)) return "Action needed";
+  const ts = [nextRenewalAt, trialEndsAt]
+    .filter((t): t is number => typeof t === "number")
+    .sort((a, b) => a - b)[0];
+  if (ts === undefined) return null;
+  const d = daysUntil(ts);
+  if (d === null) return null;
+  if (d < 0) return "Overdue";
+  if (d === 0) return "Today";
+  if (d === 1) return "Tomorrow";
+  if (d <= 7) return "Due soon";
+  return `In ${d} days`;
 }

@@ -18,8 +18,8 @@ import { getCancellationCTA, openExternalUrl } from "@/lib/cancellation";
 import {
   formatPrice,
   formatRenewalDate,
-  isUrgent,
   needsAttention,
+  urgencyLabel,
 } from "@/lib/format";
 import { merchantFaviconUrl } from "@/lib/merchantFavicon";
 import { api } from "../../../convex/_generated/api";
@@ -85,7 +85,6 @@ export function SubscriptionDetailView() {
     );
   }
 
-  const urgent = isUrgent(sub.nextRenewalAt) || isUrgent(sub.trialEndsAt);
   const attention =
     needsAttention(sub.nextRenewalAt) || needsAttention(sub.trialEndsAt);
   const cta = getCancellationCTA(sub as never);
@@ -152,7 +151,7 @@ export function SubscriptionDetailView() {
               </p>
               {attention && (
                 <p className="mt-3 font-mono text-xs font-medium tabular-nums tracking-wide text-muted-foreground">
-                  {urgent ? "Action needed" : "Due soon"}
+                  {urgencyLabel(sub.nextRenewalAt, sub.trialEndsAt)}
                 </p>
               )}
             </div>

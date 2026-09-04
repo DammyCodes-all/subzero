@@ -1,8 +1,12 @@
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
-import { ActionCtx, action, internalAction } from "./_generated/server";
-import { env } from "./_generated/server";
+import {
+  type ActionCtx,
+  action,
+  env,
+  internalAction,
+} from "./_generated/server";
 
 const SYSTEM_PROMPT = `You are a precise subscription extraction engine for SubZero. Return valid JSON ONLY.
 
@@ -36,6 +40,7 @@ RULES:
   - Any text containing "google" → "Google One" (e.g., "Google AI Plus (400 GB) (Google One)" → merchant "Google One", product "Google AI Plus (400 GB)")
   - Snap → "Snap Inc", OpenAI → "ChatGPT", others: Adobe, Spotify, Notion, Netflix, Figma, Linear, Canva, YouTube
   - Never repeat merchant in product; never put "Google Play"/"Apple" in merchant.
+  - product: plan/feature name only (e.g. "Snapchat+"). Never app-store titles — strip any "(Name: tagline)" suffix: "Snapchat+ (Snapchat: Chat with Friends)" → product "Snapchat+".
 
 FEW-SHOT:
 
@@ -51,19 +56,39 @@ Document: "Spotify Premium $9.99/month renews 2026-09-15"
 VALIDATION: Raw JSON only. All keys present. No trailing commas. No single quotes. No extra text.`;
 
 async function callAI(text: string) {
-  const groqKey = (env as unknown as { GROQ_API_KEY?: string }).GROQ_API_KEY ?? process.env.GROQ_API_KEY;
-  const openaiKey = (env as unknown as { OPENAI_API_KEY?: string }).OPENAI_API_KEY ?? process.env.OPENAI_API_KEY;
+  const groqKey =
+    (env as unknown as { GROQ_API_KEY?: string }).GROQ_API_KEY ??
+    process.env.GROQ_API_KEY;
+  const openaiKey =
+    (env as unknown as { OPENAI_API_KEY?: string }).OPENAI_API_KEY ??
+    process.env.OPENAI_API_KEY;
   const provider = groqKey ? "groq" : openaiKey ? "openai" : null;
   const apiKey = groqKey ?? openaiKey;
   if (!apiKey || !provider) {
     // Mock fallback — same shape as LLM, keeps demo working without keys
     const lower = text.toLowerCase();
-    const isSub = /receipt|trial|renewal|subscription|invoice|charged|billed/i.test(lower);
-    const priceMatch = lower.match(/\$\s*(\d+(?:\.\d{1,2})?)/) ?? lower.match(/(\d+\.\d{2})/);
+    const isSub =
+      /receipt|trial|renewal|subscription|invoice|charged|billed/i.test(lower);
+    const priceMatch =
+      lower.match(/\$\s*(\d+(?:\.\d{1,2})?)/) ?? lower.match(/(\d+\.\d{2})/);
     const price = priceMatch ? Number.parseFloat(priceMatch[1]) : 0;
-    const merchants = ["adobe","canva","spotify","notion","netflix","chatgpt","figma","linear"];
+    const merchants = [
+      "adobe",
+      "canva",
+      "spotify",
+      "notion",
+      "netflix",
+      "chatgpt",
+      "figma",
+      "linear",
+    ];
     let merchant = "Unknown";
-    for (const m of merchants) if (lower.includes(m)) { merchant = m.charAt(0).toUpperCase()+m.slice(1); if (m==="chatgpt") merchant="ChatGPT"; break; }
+    for (const m of merchants)
+      if (lower.includes(m)) {
+        merchant = m.charAt(0).toUpperCase() + m.slice(1);
+        if (m === "chatgpt") merchant = "ChatGPT";
+        break;
+      }
     return {
       isSubscription: isSub && !!price,
       merchant,
@@ -76,11 +101,16 @@ async function callAI(text: string) {
       billingProvider: null as string | null,
       cancellationUrl: null as string | null,
       cancellationMethod: "unknown" as const,
-      evidenceList: [{ source: "Mock", excerpt: text.slice(0,300), confidence: 0.6 }],
+      evidenceList: [
+        { source: "Mock", excerpt: text.slice(0, 300), confidence: 0.6 },
+      ],
     };
   }
 
-  const endpoint = provider === "groq" ? "https://api.groq.com/openai/v1/chat/completions" : "https://api.openai.com/v1/chat/completions";
+  const endpoint =
+    provider === "groq"
+      ? "https://api.groq.com/openai/v1/chat/completions"
+      : "https://api.openai.com/v1/chat/completions";
   const model = provider === "groq" ? "openai/gpt-oss-120b" : "gpt-4o-mini";
 
   const response = await fetch(endpoint, {
@@ -94,7 +124,10 @@ async function callAI(text: string) {
       response_format: { type: "json_object" },
       messages: [
         { role: "system", content: SYSTEM_PROMPT },
-        { role: "user", content: `Analyze the following email/text:\n\n${text}` },
+        {
+          role: "user",
+          content: `Analyze the following email/text:\n\n${text}`,
+        },
       ],
       temperature: 0.1,
     }),
@@ -147,7 +180,12 @@ export const extractFromText = action({
     if (!identity) throw new Error("Not authenticated");
     const userId = identity.tokenIdentifier;
 
-    return await processExtraction(ctx, userId, args.rawText, args.sourceName ?? "Manual paste");
+    return await processExtraction(
+      ctx,
+      userId,
+      args.rawText,
+      args.sourceName ?? "Manual paste",
+    );
   },
 });
 
@@ -158,7 +196,12 @@ export const extractFromTextInternal = internalAction({
     sourceName: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    return await processExtraction(ctx, args.userId, args.rawText, args.sourceName ?? "Email Ingestion");
+    return await processExtraction(
+      ctx,
+      args.userId,
+      args.rawText,
+      args.sourceName ?? "Email Ingestion",
+    );
   },
 });
 
@@ -166,8 +209,13 @@ async function processExtraction(
   ctx: ActionCtx,
   userId: string,
   rawText: string,
-  sourceName: string
-): Promise<{ success: boolean; subscriptionId?: Id<"subscriptions">; merchant?: string; reason?: string }> {
+  sourceName: string,
+): Promise<{
+  success: boolean;
+  subscriptionId?: Id<"subscriptions">;
+  merchant?: string;
+  reason?: string;
+}> {
   const extracted = await callAI(rawText);
   if (!extracted.isSubscription || !extracted.merchant) {
     return { success: false, reason: "No subscription detected in text" };
@@ -180,22 +228,29 @@ async function processExtraction(
     ? Date.parse(extracted.trialEndsAtISO)
     : undefined;
 
-  const validNextRenewalAt = isNaN(nextRenewalAt as number) ? undefined : nextRenewalAt;
-  const validTrialEndsAt = isNaN(trialEndsAt as number) ? undefined : trialEndsAt;
+  const validNextRenewalAt = isNaN(nextRenewalAt as number)
+    ? undefined
+    : nextRenewalAt;
+  const validTrialEndsAt = isNaN(trialEndsAt as number)
+    ? undefined
+    : trialEndsAt;
 
-  const subscriptionId: Id<"subscriptions"> = await ctx.runMutation(internal.subscriptions.upsertInternal, {
-    userId,
-    merchant: extracted.merchant,
-    product: extracted.product ?? undefined,
-    price: extracted.price || 0,
-    currency: extracted.currency || "USD",
-    billingInterval: extracted.billingInterval || "monthly",
-    billingProvider: extracted.billingProvider ?? undefined,
-    nextRenewalAt: validNextRenewalAt,
-    trialEndsAt: validTrialEndsAt,
-    cancellationUrl: extracted.cancellationUrl ?? undefined,
-    cancellationMethod: extracted.cancellationMethod ?? "unknown",
-  });
+  const subscriptionId: Id<"subscriptions"> = await ctx.runMutation(
+    internal.subscriptions.upsertInternal,
+    {
+      userId,
+      merchant: extracted.merchant,
+      product: extracted.product ?? undefined,
+      price: extracted.price || 0,
+      currency: extracted.currency || "USD",
+      billingInterval: extracted.billingInterval || "monthly",
+      billingProvider: extracted.billingProvider ?? undefined,
+      nextRenewalAt: validNextRenewalAt,
+      trialEndsAt: validTrialEndsAt,
+      cancellationUrl: extracted.cancellationUrl ?? undefined,
+      cancellationMethod: extracted.cancellationMethod ?? "unknown",
+    },
+  );
 
   if (extracted.evidenceList && extracted.evidenceList.length > 0) {
     for (const ev of extracted.evidenceList) {
@@ -211,9 +266,13 @@ async function processExtraction(
 
   // Trigger Firecrawl cancellation research if we don't have a direct cancellation link
   if (!extracted.cancellationUrl) {
-    await ctx.scheduler.runAfter(0, internal.research.researchCancellationRoute, {
-      subscriptionId,
-    });
+    await ctx.scheduler.runAfter(
+      0,
+      internal.research.researchCancellationRoute,
+      {
+        subscriptionId,
+      },
+    );
   }
 
   return { success: true, subscriptionId, merchant: extracted.merchant };
