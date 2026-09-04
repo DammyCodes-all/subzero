@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@auth/core": "^0.37.0",
+    "@base-ui-components/react": "1.0.0-rc.0",
     "@base-ui/react": "^1.7.0",
     "@convex-dev/auth": "^0.0.88",
     "@hugeicons/core-free-icons": "^4.3.0",
