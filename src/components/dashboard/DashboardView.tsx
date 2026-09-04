@@ -88,6 +88,16 @@ export function DashboardView() {
     (s) => s.status !== "cancelled",
   ).length;
 
+  const now = Date.now();
+  const trialCount = (all ?? []).filter(
+    (s) =>
+      s.status !== "cancelled" &&
+      s.trialEndsAt !== undefined &&
+      s.trialEndsAt > now,
+  ).length;
+
+  const paceItems = (all ?? []).filter((s) => s.status !== "cancelled");
+
   const firstName =
     viewer?.name?.split(" ")[0] ?? viewer?.email?.split("@")[0] ?? null;
 
@@ -121,9 +131,10 @@ export function DashboardView() {
           <DashboardGreeting name={firstName} />
 
           <SummaryHeader
-            items={displaySubs as Doc<"subscriptions">[]}
+            paceItems={paceItems as Doc<"subscriptions">[]}
             attentionCount={urgentSubs.length}
             activeCount={activeCount}
+            trialCount={trialCount}
           />
 
           {hero && (
