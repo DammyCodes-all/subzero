@@ -64,16 +64,16 @@ export function NoSubscriptionsState() {
   }
 
   return (
-    <div className="mx-auto max-w-2xl px-6 py-8 text-center sm:py-10">
+    <div className="mx-auto max-w-2xl px-6 py-2 text-center sm:py-4">
       <Image
         src="/mail-mockup.png"
         alt="Mailbox syncing Gmail"
         width={768}
         height={512}
         priority
-        className="mx-auto h-auto max-h-[36vh] w-auto max-w-full"
+        className="mx-auto h-auto max-h-[30vh] w-auto max-w-full"
       />
-      <h3 className="mt-6 font-heading text-xl font-semibold tracking-tight sm:text-2xl">
+      <h3 className="mt-4 font-heading text-xl font-semibold tracking-tight sm:text-2xl">
         No subscriptions yet
       </h3>
       <p className="mx-auto mt-2 max-w-sm text-sm leading-relaxed text-muted-foreground">
@@ -81,7 +81,7 @@ export function NoSubscriptionsState() {
         you.
       </p>
       <Button
-        className="mt-6 font-medium"
+        className="mt-4 font-medium"
         onClick={() => {
           markGoogleOAuthAttempt();
           void signIn("google", { redirectTo: GOOGLE_OAUTH_REDIRECT });
@@ -190,16 +190,16 @@ function AuthenticatedEmptyState() {
   };
 
   return (
-    <div className="mx-auto max-w-2xl px-6 py-8 text-center sm:py-10">
+    <div className="mx-auto max-w-2xl px-6 py-2 text-center sm:py-4">
       <Image
         src="/mail-mockup.png"
         alt="Mailbox syncing Gmail"
         width={768}
         height={512}
         priority
-        className="mx-auto h-auto max-h-[36vh] w-auto max-w-full"
+        className="mx-auto h-auto max-h-[30vh] w-auto max-w-full"
       />
-      <h3 className="mt-6 font-heading text-xl font-semibold tracking-tight sm:text-2xl">
+      <h3 className="mt-4 font-heading text-xl font-semibold tracking-tight sm:text-2xl">
         No subscriptions yet
       </h3>
       <p className="mx-auto mt-2 max-w-md text-sm leading-relaxed text-muted-foreground">
@@ -238,7 +238,7 @@ function AuthenticatedEmptyState() {
         ) : null}
       </p>
 
-      <div className="mx-auto mt-6 max-w-xs">
+      <div className="mx-auto mt-4 max-w-xs">
         {status === undefined ? (
           <div className="h-10 animate-pulse rounded-lg bg-border/40" />
         ) : !isConnected ? (
