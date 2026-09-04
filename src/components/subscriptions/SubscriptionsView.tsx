@@ -11,6 +11,11 @@ import { useQuery } from "convex/react";
 import Link from "next/link";
 import { useState } from "react";
 import { ActionCard } from "@/components/ActionCard";
+import {
+  Tabs,
+  TabsList,
+  TabsTab,
+} from "@/components/animate-ui/components/base/tabs";
 import { MerchantAvatar } from "@/components/MerchantAvatar";
 import { DashboardSkeleton } from "@/components/Skeleton";
 import { SubscriptionRow } from "@/components/SubscriptionRow";
@@ -153,24 +158,24 @@ export function SubscriptionsView() {
 
       {/* Filter Tabs & Search Bar */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex flex-wrap items-center gap-1.5 border-b border-border/40 pb-2 sm:border-b-0 sm:pb-0">
-          {(
-            ["all", "active", "trials", "urgent", "cancelled"] as FilterTab[]
-          ).map((tab) => (
-            <button
-              key={tab}
-              type="button"
-              onClick={() => handleFilterChange(tab)}
-              className={`rounded-lg px-3 py-1.5 text-xs font-medium capitalize transition-colors ${
-                filter === tab
-                  ? "bg-primary/10 text-primary"
-                  : "text-muted-foreground hover:bg-secondary hover:text-foreground"
-              }`}
-            >
-              {tab === "urgent" ? "Renewing Soon" : tab}
-            </button>
-          ))}
-        </div>
+        <Tabs
+          value={filter}
+          onValueChange={(v) => handleFilterChange(v as FilterTab)}
+        >
+          <TabsList className="h-8 max-w-full overflow-x-auto bg-card p-[3px] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            {(
+              ["all", "active", "trials", "urgent", "cancelled"] as FilterTab[]
+            ).map((tab) => (
+              <TabsTab
+                key={tab}
+                value={tab}
+                className="px-3 py-1 text-xs font-medium capitalize data-[selected]:text-primary"
+              >
+                {tab === "urgent" ? "Renewing Soon" : tab}
+              </TabsTab>
+            ))}
+          </TabsList>
+        </Tabs>
 
         {/* Search input */}
         <div className="relative w-full sm:w-64">
