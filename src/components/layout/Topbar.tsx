@@ -21,6 +21,8 @@ export function Topbar() {
           <span className="hidden sm:inline">Connect Gmail</span>
         </ConnectGmailButton>
 
+        <div aria-hidden="true" className="h-5 w-px bg-border" />
+
         <UserMenu />
       </div>
     </header>
