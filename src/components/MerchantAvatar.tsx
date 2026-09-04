@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useState } from "react";
 
 // Merchant identity mark in three states:
@@ -31,12 +32,12 @@ export function MerchantAvatar({
       )}
       {(!faviconUrl || status === "failed") && merchant.charAt(0).toUpperCase()}
       {showImg && (
-        <img
+        <Image
           src={faviconUrl}
           alt=""
-          loading="lazy"
           width={size}
           height={size}
+          unoptimized
           onLoad={() => setStatus("loaded")}
           onError={() => setStatus("failed")}
           className={`absolute inset-0 h-full w-full bg-card object-cover transition-opacity ${

@@ -45,11 +45,43 @@ export async function healDirtyProductNames(
   return healed;
 }
 
-// Rows stored under the old rule (any provider-billed route auto-"high")
-// get rescored from their researched instructions. Only touches the exact
-// population the old rule inflated: researched rows with a known method
-// sitting at "high". Anything genuinely hard recomputes to the same value
-// and is left alone.
+// Evidence sources stored with a redundant channel suffix
+// ("Acme via forward" — the sourceType pill already says email) get trimmed
+// to the plain name.
+export async function healEvidenceSources(
+  ctx: MutationCtx,
+  userId: string,
+): Promise<number> {
+  const subs = await ctx.db
+    .query("subscriptions")
+    .withIndex("by_user", (q) => q.eq("userId", userId))
+    .take(200);
+  let fixed = 0;
+  for (const s of subs) {
+    const rows = await ctx.db
+      .query("evidence")
+      .withIndex("by_subscription", (q) => q.eq("subscriptionId", s._id))
+      .collect();
+    for (const ev of rows) {
+      if (!ev.source.endsWith(" via forward")) continue;
+      await ctx.db.patch(ev._id, {
+        source: ev.source.slice(0, -" via forward".length).trim() || ev.source,
+      });
+      fixed += 1;
+    }
+  }
+  return fixed;
+}
+
+// Single entry point for ingest-time healing — one call per mutation.
+export async function healUserData(
+  ctx: MutationCtx,
+  userId: string,
+): Promise<void> {
+  await healDirtyProductNames(ctx, userId);
+  await refreshLegacyDifficulty(ctx, userId);
+  await healEvidenceSources(ctx, userId);
+}
 export async function refreshLegacyDifficulty(
   ctx: MutationCtx,
   userId: string,

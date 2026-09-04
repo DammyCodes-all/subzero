@@ -9,7 +9,7 @@ import {
 } from "./_generated/server";
 import { dedupKey } from "./lib/dedup";
 import { getDifficulty } from "./lib/difficulty";
-import { healDirtyProductNames, refreshLegacyDifficulty } from "./lib/heal";
+import { healUserData } from "./lib/heal";
 import { cleanProductName } from "./lib/product";
 
 export const list = query({
@@ -275,8 +275,7 @@ export const upsertInternal = internalMutation({
     );
 
     // Self-heal rows stored before write-path cleaning (bounded, indexed).
-    await healDirtyProductNames(ctx, userId);
-    await refreshLegacyDifficulty(ctx, userId);
+    await healUserData(ctx, userId);
 
     return subId;
   },

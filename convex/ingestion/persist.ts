@@ -3,7 +3,7 @@ import { internal } from "../_generated/api";
 import { internalMutation, internalQuery } from "../_generated/server";
 import { dedupKey } from "../lib/dedup";
 import { getDifficulty } from "../lib/difficulty";
-import { healDirtyProductNames, refreshLegacyDifficulty } from "../lib/heal";
+import { healUserData } from "../lib/heal";
 import { cleanProductName } from "../lib/product";
 
 export const checkSvixId = internalQuery({
@@ -131,8 +131,7 @@ export const persistExtracted = internalMutation({
           svixId: args.svixId,
           messageId: args.messageId,
         });
-        await healDirtyProductNames(ctx, args.userId);
-        await refreshLegacyDifficulty(ctx, args.userId);
+        await healUserData(ctx, args.userId);
         return {
           subscriptionId: match._id,
           evidenceId,
@@ -337,7 +336,7 @@ export const persistExtracted = internalMutation({
 
     const evidenceId = await ctx.db.insert("evidence", {
       subscriptionId: subscriptionId as never,
-      source: `${merchant} via forward`,
+      source: merchant,
       sourceType: "email",
       excerpt,
       confidence,
@@ -347,8 +346,7 @@ export const persistExtracted = internalMutation({
     });
 
     // Self-heal rows stored before write-path cleaning (bounded, indexed).
-    await healDirtyProductNames(ctx, args.userId);
-    await refreshLegacyDifficulty(ctx, args.userId);
+    await healUserData(ctx, args.userId);
 
     return {
       subscriptionId: subscriptionId as never,

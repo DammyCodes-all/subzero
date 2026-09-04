@@ -46,13 +46,13 @@ RULES:
 FEW-SHOT:
 
 Document: "Your Google Play Order Receipt Google AI Plus (400 GB) (Google One) trial ends 20 Aug 2027 charged ₦7,700/month via Google Play"
-=> {"isSubscription":true,"merchant":"Google One","product":"Google AI Plus (400 GB)","price":7700,"currency":"NGN","billingInterval":"monthly","nextRenewalAtISO":"2027-08-20","trialEndsAtISO":"2027-08-20","billingProvider":"Google Play","cancellationUrl":null,"cancellationMethod":"unknown","evidenceList":[{"source":"Google One via forward","excerpt":"You will be automatically charged ₦7,700.00/month","confidence":0.98}]}
+=> {"isSubscription":true,"merchant":"Google One","product":"Google AI Plus (400 GB)","price":7700,"currency":"NGN","billingInterval":"monthly","nextRenewalAtISO":"2027-08-20","trialEndsAtISO":"2027-08-20","billingProvider":"Google Play","cancellationUrl":null,"cancellationMethod":"unknown","evidenceList":[{"source":"Google One","excerpt":"You will be automatically charged ₦7,700.00/month","confidence":0.98}]}
 
 Document: "NATIONAL EXAMINATIONS COUNCIL Invoice ₦5,100 single payment, no renewal"
 => {"isSubscription":false,"merchant":null,"product":null,"price":0,"currency":"USD","billingInterval":"unknown","nextRenewalAtISO":null,"trialEndsAtISO":null,"billingProvider":null,"cancellationUrl":null,"cancellationMethod":"unknown","evidenceList":[]}
 
 Document: "Spotify Premium $9.99/month renews 2026-09-15"
-=> {"isSubscription":true,"merchant":"Spotify","product":"Spotify Premium","price":9.99,"currency":"USD","billingInterval":"monthly","nextRenewalAtISO":"2026-09-15","trialEndsAtISO":null,"billingProvider":null,"cancellationUrl":null,"cancellationMethod":"unknown","evidenceList":[{"source":"Spotify via forward","excerpt":"$9.99/month renews 2026-09-15","confidence":0.96}]}
+=> {"isSubscription":true,"merchant":"Spotify","product":"Spotify Premium","price":9.99,"currency":"USD","billingInterval":"monthly","nextRenewalAtISO":"2026-09-15","trialEndsAtISO":null,"billingProvider":null,"cancellationUrl":null,"cancellationMethod":"unknown","evidenceList":[{"source":"Spotify","excerpt":"$9.99/month renews 2026-09-15","confidence":0.96}]}
 
 VALIDATION: Raw JSON only. All keys present. No trailing commas. No single quotes. No extra text.`;
 

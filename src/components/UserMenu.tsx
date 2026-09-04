@@ -8,6 +8,7 @@ import {
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useConvexAuth, useQuery } from "convex/react";
+import Image from "next/image";
 import Link from "next/link";
 import { useState } from "react";
 import {
@@ -63,11 +64,12 @@ export function UserMenu() {
         className="flex size-8 cursor-pointer items-center justify-center overflow-hidden rounded-full border border-border bg-secondary text-xs font-semibold text-foreground transition-colors outline-none hover:border-foreground/30 focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/50 data-[popup-open]:border-foreground/30"
       >
         {showImage ? (
-          <img
+          <Image
             src={image as string}
             alt=""
             width={32}
             height={32}
+            unoptimized
             onError={() => setImgFailed(true)}
             className="h-full w-full object-cover"
           />
@@ -85,11 +87,12 @@ export function UserMenu() {
                 className="flex size-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-secondary text-sm font-semibold text-foreground"
               >
                 {showImage ? (
-                  <img
+                  <Image
                     src={image as string}
                     alt=""
                     width={36}
                     height={36}
+                    unoptimized
                     onError={() => setImgFailed(true)}
                     className="h-full w-full object-cover"
                   />
