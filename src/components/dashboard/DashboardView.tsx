@@ -108,7 +108,7 @@ export function DashboardView() {
         <DashboardSkeleton />
       ) : (all?.length ?? 0) === 0 ? (
         /* ── Zero-state ── */
-        <div className="space-y-8">
+        <div className="flex min-h-[60vh] flex-col justify-center space-y-8">
           <DashboardGreeting name={firstName} />
           <NoSubscriptionsState />
         </div>

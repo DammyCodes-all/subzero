@@ -80,6 +80,29 @@
   * {
     @apply border-border outline-ring/50;
   }
+  /* SubZero scrollbar — thin, cream at low opacity, transparent track */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: rgb(249 247 242 / 0.18) transparent;
+  }
+  *::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  *::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  *::-webkit-scrollbar-thumb {
+    background: rgb(249 247 242 / 0.18);
+    border-radius: 8px;
+    border: 3px solid transparent;
+    background-clip: padding-box;
+  }
+  *::-webkit-scrollbar-thumb:hover {
+    background: rgb(249 247 242 / 0.32);
+    border: 3px solid transparent;
+    background-clip: padding-box;
+  }
   body {
     @apply bg-background text-foreground;
     font-family: var(--font-inter), system-ui, sans-serif;
