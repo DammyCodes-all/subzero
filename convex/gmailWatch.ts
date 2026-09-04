@@ -206,7 +206,7 @@ export const ingestIncremental = internalAction({
         const msg = await getMessage(accessToken, m.id).catch(() => null);
         if (!msg) { skipped++; continue; }
         scanned++;
-        const r = await processOneEmail(ctx, args.userId, msg.subject, msg.text, msg.html, msg.id, conn.accountEmail, conn._id).catch(() => ({ status: "unparsed" as const }));
+        const r = await processOneEmail(ctx, args.userId, msg.subject, msg.text, msg.html, msg.id, conn.accountEmail, conn._id, msg.from).catch(() => ({ status: "unparsed" as const }));
         if (r.status === "created") created++;
         else if (r.status === "merged") merged++;
         else if (r.status === "skipped") skipped++;
@@ -270,7 +270,7 @@ async function ingestListQuery(
     const msg = await getMessage(accessToken, m.id).catch(() => null);
     if (!msg) { skipped++; continue; }
     scanned++;
-    const r = await processOneEmail(ctx, userId, msg.subject, msg.text, msg.html, msg.id, conn.accountEmail, conn._id).catch(() => ({ status: "unparsed" as const }));
+    const r = await processOneEmail(ctx, userId, msg.subject, msg.text, msg.html, msg.id, conn.accountEmail, conn._id, msg.from).catch(() => ({ status: "unparsed" as const }));
     if (r.status === "created") created++;
     else if (r.status === "merged") merged++;
     else if (r.status === "skipped") skipped++;

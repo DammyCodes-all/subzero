@@ -4,6 +4,7 @@ import { v } from "convex/values";
 import { internal } from "../_generated/api";
 import type { Id } from "../_generated/dataModel";
 import { internalAction } from "../_generated/server";
+import { isSelfEmail } from "../lib/selfMail";
 import { normalizeEmail } from "./normalize";
 
 const KEYWORDS =
@@ -131,6 +132,13 @@ export const processForwardedEmail = internalAction({
 
       // 4. Normalize
       const normalized = normalizeEmail({ text, html, subject: args.subject });
+      // Never ingest our own outbound mail (nudges / test mails forwarded
+      // back would otherwise become dummy subscriptions).
+      if (isSelfEmail({ from, subject: args.subject, text: normalized.text })) {
+        console.log("[ingestion] Self mail — returning skipped");
+        await markAttempt("skipped", { reason: "skipped: self mail" });
+        return { subscriptionId: null, evidenceId: null, status: "skipped" };
+      }
       const bodyForKeyword = `${normalized.text} ${normalized.subject}`.trim();
       console.log(
         `[ingestion] Keyword check: textLen=${normalized.text.length}, subject="${normalized.subject.slice(0, 60)}", hasKeyword=${KEYWORDS.test(bodyForKeyword)}`,

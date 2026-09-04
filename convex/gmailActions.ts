@@ -73,6 +73,9 @@ export const scanGmail = action({
           f.text,
           f.html ?? "",
           `fixture:${f.subject.slice(0, 20)}`,
+          undefined,
+          undefined,
+          f.from,
         );
         if (r.status === "created") created++;
         else if (r.status === "merged") merged++;
@@ -168,6 +171,7 @@ export const scanGmail = action({
                 msg.id,
                 conn.accountEmail,
                 conn._id,
+                msg.from,
               );
               if (r.status === "created") created++;
               else if (r.status === "merged") merged++;
@@ -199,7 +203,11 @@ export const scanGmail = action({
         } catch {}
         // Best-effort ensure watch if topic configured
         try {
-          await ctx.scheduler.runAfter(0, internal.gmailWatch.ensureWatchForConn as any, { connId: conn._id });
+          await ctx.scheduler.runAfter(
+            0,
+            internal.gmailWatch.ensureWatchForConn as any,
+            { connId: conn._id },
+          );
         } catch {}
       }
     }
@@ -266,6 +274,9 @@ export const scanForUser = internalAction({
           f.text,
           f.html ?? "",
           `fixture:${f.subject.slice(0, 20)}`,
+          undefined,
+          undefined,
+          f.from,
         );
         if (r.status === "created") created++;
       }
@@ -304,6 +315,7 @@ export const scanForUser = internalAction({
             msg.id,
             conn.accountEmail,
             conn._id,
+            msg.from,
           ).catch(() => ({ status: "unparsed" }));
           if (r.status === "created") created++;
           await new Promise((rr) => setTimeout(rr, 450));
@@ -313,7 +325,10 @@ export const scanForUser = internalAction({
           try {
             const tok2 = await getAccessToken(conn.gmailRefreshToken);
             const hid = await getProfileHistoryId(tok2.accessToken);
-            await ctx.runMutation(internal.gmail.updateHistoryId as any, { connId: conn._id, historyId: hid });
+            await ctx.runMutation(internal.gmail.updateHistoryId as any, {
+              connId: conn._id,
+              historyId: hid,
+            });
           } catch {}
         }
       } catch (e: any) {}

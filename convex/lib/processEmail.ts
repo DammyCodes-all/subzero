@@ -1,6 +1,7 @@
 import { internal } from "../_generated/api";
 import type { Id } from "../_generated/dataModel";
 import { normalizeEmail } from "../ingestion/normalize";
+import { isSelfEmail } from "./selfMail";
 
 const PRICE_HINT =
   /(\$|€|£|₦|₹|¥)\s*[\d,]+|[\d,]+\s*(USD|EUR|GBP|NGN|INR|JPY|CAD|AUD)/i;
@@ -16,7 +17,12 @@ export async function processOneEmail(
   messageId: string,
   sourceEmail?: string,
   sourceConnectionId?: Id<"connections">,
+  from?: string,
 ): Promise<{ status: string; subscriptionId?: string }> {
+  // Never ingest our own outbound mail (nudges / test mails land in the
+  // user's inbox and would otherwise become dummy subscriptions).
+  if (isSelfEmail({ from, subject, text: `${subject} ${text}` }))
+    return { status: "skipped" };
   const normalized = normalizeEmail({ text, html, subject });
   const hay = `${normalized.text} ${normalized.subject}`;
   if (!KEYWORDS.test(hay)) return { status: "skipped" };
