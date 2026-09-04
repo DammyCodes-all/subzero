@@ -281,7 +281,7 @@ RULES:
 - billingInterval enum only monthly|yearly|weekly|unknown. unknown if not stated.
 - dates ISO 8601 YYYY-MM-DD or null. Do not compute; use explicit date in text.
 - isConfirmation true only if email explicitly confirms cancellation (cancelled/canceled confirmed).
-- quote: exact substring backing price or renewal date, max 300 chars.
+- quote: exact substring backing price or renewal date, max 300 chars. Minimal markdown (**bold**, *italic*, \`code\`, [text](https://…)) wherever it aids clarity; never headings, lists, tables, or images.
 - CONFIDENCE: 0.95-0.99 explicit price+renewal labeled, 0.85-0.95 needs minor interpretation, 0.6-0.85 ambiguous.
 
 CANONICAL MERCHANT MAP (brand only, never product/billingProvider):

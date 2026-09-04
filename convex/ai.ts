@@ -36,6 +36,7 @@ RULES:
 - billingInterval enum only. unknown if not stated.
 - dates ISO 8601 YYYY-MM-DD or null. Use explicit date only.
 - excerpt: exact quote backing price/date. confidence: 0.95-0.99 explicit, 0.85-0.95 minor interpretation, 0.6-0.85 ambiguous.
+- excerpt formatting: plain text by default. You may use minimal markdown (**bold**, *italic*, \`code\`, [text](https://…)) wherever it makes the quote clearer. Never headings, lists, tables, or images.
 - CANONICAL MERCHANT (brand only, never product/billingProvider):
   - Any text containing "google" → "Google One" (e.g., "Google AI Plus (400 GB) (Google One)" → merchant "Google One", product "Google AI Plus (400 GB)")
   - Snap → "Snap Inc", OpenAI → "ChatGPT", others: Adobe, Spotify, Notion, Netflix, Figma, Linear, Canva, YouTube

@@ -1,5 +1,9 @@
 "use client";
 
+import { ExternalLinkIcon } from "@hugeicons/core-free-icons";
+import { HugeiconsIcon } from "@hugeicons/react";
+import { MiniMarkdown } from "@/components/detail/MiniMarkdown";
+
 type Evidence = {
   _id: string;
   source: string;
@@ -30,49 +34,47 @@ export function EvidenceBlock({ evidence }: { evidence: Evidence[] }) {
   }
 
   return (
-    <div className="space-y-3">
+    <div className="overflow-hidden rounded-xl border border-border/50 divide-y divide-border/40">
       {evidence.map((ev) => (
         <div
           key={ev._id}
-          className="rounded-lg border bg-card p-4 transition-colors hover:bg-[var(--card-hover)]"
+          className="p-4 transition-colors hover:bg-[var(--card-hover)] sm:p-5"
         >
-          <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-2">
-                <p className="truncate text-sm font-medium leading-none">
-                  {ev.source}
-                </p>
-                <span
-                  className={`shrink-0 rounded-full px-1.5 py-0.5 font-mono text-[10px] font-medium uppercase tracking-wide ${
-                    ev.sourceType === "email"
-                      ? "bg-primary/15 text-primary"
-                      : ev.sourceType === "firecrawl"
-                        ? "bg-secondary text-muted-foreground"
-                        : "bg-border text-muted-foreground"
-                  }`}
-                >
-                  {ev.sourceType}
-                </span>
-              </div>
-              <p className="mt-1 font-mono text-[11px] tabular-nums text-muted-foreground">
-                {formatRetrieved(ev.retrievedAt)} ·{" "}
-                {Math.round(ev.confidence * 100)}% confidence
-              </p>
-            </div>
+          <blockquote className="text-[13px] leading-relaxed text-foreground/90">
+            <MiniMarkdown text={ev.excerpt} />
+          </blockquote>
+          <div className="mt-2.5 flex flex-wrap items-center gap-x-2 gap-y-1">
+            <p className="truncate text-xs font-medium text-foreground">
+              {ev.source}
+            </p>
+            <span className="shrink-0 rounded-full bg-secondary px-1.5 py-0.5 font-mono text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+              {ev.sourceType}
+            </span>
+            <span className="font-mono text-[11px] tabular-nums text-muted-foreground">
+              {formatRetrieved(ev.retrievedAt)} ·{" "}
+              {Math.round(ev.confidence * 100)}%
+            </span>
             {ev.url && (
               <a
                 href={ev.url}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="shrink-0 font-mono text-xs font-medium text-primary hover:underline"
+                className="inline-flex shrink-0 items-center gap-1 font-mono text-[11px] font-medium text-muted-foreground transition-colors hover:text-primary"
               >
                 Open source
+                <HugeiconsIcon
+                  icon={
+                    ExternalLinkIcon as unknown as Parameters<
+                      typeof HugeiconsIcon
+                    >[0]["icon"]
+                  }
+                  size={11}
+                  strokeWidth={2}
+                  color="currentColor"
+                />
               </a>
             )}
           </div>
-          <blockquote className="mt-3 border-l-2 border-border pl-3 text-sm leading-relaxed text-muted-foreground">
-            “{ev.excerpt}”
-          </blockquote>
         </div>
       ))}
     </div>

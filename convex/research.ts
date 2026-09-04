@@ -1,19 +1,25 @@
 import { v } from "convex/values";
-import { internalAction } from "./_generated/server";
 import { internal } from "./_generated/api";
-import { env } from "./_generated/server";
+import { env, internalAction } from "./_generated/server";
 import { GROQ_EXTRACTION_MODEL } from "./lib/aiModels";
 
 export const researchCancellationRoute = internalAction({
   args: { subscriptionId: v.id("subscriptions") },
   handler: async (ctx, args) => {
-    const sub = await ctx.runQuery(internal.subscriptions.getInternal, { id: args.subscriptionId });
+    const sub = await ctx.runQuery(internal.subscriptions.getInternal, {
+      id: args.subscriptionId,
+    });
     if (!sub) throw new Error("Subscription not found");
 
-    const firecrawlKey = (env as unknown as { FIRECRAWL_API_KEY?: string }).FIRECRAWL_API_KEY;
+    const firecrawlKey = (env as unknown as { FIRECRAWL_API_KEY?: string })
+      .FIRECRAWL_API_KEY;
     const groqKey = (env as unknown as { GROQ_API_KEY?: string }).GROQ_API_KEY;
-    const openrouterKey = (env as unknown as { OPENROUTER_API_KEY?: string }).OPENROUTER_API_KEY ?? (process.env as unknown as { OPENROUTER_API_KEY?: string }).OPENROUTER_API_KEY;
-    const openaiKey = (env as unknown as { OPENAI_API_KEY?: string }).OPENAI_API_KEY;
+    const openrouterKey =
+      (env as unknown as { OPENROUTER_API_KEY?: string }).OPENROUTER_API_KEY ??
+      (process.env as unknown as { OPENROUTER_API_KEY?: string })
+        .OPENROUTER_API_KEY;
+    const openaiKey = (env as unknown as { OPENAI_API_KEY?: string })
+      .OPENAI_API_KEY;
 
     // No keys → never invent. Persist as unknown, let UI show "No verified route".
     if (!firecrawlKey || (!groqKey && !openrouterKey && !openaiKey)) {
@@ -29,7 +35,9 @@ export const researchCancellationRoute = internalAction({
     }
 
     // 1. Search with Firecrawl — provider-aware site hint in query (generic, no hardcode result)
-    const billingHint = sub.billingProvider ? ` billed via ${sub.billingProvider}` : "";
+    const billingHint = sub.billingProvider
+      ? ` billed via ${sub.billingProvider}`
+      : "";
     const providerLower = (sub.billingProvider ?? "").toLowerCase();
     let providerSiteHint = "";
     if (providerLower.includes("google")) {
@@ -41,7 +49,13 @@ export const researchCancellationRoute = internalAction({
     }
     const searchQuery = `how to cancel ${sub.merchant}${sub.product ? ` ${sub.product}` : ""}${billingHint} subscription${providerSiteHint}`;
 
-    type SearchHit = { url?: string; title?: string; description?: string; snippet?: string; markdown?: string };
+    type SearchHit = {
+      url?: string;
+      title?: string;
+      description?: string;
+      snippet?: string;
+      markdown?: string;
+    };
     let searchHits: SearchHit[] = [];
     try {
       const controller = new AbortController();
@@ -60,10 +74,17 @@ export const researchCancellationRoute = internalAction({
       });
       clearTimeout(t);
       if (res.ok) {
-        const j = (await res.json()) as unknown as { data?: unknown; web?: unknown };
-        const raw: unknown = (j as { data?: unknown }).data ?? (j as { web?: unknown }).web ?? [];
+        const j = (await res.json()) as unknown as {
+          data?: unknown;
+          web?: unknown;
+        };
+        const raw: unknown =
+          (j as { data?: unknown }).data ?? (j as { web?: unknown }).web ?? [];
         if (Array.isArray(raw)) searchHits = raw as SearchHit[];
-        else if (raw && typeof raw === "object") searchHits = Object.values(raw as Record<string, unknown>).flat() as SearchHit[];
+        else if (raw && typeof raw === "object")
+          searchHits = Object.values(
+            raw as Record<string, unknown>,
+          ).flat() as SearchHit[];
       }
     } catch {
       searchHits = [];
@@ -106,7 +127,9 @@ export const researchCancellationRoute = internalAction({
         path = urlStr.toLowerCase();
       }
       const title = String(h.title ?? "").toLowerCase();
-      const snippet = String(h.description ?? h.snippet ?? h.markdown ?? "").toLowerCase();
+      const snippet = String(
+        h.description ?? h.snippet ?? h.markdown ?? "",
+      ).toLowerCase();
       const combined = `${title} ${snippet}`;
       let s = 0;
       // boost help / support domains generic
@@ -120,29 +143,66 @@ export const researchCancellationRoute = internalAction({
       )
         s += 4;
       // provider-specific boost — for store-billed, Play/App Store help should outrank merchant portal
-      if (providerLower.includes("google") && (host === "support.google.com" || host === "play.google.com")) s += 5;
-      if (providerLower.includes("apple") && (host === "support.apple.com" || host === "apps.apple.com")) s += 5;
-      if (providerLower.includes("amazon") && host.includes("amazon.com") && path.includes("help")) s += 5;
+      if (
+        providerLower.includes("google") &&
+        (host === "support.google.com" || host === "play.google.com")
+      )
+        s += 5;
+      if (
+        providerLower.includes("apple") &&
+        (host === "support.apple.com" || host === "apps.apple.com")
+      )
+        s += 5;
+      if (
+        providerLower.includes("amazon") &&
+        host.includes("amazon.com") &&
+        path.includes("help")
+      )
+        s += 5;
       const merchantHostMatch =
         (merchantSlug && host.includes(merchantSlug)) ||
         merchantTokens.some((tok) => host.includes(tok));
       if (
         merchantHostMatch &&
-        (path.includes("help") || path.includes("support") || path.includes("faq") || path.includes("cancel"))
+        (path.includes("help") ||
+          path.includes("support") ||
+          path.includes("faq") ||
+          path.includes("cancel"))
       )
         s += 3;
       if (host === "play.google.com" || host === "apps.apple.com") s += 3;
-      if (path.includes("cancel") || (path.includes("subscription") && combined.includes("cancel"))) s += 2;
-      if (combined.includes("how to cancel") || combined.includes("cancel subscription")) s += 2;
+      if (
+        path.includes("cancel") ||
+        (path.includes("subscription") && combined.includes("cancel"))
+      )
+        s += 2;
+      if (
+        combined.includes("how to cancel") ||
+        combined.includes("cancel subscription")
+      )
+        s += 2;
       // Prefer official help answers over community threads/forums
       if (path.includes("/answer/")) s += 3;
-      if (path.includes("/thread/") || path.includes("/threads/") || host.includes("reddit.com") || host.includes("youtube.com")) s -= 6;
-      if (providerLower.includes("google") && path.includes("googleplay")) s += 4;
+      if (
+        path.includes("/thread/") ||
+        path.includes("/threads/") ||
+        host.includes("reddit.com") ||
+        host.includes("youtube.com")
+      )
+        s -= 6;
+      if (providerLower.includes("google") && path.includes("googleplay"))
+        s += 4;
       if (providerLower.includes("apple") && path.includes("apple")) s += 4;
       // For store-billed, demote merchant portal account pages generically (not snap-specific)
-      if (providerLower && merchantHostMatch && path.includes("accounts.")) s -= 4;
+      if (providerLower && merchantHostMatch && path.includes("accounts."))
+        s -= 4;
       // For store-billed, slightly prefer provider help over merchant cancel page when both exist
-      if (providerLower && merchantHostMatch && path.includes("cancel") && (host.startsWith("help.") || host.startsWith("support."))) {
+      if (
+        providerLower &&
+        merchantHostMatch &&
+        path.includes("cancel") &&
+        (host.startsWith("help.") || host.startsWith("support."))
+      ) {
         s -= 1;
       }
       // demote marketing
@@ -186,7 +246,8 @@ export const researchCancellationRoute = internalAction({
     // Fallback: if we only got 1, allow 2nd even if score borderline but contains googleplay for provider
     if (urlsToScrape.length === 1 && ranked[1]?.h.url) {
       const u = String(ranked[1].h.url).toLowerCase();
-      if (providerLower.includes("google") && u.includes("googleplay")) urlsToScrape.push(String(ranked[1].h.url));
+      if (providerLower.includes("google") && u.includes("googleplay"))
+        urlsToScrape.push(String(ranked[1].h.url));
     }
 
     let scrapedAny = false;
@@ -212,20 +273,37 @@ export const researchCancellationRoute = internalAction({
               });
               clearTimeout(t);
               if (!r.ok) return null;
-              const j = (await r.json()) as unknown as { markdown?: string; data?: { markdown?: string }; links?: string[]; data2?: { links?: string[] } };
-              const markdown = String((j as { markdown?: string }).markdown ?? (j as { data?: { markdown?: string } }).data?.markdown ?? "");
-              const links = ((j as unknown as { links?: string[] }).links ?? (j as unknown as { data?: { links?: string[] } }).data?.links ?? []) as string[];
+              const j = (await r.json()) as unknown as {
+                markdown?: string;
+                data?: { markdown?: string };
+                links?: string[];
+                data2?: { links?: string[] };
+              };
+              const markdown = String(
+                (j as { markdown?: string }).markdown ??
+                  (j as { data?: { markdown?: string } }).data?.markdown ??
+                  "",
+              );
+              const links = ((j as unknown as { links?: string[] }).links ??
+                (j as unknown as { data?: { links?: string[] } }).data?.links ??
+                []) as string[];
               return { url: u, markdown, links };
             } catch {
               return null;
             }
           }),
         );
-        const valid = scraped.filter((x): x is { url: string; markdown: string; links: string[] } => !!x && !!x.markdown);
+        const valid = scraped.filter(
+          (x): x is { url: string; markdown: string; links: string[] } =>
+            !!x && !!x.markdown,
+        );
         if (valid.length > 0) {
           scrapedAny = true;
           sourceUrl = valid[0].url;
-          markdownContent = valid.map((v) => v.markdown).join("\n\n").slice(0, 9000);
+          markdownContent = valid
+            .map((v) => v.markdown)
+            .join("\n\n")
+            .slice(0, 9000);
           allLinks = valid.flatMap((v) => v.links ?? []);
           // merge allUrls includes scraped links too for validation
           allUrls = [...allUrls, ...allLinks];
@@ -236,15 +314,23 @@ export const researchCancellationRoute = internalAction({
       // Fallback to snippets/markdown from search hits if scrape failed
       markdownContent = ranked
         .slice(0, 2)
-        .map((r) => String(r.h.markdown ?? r.h.description ?? r.h.snippet ?? ""))
+        .map((r) =>
+          String(r.h.markdown ?? r.h.description ?? r.h.snippet ?? ""),
+        )
         .join("\n\n")
         .slice(0, 9000);
     }
 
-    console.log(`[research] primary=${sourceUrl?.slice(0, 80)} markdownLen=${markdownContent.length} scraped=${scrapedAny}`);
+    console.log(
+      `[research] primary=${sourceUrl?.slice(0, 80)} markdownLen=${markdownContent.length} scraped=${scrapedAny}`,
+    );
 
     // Gate — generic, prevents marketing boilerplate for any merchant
-    if (!markdownContent || markdownContent.trim().length < 160 || !/cancel/i.test(markdownContent)) {
+    if (
+      !markdownContent ||
+      markdownContent.trim().length < 160 ||
+      !/cancel/i.test(markdownContent)
+    ) {
       await ctx.runMutation(internal.subscriptions.saveResearchResult, {
         subscriptionId: args.subscriptionId,
         cancellationMethod: "unknown",
@@ -276,7 +362,7 @@ RULES:
 - Missing field → null (or [] for instructions). Do NOT guess, do NOT invent URLs.
 - cancellationUrl: exact URL found in HELP CONTENT, or mailto: if email. null if not explicitly present. Never synthesize https://www.<merchant>.com/... or any generic settings/billing URL.
 - instructions: ordered steps as written in help content, plain text only, no URLs, no em dashes. If unknown → []. Do not put https:// links inside instructions. URL goes only in cancellationUrl.
-- evidenceExcerpt: exact quote from content backing the route, max 200 chars, or null. No em dashes.
+- evidenceExcerpt: exact quote from content backing the route, max 200 chars, or null. No em dashes. Minimal markdown (**bold**, *italic) wherever it aids clarity; never headings, lists, links, or images.
 - BILLING PROVIDER DISCOVERY: If Billed via is a store (Google Play / Apple App Store / Amazon), prefer provider-dashboard steps/URL (support.google.com / play.google.com / support.apple.com / amazon.com/gp/help) found in HELP CONTENT. Ignore merchant portal URLs (e.g., accounts.snapchat.com, snapchat.com/plus) for store-billed. If no provider dashboard URL is present in content, return unknown/null. Do not invent.
 - The 6 types:
   - open_web: self-serve cancel on merchant site (button: Open cancellation)
@@ -313,11 +399,38 @@ VALIDATION: Raw JSON only. All keys present. No trailing commas. No single quote
 HELP CONTENT:
 ${markdownContent.slice(0, 8000)}`;
 
-    type ProviderCfg = { id: string; key: string; endpoint: string; model: string };
+    type ProviderCfg = {
+      id: string;
+      key: string;
+      endpoint: string;
+      model: string;
+    };
     const providers: ProviderCfg[] = [];
-    if (groqKey) providers.push({ id: "groq", key: groqKey, endpoint: "https://api.groq.com/openai/v1/chat/completions", model: GROQ_EXTRACTION_MODEL });
-    if (openrouterKey) providers.push({ id: "openrouter", key: openrouterKey, endpoint: "https://openrouter.ai/api/v1/chat/completions", model: (env as unknown as { OPENROUTER_MODEL?: string }).OPENROUTER_MODEL ?? (process.env as unknown as { OPENROUTER_MODEL?: string }).OPENROUTER_MODEL ?? "openrouter/free" });
-    if (openaiKey) providers.push({ id: "openai", key: openaiKey, endpoint: "https://api.openai.com/v1/chat/completions", model: "gpt-4o-mini" });
+    if (groqKey)
+      providers.push({
+        id: "groq",
+        key: groqKey,
+        endpoint: "https://api.groq.com/openai/v1/chat/completions",
+        model: GROQ_EXTRACTION_MODEL,
+      });
+    if (openrouterKey)
+      providers.push({
+        id: "openrouter",
+        key: openrouterKey,
+        endpoint: "https://openrouter.ai/api/v1/chat/completions",
+        model:
+          (env as unknown as { OPENROUTER_MODEL?: string }).OPENROUTER_MODEL ??
+          (process.env as unknown as { OPENROUTER_MODEL?: string })
+            .OPENROUTER_MODEL ??
+          "openrouter/free",
+      });
+    if (openaiKey)
+      providers.push({
+        id: "openai",
+        key: openaiKey,
+        endpoint: "https://api.openai.com/v1/chat/completions",
+        model: "gpt-4o-mini",
+      });
     const primaryProvider = providers[0]?.id ?? "none";
 
     type LLMOutput = {
@@ -334,7 +447,9 @@ ${markdownContent.slice(0, 8000)}`;
       let usedProvider = primaryProvider;
       providerLoop: for (const prov of providers) {
         usedProvider = prov.id;
-        console.log(`[research] Trying provider ${prov.id} model ${prov.model}`);
+        console.log(
+          `[research] Trying provider ${prov.id} model ${prov.model}`,
+        );
         for (let attempt = 0; attempt < 3; attempt++) {
           const controller = new AbortController();
           const t = setTimeout(() => controller.abort(), 20000);
@@ -344,7 +459,8 @@ ${markdownContent.slice(0, 8000)}`;
               Authorization: `Bearer ${prov.key}`,
             };
             if (prov.id === "openrouter") {
-              headers["HTTP-Referer"] = process.env.SITE_URL ?? "http://localhost:3000";
+              headers["HTTP-Referer"] =
+                process.env.SITE_URL ?? "http://localhost:3000";
               headers["X-Title"] = "SubZero";
             }
             const r = await fetch(prov.endpoint, {
@@ -366,7 +482,9 @@ ${markdownContent.slice(0, 8000)}`;
               res = r;
               break providerLoop;
             }
-            lastErr = new Error(`AI extraction failed: ${r.status} ${r.statusText}`);
+            lastErr = new Error(
+              `AI extraction failed: ${r.status} ${r.statusText}`,
+            );
             // Retry only on 429 or 5xx
             if ((r.status === 429 || r.status >= 500) && attempt < 2) {
               const backoff = 1500 * (attempt + 1) + Math.random() * 500;
@@ -374,7 +492,9 @@ ${markdownContent.slice(0, 8000)}`;
               continue;
             }
             if (r.status === 429 && attempt === 2) {
-              console.log(`[research] Provider ${prov.id} 429 exhausted, trying next`);
+              console.log(
+                `[research] Provider ${prov.id} 429 exhausted, trying next`,
+              );
               break;
             }
             throw lastErr;
@@ -382,14 +502,17 @@ ${markdownContent.slice(0, 8000)}`;
             clearTimeout(t);
             lastErr = e;
             const msg = String(e);
-            const isRateLimit = msg.includes("429") || msg.includes("Rate limit");
+            const isRateLimit =
+              msg.includes("429") || msg.includes("Rate limit");
             if (isRateLimit && attempt < 2) {
               const backoff = 1500 * (attempt + 1) + Math.random() * 500;
               await new Promise((rr) => setTimeout(rr, backoff));
               continue;
             }
             if (isRateLimit && attempt === 2) {
-              console.log(`[research] Provider ${prov.id} rate limit, falling back`);
+              console.log(
+                `[research] Provider ${prov.id} rate limit, falling back`,
+              );
               break;
             }
             if (attempt === 2) throw e;
@@ -401,14 +524,19 @@ ${markdownContent.slice(0, 8000)}`;
           }
         }
         if (!res && lastErr && String(lastErr).includes("429")) {
-          console.log(`[research] Falling back from ${prov.id} to next provider`);
+          console.log(
+            `[research] Falling back from ${prov.id} to next provider`,
+          );
           continue;
         }
         if (!res) break;
       }
-      if (!res) throw lastErr ?? new Error("AI extraction failed after retries");
+      if (!res)
+        throw lastErr ?? new Error("AI extraction failed after retries");
 
-      const data = (await res.json()) as unknown as { choices?: Array<{ message?: { content?: string } }> };
+      const data = (await res.json()) as unknown as {
+        choices?: Array<{ message?: { content?: string } }>;
+      };
       const content = data.choices?.[0]?.message?.content ?? "{}";
       const raw = JSON.parse(content) as unknown;
       if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
@@ -438,11 +566,30 @@ ${markdownContent.slice(0, 8000)}`;
 
     // Validate + normalize LLM output — generic, no hardcoded host list
     // At this point parsed is guaranteed non-null object
-    const validMethods = new Set(["open_web", "open_provider", "send_email", "contact_support", "manual", "unknown"]);
-    let cancellationMethod = typeof parsed!.cancellationMethod === "string" ? parsed!.cancellationMethod.toLowerCase().replace("-", "_") : "unknown";
+    const validMethods = new Set([
+      "open_web",
+      "open_provider",
+      "send_email",
+      "contact_support",
+      "manual",
+      "unknown",
+    ]);
+    let cancellationMethod =
+      typeof parsed!.cancellationMethod === "string"
+        ? parsed!.cancellationMethod.toLowerCase().replace("-", "_")
+        : "unknown";
     if (!validMethods.has(cancellationMethod)) cancellationMethod = "unknown";
-    let cancellationUrl: string | undefined = typeof parsed!.cancellationUrl === "string" && parsed!.cancellationUrl.trim() ? parsed!.cancellationUrl.trim() : undefined;
-    if (cancellationUrl && !cancellationUrl.startsWith("http") && !cancellationUrl.startsWith("mailto:")) cancellationUrl = undefined;
+    let cancellationUrl: string | undefined =
+      typeof parsed!.cancellationUrl === "string" &&
+      parsed!.cancellationUrl.trim()
+        ? parsed!.cancellationUrl.trim()
+        : undefined;
+    if (
+      cancellationUrl &&
+      !cancellationUrl.startsWith("http") &&
+      !cancellationUrl.startsWith("mailto:")
+    )
+      cancellationUrl = undefined;
 
     // Generic verbatim check — URL must appear verbatim in scraped markdown/links/search URLs
     // Use boundary-aware check: exact match, not prefix of longer URL
@@ -452,7 +599,8 @@ ${markdownContent.slice(0, 8000)}`;
       const after = content[idx + url.length];
       // If URL is prefix of longer URL, next char would be alphanumeric or - _ . ~ etc without delimiter
       // Allow delimiter: whitespace, quote, paren, bracket, < >, newline, end
-      if (after && /[A-Za-z0-9\-_~@:%]/.test(after) && url.endsWith(after)) return false;
+      if (after && /[A-Za-z0-9\-_~@:%]/.test(after) && url.endsWith(after))
+        return false;
       // Also handle case where url is inside longer query string still verbatim, so just need exact occurrence
       return true;
     }
@@ -461,7 +609,9 @@ ${markdownContent.slice(0, 8000)}`;
       const inAllUrls = allUrls.some((u) => u === cancellationUrl);
       const inAllLinks = allLinks.some((l) => l === cancellationUrl);
       if (!inMarkdown && !inAllUrls && !inAllLinks) {
-        console.log(`[research] verbatim fail: url=${cancellationUrl} not in markdown/links`);
+        console.log(
+          `[research] verbatim fail: url=${cancellationUrl} not in markdown/links`,
+        );
         cancellationUrl = undefined;
         if (cancellationMethod !== "unknown") cancellationMethod = "unknown";
       }
@@ -493,21 +643,39 @@ ${markdownContent.slice(0, 8000)}`;
       ? (parsed!.instructions as unknown[])
           .map((s) => String(s).trim())
           .filter(Boolean)
-          .map((s: string) => s.replace(/https?:\/\/\S+/g, "").replace(/\s{2,}/g, " ").replace(/ — /g, ". ").replace(/—/g, " ").trim())
+          .map((s: string) =>
+            s
+              .replace(/https?:\/\/\S+/g, "")
+              .replace(/\s{2,}/g, " ")
+              .replace(/ — /g, ". ")
+              .replace(/—/g, " ")
+              .trim(),
+          )
           .filter(Boolean)
           .slice(0, 12)
       : [];
     const evidenceExcerpt: string | undefined =
-      typeof parsed!.evidenceExcerpt === "string" && parsed!.evidenceExcerpt.trim()
-        ? parsed!.evidenceExcerpt.trim().slice(0, 200).replace(/ — /g, ". ").replace(/—/g, " ")
+      typeof parsed!.evidenceExcerpt === "string" &&
+      parsed!.evidenceExcerpt.trim()
+        ? parsed!.evidenceExcerpt
+            .trim()
+            .slice(0, 200)
+            .replace(/ — /g, ". ")
+            .replace(/—/g, " ")
         : undefined;
 
     // If LLM said unknown or gave no steps, force unknown; for open_* require URL per plan
     if (cancellationMethod === "unknown" || instructions.length === 0) {
-      if (cancellationMethod !== "unknown" && instructions.length === 0) cancellationMethod = "unknown";
+      if (cancellationMethod !== "unknown" && instructions.length === 0)
+        cancellationMethod = "unknown";
       if (cancellationMethod === "unknown") cancellationUrl = undefined;
     }
-    if ((cancellationMethod === "open_web" || cancellationMethod === "open_provider" || cancellationMethod === "send_email") && !cancellationUrl) {
+    if (
+      (cancellationMethod === "open_web" ||
+        cancellationMethod === "open_provider" ||
+        cancellationMethod === "send_email") &&
+      !cancellationUrl
+    ) {
       // Stricter: open_* and send_email require a verifiable URL/mailto
       cancellationMethod = "unknown";
     }
@@ -528,14 +696,22 @@ ${markdownContent.slice(0, 8000)}`;
 export const retryFailedResearch = internalAction({
   args: {},
   handler: async (ctx) => {
-    const failed: any[] = await ctx.runQuery(internal.subscriptions.getFailedForRetry);
+    const failed: any[] = await ctx.runQuery(
+      internal.subscriptions.getFailedForRetry,
+    );
     let retried = 0;
     for (const sub of failed.slice(0, 5)) {
       try {
-        await ctx.runMutation(internal.subscriptions.markResearchPending, { id: sub._id });
-        await ctx.scheduler.runAfter(0, internal.research.researchCancellationRoute, {
-          subscriptionId: sub._id,
+        await ctx.runMutation(internal.subscriptions.markResearchPending, {
+          id: sub._id,
         });
+        await ctx.scheduler.runAfter(
+          0,
+          internal.research.researchCancellationRoute,
+          {
+            subscriptionId: sub._id,
+          },
+        );
         retried++;
       } catch {}
     }
