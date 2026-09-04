@@ -35,7 +35,9 @@ export function openExternalUrl(url: string, provider?: string | null) {
         const intentUrl = `intent://${u.host}${u.pathname}${u.search}#Intent;package=com.android.vending;scheme=https;end`;
         window.location.href = intentUrl;
         setTimeout(() => {
-          try { window.open(url, "_blank", "noopener,noreferrer"); } catch {}
+          try {
+            window.open(url, "_blank", "noopener,noreferrer");
+          } catch {}
         }, 600);
         return;
       }
@@ -77,7 +79,6 @@ export function getCancellationCTA(sub: SubLike): CancellationCTA {
       label: `Open ${provider}`,
       href: url,
       variant: "default",
-      helper: `Cancel in ${provider}`,
     };
   }
   // Web method with provider billing but discovered route is open_web — show but note provider
@@ -99,7 +100,13 @@ export function getCancellationCTA(sub: SubLike): CancellationCTA {
     };
   }
   if (m === "open_web") {
-    if (url) return { label: "Open cancellation", href: url, variant: "default", helper: `Cancel on ${sub.merchant}` };
+    if (url)
+      return {
+        label: "Open cancellation",
+        href: url,
+        variant: "default",
+        helper: `Cancel on ${sub.merchant}`,
+      };
     return {
       label: "No verified route",
       variant: "outline",
@@ -116,16 +123,34 @@ export function getCancellationCTA(sub: SubLike): CancellationCTA {
         helper: "No verified provider link",
       };
     }
-    return { label: `Open ${provider ?? "provider"}`, href: url, variant: "default", helper: "Cancel where you were billed" };
+    return {
+      label: `Open ${provider ?? "provider"}`,
+      href: url,
+      variant: "default",
+      helper: "Cancel where you were billed",
+    };
   }
   if (m === "send_email") {
-    return { label: "Review & send", variant: "default", helper: "Sent via SubZero" };
+    return {
+      label: "Review & send",
+      variant: "default",
+      helper: "Sent via SubZero",
+    };
   }
   if (m === "contact_support") {
-    return { label: "Contact support", href: url, variant: "default", helper: "Requires support request" };
+    return {
+      label: "Contact support",
+      href: url,
+      variant: "default",
+      helper: "Requires support request",
+    };
   }
   if (m === "manual") {
-    return { label: "View steps", variant: "outline", helper: "Manual steps below" };
+    return {
+      label: "View steps",
+      variant: "outline",
+      helper: "Manual steps below",
+    };
   }
   return {
     label: "No verified route",

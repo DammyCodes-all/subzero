@@ -94,9 +94,10 @@ function NavLink({
 export function Sidebar({ collapsed, onToggle }: SidebarProps) {
   const pathname = usePathname();
 
-  const isActive = (href: string, exact: boolean) => {
-    if (exact) return pathname === href;
-    return pathname.startsWith(href);
+  const isActive = (item: NavItem) => {
+    if (item.exact) return pathname === item.href;
+    if (pathname.startsWith(item.href)) return true;
+    return item.aliases?.some((a) => pathname.startsWith(a)) ?? false;
   };
 
   return (
@@ -197,7 +198,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
                 key={item.href}
                 item={item}
                 collapsed={collapsed}
-                active={isActive(item.href, item.exact)}
+                active={isActive(item)}
               />
             ))}
           </nav>

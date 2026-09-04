@@ -16,6 +16,7 @@ import { getCancellationCTA, openExternalUrl } from "@/lib/cancellation";
 import {
   formatPrice,
   formatRenewalDate,
+  frictionLabel,
   needsAttention,
   urgencyLabel,
 } from "@/lib/format";
@@ -122,19 +123,15 @@ export function SubscriptionDetailView() {
             </span>
           </p>
           <p className="mt-2 flex flex-wrap items-center gap-1.5 text-xs leading-none text-muted-foreground">
-            <span>Renews {formatRenewalDate(sub.nextRenewalAt)}</span>
+            <span>
+              {sub.trialEndsAt !== undefined && sub.trialEndsAt > Date.now()
+                ? `Trial ends ${formatRenewalDate(sub.trialEndsAt)}`
+                : `Renews ${formatRenewalDate(sub.nextRenewalAt)}`}
+            </span>
             {sub.cancellationDifficulty && (
               <>
                 <span className="text-muted-foreground">·</span>
-                <span>
-                  {sub.cancellationDifficulty === "very_high"
-                    ? "Very high friction"
-                    : sub.cancellationDifficulty === "high"
-                      ? "High friction"
-                      : sub.cancellationDifficulty === "medium"
-                        ? "Medium friction"
-                        : "Low friction"}
-                </span>
+                <span>{frictionLabel(sub.cancellationDifficulty)}</span>
               </>
             )}
             {sub.billingProvider && (

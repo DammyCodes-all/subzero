@@ -18,6 +18,7 @@ export const NAV_ITEMS: NavItem[] = [
     href: "/dashboard/subscriptions",
     icon: Invoice02Icon as unknown as NavItem["icon"],
     exact: false,
+    aliases: ["/subscriptions"],
   },
   {
     label: "Connections",

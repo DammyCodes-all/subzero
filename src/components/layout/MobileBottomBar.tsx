@@ -9,9 +9,10 @@ import { NAV_ITEMS } from "./navigation";
 export function MobileBottomBar() {
   const pathname = usePathname();
 
-  const isActive = (href: string, exact: boolean) => {
-    if (exact) return pathname === href;
-    return pathname.startsWith(href);
+  const isActive = (item: (typeof NAV_ITEMS)[number]) => {
+    if (item.exact) return pathname === item.href;
+    if (pathname.startsWith(item.href)) return true;
+    return item.aliases?.some((a) => pathname.startsWith(a)) ?? false;
   };
 
   return (
@@ -22,7 +23,7 @@ export function MobileBottomBar() {
     >
       <div className="grid grid-cols-4">
         {NAV_ITEMS.map((item) => {
-          const active = isActive(item.href, item.exact);
+          const active = isActive(item);
           return (
             <Link
               key={item.href}
