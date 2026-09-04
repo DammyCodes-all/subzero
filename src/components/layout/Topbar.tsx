@@ -1,17 +1,22 @@
 "use client";
 
-import { SubzeroMark } from "@/components/brand/SubzeroLogo";
+import Link from "next/link";
+import { SubzeroWithWordmark } from "@/components/brand/SubzeroLogo";
 import { ConnectGmailButton } from "@/components/ConnectGmailButton";
 import { UserMenu } from "@/components/UserMenu";
 
 export function Topbar() {
   return (
     <header className="sticky top-0 z-30 flex h-16 w-full items-center justify-between bg-background/80 px-4 backdrop-blur-md md:px-6">
-      {/* Left — brand mark on mobile (nav lives in bottom bar) */}
+      {/* Left — wordmark on mobile (nav lives in bottom bar) */}
       <div className="flex items-center gap-3">
-        <span className="md:hidden" aria-hidden="true">
-          <SubzeroMark size={24} className="h-6 w-6" />
-        </span>
+        <Link
+          href="/dashboard"
+          aria-label="SubZero dashboard"
+          className="md:hidden"
+        >
+          <SubzeroWithWordmark className="h-6 w-auto" width={120} height={27} />
+        </Link>
       </div>
 
       {/* Right section — CTA + account */}
