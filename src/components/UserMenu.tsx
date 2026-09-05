@@ -10,7 +10,7 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import { useConvexAuth, useQuery } from "convex/react";
 import Image from "next/image";
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Popover,
   PopoverPopup,
@@ -47,6 +47,11 @@ export function UserMenu() {
   const name = viewer?.name ?? null;
   const email = viewer?.email ?? null;
   const initial = initialOf(name, email);
+  // New account (wipe + re-sign-in) reuses this mounted instance — a stale
+  // failure flag would hide the new avatar forever. Reset on identity change.
+  useEffect(() => {
+    setImgFailed(false);
+  }, [viewer?._id, image]);
 
   const gmail = connections?.find(
     (c) => c.provider === "google" && c.status === "connected",
@@ -65,11 +70,13 @@ export function UserMenu() {
       >
         {showImage ? (
           <Image
+            key={image}
             src={image as string}
             alt=""
             width={32}
             height={32}
             unoptimized
+            referrerPolicy="no-referrer"
             onError={() => setImgFailed(true)}
             className="h-full w-full object-cover"
           />
@@ -88,11 +95,13 @@ export function UserMenu() {
               >
                 {showImage ? (
                   <Image
+                    key={image}
                     src={image as string}
                     alt=""
                     width={36}
                     height={36}
                     unoptimized
+                    referrerPolicy="no-referrer"
                     onError={() => setImgFailed(true)}
                     className="h-full w-full object-cover"
                   />
