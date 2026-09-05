@@ -1,13 +1,18 @@
 "use client";
 
-import { ArrowRight02Icon } from "@hugeicons/core-free-icons";
+import {
+  AiMagicIcon,
+  ArrowRight02Icon,
+  Cancel01Icon,
+} from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useQuery } from "convex/react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { sileo } from "sileo";
 import { ActionCard } from "@/components/ActionCard";
+import { BlackHoleScan } from "@/components/BlackHoleScan";
 import { CompactAttentionRow } from "@/components/CompactAttentionRow";
 import { DashboardGreeting } from "@/components/dashboard/DashboardGreeting";
 import {
@@ -30,6 +35,7 @@ export function DashboardView() {
   const all = useQuery(api.subscriptions.list);
   const gmailStatus = useQuery(api.gmail.getGmailStatus);
   const viewer = useQuery(api.users.getViewer);
+  const [previewFirstScan, setPreviewFirstScan] = useState(false);
 
   const isLoading = attention === undefined || all === undefined;
 
@@ -101,8 +107,58 @@ export function DashboardView() {
   const firstName =
     viewer?.name?.split(" ")[0] ?? viewer?.email?.split("@")[0] ?? null;
 
+  if (previewFirstScan) {
+    return (
+      <div className="w-full space-y-8">
+        <div className="flex justify-end">
+          <button
+            type="button"
+            onClick={() => setPreviewFirstScan(false)}
+            className="inline-flex items-center gap-1.5 rounded-full border border-white/[0.08] bg-secondary px-3 py-1.5 font-mono text-[11px] text-muted-foreground transition-colors hover:text-foreground"
+          >
+            <HugeiconsIcon
+              icon={Cancel01Icon as unknown as Parameters<typeof HugeiconsIcon>[0]["icon"]}
+              size={12}
+              strokeWidth={1.8}
+              color="currentColor"
+            />
+            Exit preview
+          </button>
+        </div>
+        <div className="flex min-h-[60vh] flex-col justify-center space-y-8">
+          <DashboardGreeting name={firstName} />
+          <div className="mx-auto max-w-2xl px-6 py-2 text-center sm:py-4">
+            <BlackHoleScan
+              size={260}
+              isScanning
+              label="Scanning your Gmail…"
+              sublabel={gmailStatus?.accountEmail ?? undefined}
+            />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="w-full space-y-8">
+      <div className="flex justify-end">
+        <button
+          type="button"
+          onClick={() => setPreviewFirstScan(true)}
+          className="inline-flex items-center gap-1.5 rounded-full border border-white/[0.06] bg-card px-3 py-1.5 font-mono text-[11px] text-muted-foreground transition-colors hover:border-primary/40 hover:text-foreground"
+          title="Preview the first-scan black-hole state"
+        >
+          <HugeiconsIcon
+            icon={AiMagicIcon as unknown as Parameters<typeof HugeiconsIcon>[0]["icon"]}
+            size={12}
+            strokeWidth={1.8}
+            color="currentColor"
+            className="text-primary"
+          />
+          Preview first scan
+        </button>
+      </div>
       <ProcessingRows />
       {gmailStatus?.needsReauth && !gmailStatus?.connected && (
         <div className="flex items-center justify-between gap-3 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-[12px]">

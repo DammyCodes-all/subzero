@@ -163,7 +163,7 @@ function AuthenticatedEmptyState() {
     return (
       <div className="mx-auto max-w-2xl px-6 py-2 text-center sm:py-4">
         <BlackHoleScan
-          size={180}
+          size={260}
           isScanning
           label="Scanning your Gmail…"
           sublabel={status?.accountEmail ?? undefined}
