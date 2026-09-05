@@ -7,6 +7,7 @@ import { useAction, useConvexAuth, useMutation, useQuery } from "convex/react";
 import Image from "next/image";
 import { useEffect, useState } from "react";
 import { sileo } from "sileo";
+import { BlackHoleScan } from "@/components/BlackHoleScan";
 import { ConnectGmailButton } from "@/components/ConnectGmailButton";
 import { Button } from "@/components/ui/button";
 import {
@@ -156,6 +157,20 @@ function AuthenticatedEmptyState() {
   }, [status, autoTried, scan]);
 
   const isConnected = !!status?.connected;
+  const isFirstSync = scanning && isConnected && !status?.lastGmailScanAt;
+
+  if (isFirstSync) {
+    return (
+      <div className="mx-auto max-w-2xl px-6 py-2 text-center sm:py-4">
+        <BlackHoleScan
+          size={180}
+          isScanning
+          label="Scanning your Gmail…"
+          sublabel={status?.accountEmail ?? undefined}
+        />
+      </div>
+    );
+  }
 
   const handleScan = async () => {
     setScanning(true);
