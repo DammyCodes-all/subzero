@@ -2,6 +2,7 @@
 
 import { Cancel01Icon, Menu01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
+import { useConvexAuth } from "convex/react";
 import Link from "next/link";
 import { useState } from "react";
 import { SubzeroWithWordmark } from "@/components/brand/SubzeroLogo";
@@ -15,6 +16,7 @@ const NAV_LINKS = [
 
 export function MarketingHeader() {
   const [open, setOpen] = useState(false);
+  const { isAuthenticated, isLoading } = useConvexAuth();
 
   return (
     <header className="sticky top-0 z-50 border-b border-border bg-background/80 backdrop-blur-md">
@@ -40,14 +42,27 @@ export function MarketingHeader() {
         </nav>
 
         <div className="hidden items-center gap-2 md:flex">
-          <Link href="/auth?mode=login">
-            <Button variant="ghost" size="sm">
-              Sign in
-            </Button>
-          </Link>
-          <Link href="/auth?mode=signup">
-            <Button size="sm">Get started</Button>
-          </Link>
+          {isLoading ? (
+            <span
+              aria-hidden="true"
+              className="h-7 w-36 animate-pulse rounded-lg bg-border/60"
+            />
+          ) : isAuthenticated ? (
+            <Link href="/dashboard">
+              <Button size="sm">Go to dashboard</Button>
+            </Link>
+          ) : (
+            <>
+              <Link href="/auth?mode=login">
+                <Button variant="ghost" size="sm">
+                  Sign in
+                </Button>
+              </Link>
+              <Link href="/auth?mode=signup">
+                <Button size="sm">Get started</Button>
+              </Link>
+            </>
+          )}
         </div>
 
         <button
@@ -82,24 +97,43 @@ export function MarketingHeader() {
               </Link>
             ))}
             <div className="mt-3 flex gap-2 border-t border-border pt-3">
-              <Link
-                href="/auth?mode=login"
-                onClick={() => setOpen(false)}
-                className="flex-1"
-              >
-                <Button variant="outline" size="sm" className="w-full">
-                  Sign in
-                </Button>
-              </Link>
-              <Link
-                href="/auth?mode=signup"
-                onClick={() => setOpen(false)}
-                className="flex-1"
-              >
-                <Button size="sm" className="w-full">
-                  Get started
-                </Button>
-              </Link>
+              {isLoading ? (
+                <span
+                  aria-hidden="true"
+                  className="h-7 w-full animate-pulse rounded-lg bg-border/60"
+                />
+              ) : isAuthenticated ? (
+                <Link
+                  href="/dashboard"
+                  onClick={() => setOpen(false)}
+                  className="flex-1"
+                >
+                  <Button size="sm" className="w-full">
+                    Go to dashboard
+                  </Button>
+                </Link>
+              ) : (
+                <>
+                  <Link
+                    href="/auth?mode=login"
+                    onClick={() => setOpen(false)}
+                    className="flex-1"
+                  >
+                    <Button variant="outline" size="sm" className="w-full">
+                      Sign in
+                    </Button>
+                  </Link>
+                  <Link
+                    href="/auth?mode=signup"
+                    onClick={() => setOpen(false)}
+                    className="flex-1"
+                  >
+                    <Button size="sm" className="w-full">
+                      Get started
+                    </Button>
+                  </Link>
+                </>
+              )}
             </div>
           </div>
         </nav>
