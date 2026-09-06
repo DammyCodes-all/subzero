@@ -15,6 +15,7 @@ import { ConnectGmailButton } from "@/components/ConnectGmailButton";
 import { ForwardingCard } from "@/components/ForwardingCard";
 import { ConnectionsAgentMailSkeleton } from "@/components/Skeleton";
 import { Button } from "@/components/ui/button";
+import { useConnectGmail } from "@/hooks/useConnectGmail";
 import { api } from "../../../convex/_generated/api";
 
 export function ConnectionsView() {
@@ -22,9 +23,11 @@ export function ConnectionsView() {
   const inbox = useQuery(api.agentmail.getInbox);
   const scan = useAction(api.gmailActions.scanGmail);
   const disconnect = useMutation(api.gmail.disconnectGmail);
+  const connectGmail = useConnectGmail();
 
   const [copied, setCopied] = useState(false);
   const [scanningId, setScanningId] = useState<string | null>(null);
+  const [disconnectingId, setDisconnectingId] = useState<string | null>(null);
 
   const handleCopyAlias = async () => {
     if (!inbox) return;
@@ -67,7 +70,39 @@ export function ConnectionsView() {
     }
   };
 
-  const googleConns = connections?.filter((c) => c.provider === "google") ?? [];
+  const handleDisconnect = async (connId: string, accountEmail?: string) => {
+    setDisconnectingId(connId);
+    try {
+      const res = await disconnect({
+        connectionId: connId as unknown as Parameters<typeof disconnect>[0]["connectionId"],
+      });
+      if ((res as { ok: boolean } | null)?.ok === false) {
+        sileo.error({
+          title: "Couldn't disconnect",
+          description: "That connection no longer exists.",
+        });
+      } else {
+        sileo.success({
+          title: "Gmail disconnected",
+          description: accountEmail
+            ? `${accountEmail} will no longer sync.`
+            : "That inbox will no longer sync.",
+        });
+      }
+    } catch (e: unknown) {
+      sileo.error({
+        title: "Couldn't disconnect",
+        description:
+          e instanceof Error ? e.message : "Something went wrong. Try again.",
+      });
+    } finally {
+      setDisconnectingId(null);
+    }
+  };
+
+  // Show all Google inboxes — disconnected ones stay visible with a Reconnect action.
+  const googleConns =
+    connections?.filter((c) => c.provider === "google") ?? [];
 
   return (
     <div className="space-y-6">
@@ -162,85 +197,129 @@ export function ConnectionsView() {
           )}
 
           {/* Google Connections Rows */}
-          {googleConns.map((conn) => (
-            <div
-              key={conn._id}
-              className="flex flex-col gap-3 rounded-lg border border-border/80 bg-background/50 p-4 sm:flex-row sm:items-center sm:justify-between"
-            >
-              <div className="flex items-center gap-3">
-                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-emerald-500/10 text-emerald-400">
-                  <HugeiconsIcon
-                    icon={
-                      CheckmarkCircle01Icon as unknown as Parameters<
-                        typeof HugeiconsIcon
-                      >[0]["icon"]
+          {googleConns.map((conn) => {
+            const isDisconnecting = disconnectingId === conn._id;
+            const isDisconnected = conn.status !== "connected";
+            return (
+              <div
+                key={conn._id}
+                className="flex flex-col gap-3 rounded-lg border border-border/80 bg-background/50 p-4 sm:flex-row sm:items-center sm:justify-between"
+              >
+                <div className="flex items-center gap-3">
+                  <div
+                    className={
+                      isDisconnected
+                        ? "flex h-8 w-8 items-center justify-center rounded-full bg-muted text-muted-foreground"
+                        : "flex h-8 w-8 items-center justify-center rounded-full bg-emerald-500/10 text-emerald-400"
                     }
-                    size={16}
-                    strokeWidth={1.8}
-                    color="currentColor"
-                  />
+                  >
+                    <HugeiconsIcon
+                      icon={
+                        CheckmarkCircle01Icon as unknown as Parameters<
+                          typeof HugeiconsIcon
+                        >[0]["icon"]
+                      }
+                      size={16}
+                      strokeWidth={1.8}
+                      color="currentColor"
+                    />
+                  </div>
+                  <div>
+                    <p className="font-mono text-sm font-medium text-foreground">
+                      {conn.accountEmail ?? "Connected Gmail"}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {isDisconnected ? (
+                        "Disconnected · Reconnect to resume sync"
+                      ) : (
+                        <>
+                          Gmail API Sync ·{" "}
+                          {conn.lastGmailScanAt
+                            ? `Last scan ${new Date(conn.lastGmailScanAt).toLocaleDateString()}`
+                            : "Never scanned"}
+                        </>
+                      )}
+                    </p>
+                  </div>
                 </div>
-                <div>
-                  <p className="font-mono text-sm font-medium text-foreground">
-                    {conn.accountEmail ?? "Connected Gmail"}
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    Gmail API Sync ·{" "}
-                    {conn.lastGmailScanAt
-                      ? `Last scan ${new Date(conn.lastGmailScanAt).toLocaleDateString()}`
-                      : "Never scanned"}
-                  </p>
-                </div>
-              </div>
 
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={scanningId === conn._id}
-                  onClick={() => handleScan(conn._id)}
-                  className="h-8 gap-1.5 text-xs font-medium"
-                >
-                  {scanningId === conn._id ? (
-                    <>
-                      <HugeiconsIcon
-                        icon={
-                          Loading03Icon as unknown as Parameters<
-                            typeof HugeiconsIcon
-                          >[0]["icon"]
-                        }
-                        size={14}
-                        color="currentColor"
-                        className="animate-spin"
-                      />
-                      Scanning...
-                    </>
+                <div className="flex items-center gap-2">
+                  {isDisconnected ? (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => void connectGmail()}
+                      className="h-8 gap-1.5 text-xs font-medium"
+                    >
+                      Reconnect
+                    </Button>
                   ) : (
                     <>
-                      <HugeiconsIcon
-                        icon={
-                          MailSearch01Icon as unknown as Parameters<
-                            typeof HugeiconsIcon
-                          >[0]["icon"]
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={scanningId === conn._id}
+                        onClick={() => handleScan(conn._id)}
+                        className="h-8 gap-1.5 text-xs font-medium"
+                      >
+                        {scanningId === conn._id ? (
+                          <>
+                            <HugeiconsIcon
+                              icon={
+                                Loading03Icon as unknown as Parameters<
+                                  typeof HugeiconsIcon
+                                >[0]["icon"]
+                              }
+                              size={14}
+                              color="currentColor"
+                              className="animate-spin"
+                            />
+                            Scanning...
+                          </>
+                        ) : (
+                          <>
+                            <HugeiconsIcon
+                              icon={
+                                MailSearch01Icon as unknown as Parameters<
+                                  typeof HugeiconsIcon
+                                >[0]["icon"]
+                              }
+                              size={14}
+                              color="currentColor"
+                            />
+                            Scan This Inbox
+                          </>
+                        )}
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        disabled={isDisconnecting}
+                        onClick={() =>
+                          void handleDisconnect(conn._id, conn.accountEmail)
                         }
-                        size={14}
-                        color="currentColor"
-                      />
-                      Scan This Inbox
+                        className="h-8 gap-1.5 text-xs text-muted-foreground hover:text-destructive"
+                      >
+                        {isDisconnecting && (
+                          <HugeiconsIcon
+                            icon={
+                              Loading03Icon as unknown as Parameters<
+                                typeof HugeiconsIcon
+                              >[0]["icon"]
+                            }
+                            size={14}
+                            color="currentColor"
+                            className="animate-spin"
+                          />
+                        )}
+                        {isDisconnecting ? "Disconnecting..." : "Disconnect"}
+                      </Button>
                     </>
                   )}
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => void disconnect({ connectionId: conn._id })}
-                  className="h-8 text-xs text-muted-foreground hover:text-destructive"
-                >
-                  Disconnect
-                </Button>
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
 
           {googleConns.length === 0 && (
             <div className="rounded-lg border border-dashed border-border/60 p-6 text-center">
