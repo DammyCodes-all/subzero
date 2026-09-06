@@ -74,6 +74,12 @@ export function MarketingFooter() {
           </p>
         </div>
       </div>
+
+      <div aria-hidden="true" className="overflow-hidden select-none">
+        <p className="-mb-[0.48em] text-center font-heading text-[20vw] leading-none font-bold tracking-tight whitespace-nowrap">
+          Sub<span className="text-primary">Z</span>ero
+        </p>
+      </div>
     </footer>
   );
 }
