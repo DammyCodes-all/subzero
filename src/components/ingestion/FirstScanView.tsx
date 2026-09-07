@@ -25,18 +25,19 @@ function useResponsiveScanSize() {
 export function FirstScanView({
   email,
   foundCount,
+  scanning = true,
+  error = null,
+  onRetry,
 }: {
   email?: string;
   foundCount: number;
+  scanning?: boolean;
+  error?: string | null;
+  onRetry?: () => void;
 }) {
   const size = useResponsiveScanSize();
   return (
-    <div
-      className="mx-auto max-w-2xl px-6 py-2 text-center sm:py-4"
-      role="status"
-      aria-live="polite"
-      aria-label="Scanning your Gmail for subscriptions"
-    >
+    <div className="mx-auto max-w-2xl px-6 py-2 text-center sm:py-4">
       <div className="relative flex justify-center">
         <div
           className="pointer-events-none absolute left-1/2 top-1/2 -z-10 -translate-x-1/2 -translate-y-1/2 bg-[radial-gradient(ellipse_at_center,_rgba(249,247,242,0.04)_0%,_transparent_68%)] blur-[16px]"
@@ -44,12 +45,12 @@ export function FirstScanView({
         />
         <BlackHoleScan
           size={size}
-          isScanning
+          isScanning={scanning}
           label="Scanning your Gmail…"
           sublabel={email}
         />
       </div>
-      <div className="mt-4 flex flex-col items-center gap-1.5">
+      <div className="mt-4 flex flex-col items-center gap-1.5" role="status">
         <ShimmeringText
           text="Looking for subscription receipts and trials…"
           duration={1.8}
@@ -65,6 +66,22 @@ export function FirstScanView({
           shimmeringColor="var(--muted-foreground)"
           className="font-mono text-xs font-medium"
         />
+        {error ? (
+          <div className="mt-2 flex flex-col items-center gap-2">
+            <p className="max-w-sm text-xs leading-relaxed text-muted-foreground">
+              {error}
+            </p>
+            {onRetry ? (
+              <button
+                type="button"
+                onClick={onRetry}
+                className="inline-flex items-center gap-1.5 rounded-full border border-white/[0.08] bg-secondary px-3 py-1.5 font-mono text-[11px] text-muted-foreground transition-colors hover:text-foreground"
+              >
+                Try scan again
+              </button>
+            ) : null}
+          </div>
+        ) : null}
       </div>
     </div>
   );

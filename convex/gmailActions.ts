@@ -394,7 +394,7 @@ export const scanForUser = internalAction({
         }
       } catch (e: any) {
         const msg = String(e?.message ?? e);
-        if (/400|401|403|invalid_grant|revoked|expired/i.test(msg)) {
+        if (isAuthError(msg)) {
           try {
             await ctx.runMutation(internal.gmail.markTokenInvalid, {
               connId: conn._id,
@@ -402,6 +402,8 @@ export const scanForUser = internalAction({
           } catch {}
         }
       }
+    }
+    return { scanned, created };
   },
 });
 
