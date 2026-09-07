@@ -29,6 +29,7 @@ export function ConnectionsView() {
   );
 
   const handleScan = async (connId: string) => {
+    if (scanningId !== null) return;
     setScanningId(connId);
     try {
       const res = await scan({ connectionId: connId as never });
@@ -158,6 +159,7 @@ export function ConnectionsView() {
                   key={conn._id}
                   conn={conn}
                   scanning={scanningId === conn._id}
+                  scanBusy={scanningId !== null}
                   lastResult={lastResults[conn._id] ?? null}
                   disconnecting={disconnectingId === conn._id}
                   onScan={() => void handleScan(conn._id)}

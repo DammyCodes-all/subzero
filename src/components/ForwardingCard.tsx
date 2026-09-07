@@ -2,7 +2,7 @@
 
 import { HugeiconsIcon } from "@hugeicons/react";
 import { CheckmarkCircle01Icon, Copy01Icon } from "@hugeicons/core-free-icons";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { Button } from "@/components/ui/button";
 import { ForwardingCardSkeleton } from "@/components/Skeleton";
@@ -12,11 +12,18 @@ export function ForwardingCard() {
   const inbox = useQuery(api.agentmail.getInbox);
   const getOrCreate = useMutation(api.agentmail.getOrCreateInbox);
   const [copied, setCopied] = useState(false);
+  const copiedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Ensure the DB connection row exists so resolveUserByInbox can route.
   useEffect(() => {
     if (inbox === null) void getOrCreate({});
   }, [inbox, getOrCreate]);
+
+  useEffect(() => {
+    return () => {
+      if (copiedTimer.current) clearTimeout(copiedTimer.current);
+    };
+  }, []);
 
   if (inbox === undefined) {
     return <ForwardingCardSkeleton />;
@@ -35,13 +42,32 @@ export function ForwardingCard() {
 
   const displayInbox = inbox;
 
+  function flagCopied() {
+    setCopied(true);
+    if (copiedTimer.current) clearTimeout(copiedTimer.current);
+    copiedTimer.current = setTimeout(() => setCopied(false), 2000);
+  }
+
   async function handleCopy() {
     try {
       await navigator.clipboard.writeText(displayInbox);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      flagCopied();
     } catch {
-      setCopied(false);
+      // Clipboard API unavailable (permissions, insecure context). Fall back.
+      try {
+        const ta = document.createElement("textarea");
+        ta.value = displayInbox;
+        ta.setAttribute("readonly", "");
+        ta.style.position = "absolute";
+        ta.style.left = "-9999px";
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand("copy");
+        document.body.removeChild(ta);
+        flagCopied();
+      } catch {
+        setCopied(false);
+      }
     }
   }
 

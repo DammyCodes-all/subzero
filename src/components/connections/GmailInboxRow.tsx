@@ -43,6 +43,7 @@ export type ScanResult =
 export function GmailInboxRow({
   conn,
   scanning,
+  scanBusy,
   lastResult,
   disconnecting,
   onScan,
@@ -51,6 +52,7 @@ export function GmailInboxRow({
 }: {
   conn: InboxConn;
   scanning: boolean;
+  scanBusy: boolean;
   lastResult: ScanResult | null;
   disconnecting: boolean;
   onScan: () => void;
@@ -68,6 +70,15 @@ export function GmailInboxRow({
   }, []);
 
   const isDisconnected = conn.status !== "connected";
+
+  // Drop a stale confirm so a reconnected row never opens pre-armed.
+  useEffect(() => {
+    if (isDisconnected) {
+      if (armTimer.current) clearTimeout(armTimer.current);
+      setArmDisconnect(false);
+    }
+  }, [isDisconnected]);
+
   const health = inboxHealth({
     status: conn.status,
     scopeGranted: conn.gmailScopeGranted,
@@ -90,6 +101,11 @@ export function GmailInboxRow({
     setArmDisconnect(true);
     if (armTimer.current) clearTimeout(armTimer.current);
     armTimer.current = setTimeout(() => setArmDisconnect(false), 5000);
+  };
+
+  const disarm = () => {
+    if (armTimer.current) clearTimeout(armTimer.current);
+    setArmDisconnect(false);
   };
 
   return (
@@ -191,7 +207,7 @@ export function GmailInboxRow({
                 variant="ghost"
                 size="sm"
                 disabled={disconnecting}
-                onClick={() => setArmDisconnect(false)}
+                onClick={disarm}
                 className="h-8 text-xs"
               >
                 Keep it
@@ -202,7 +218,7 @@ export function GmailInboxRow({
               <Button
                 variant="outline"
                 size="sm"
-                disabled={scanning || onCooldown}
+                disabled={scanning || scanBusy || onCooldown || disconnecting}
                 onClick={onScan}
                 title={
                   onCooldown
@@ -243,9 +259,9 @@ export function GmailInboxRow({
               <Button
                 variant="ghost"
                 size="sm"
-                disabled={disconnecting}
+                disabled={disconnecting || scanning}
                 onClick={arm}
-                className="h-8 gap-1.5 text-xs text-muted-foreground hover:text-destructive"
+                className="h-8 gap-1.5 text-xs text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
               >
                 Disconnect
               </Button>
