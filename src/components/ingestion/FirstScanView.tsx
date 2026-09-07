@@ -31,7 +31,12 @@ export function FirstScanView({
 }) {
   const size = useResponsiveScanSize();
   return (
-    <div className="mx-auto max-w-2xl px-6 py-2 text-center sm:py-4">
+    <div
+      className="mx-auto max-w-2xl px-6 py-2 text-center sm:py-4"
+      role="status"
+      aria-live="polite"
+      aria-label="Scanning your Gmail for subscriptions"
+    >
       <div className="relative flex justify-center">
         <div
           className="pointer-events-none absolute left-1/2 top-1/2 -z-10 -translate-x-1/2 -translate-y-1/2 bg-[radial-gradient(ellipse_at_center,_rgba(249,247,242,0.04)_0%,_transparent_68%)] blur-[16px]"
