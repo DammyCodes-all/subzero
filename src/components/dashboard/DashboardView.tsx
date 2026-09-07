@@ -32,11 +32,19 @@ export function DashboardView() {
   const all = useQuery(api.subscriptions.list);
   const gmailStatus = useQuery(api.gmail.getGmailStatus);
   const viewer = useQuery(api.users.getViewer);
-  const { showFirstScan, email: scanEmail, foundCount: scanCount } =
-    useFirstScan();
+  const subCount = all?.length ?? 0;
+  const {
+    showFullFirstScan,
+    showScanBanner,
+    scanning: firstScanScanning,
+    scanError: firstScanError,
+    retry: retryFirstScan,
+    email: scanEmail,
+    foundCount: scanCount,
+  } = useFirstScan({ gmailStatus, subCount });
 
-  const isLoading =
-    attention === undefined || all === undefined || gmailStatus === undefined;
+  const dataLoading = attention === undefined || all === undefined;
+  const statusLoading = gmailStatus === undefined;
 
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -122,20 +130,26 @@ export function DashboardView() {
           </Link>
         </div>
       )}
-      {isLoading ? (
+      {dataLoading ? (
         <DashboardSkeleton />
-      ) : showFirstScan ? (
+      ) : statusLoading && subCount === 0 ? (
+        /* Status pending and nothing to show yet — avoid mockup flash. */
+        <DashboardSkeleton />
+      ) : showFullFirstScan ? (
         /* ── First scan owns the screen until lastGmailScanAt is set.
-            Stays mounted even as receipts stream in — previously the
-            populated branch unmounted it on the first created sub. ── */
+            Latched to zero-sub start so streaming receipts don't unmount
+            it mid-scan (previously flipped to populated on first sub). ── */
         <div className="flex flex-col gap-4 py-2">
           <DashboardGreeting name={firstName} />
           <FirstScanView
             email={scanEmail ?? undefined}
             foundCount={scanCount}
+            scanning={firstScanScanning}
+            error={firstScanError}
+            onRetry={retryFirstScan}
           />
         </div>
-      ) : (all?.length ?? 0) === 0 ? (
+      ) : subCount === 0 ? (
         /* ── Zero-state ── */
         <div className="flex flex-col gap-4 py-2">
           <DashboardGreeting name={firstName} />
@@ -145,6 +159,39 @@ export function DashboardView() {
         /* ── Populated state: greeting → overview → hero → list ── */
         <>
           <DashboardGreeting name={firstName} />
+
+          {showScanBanner ? (
+            <div
+              className="flex items-center gap-3 rounded-lg border border-dashed bg-card px-4 py-3"
+              role="status"
+            >
+              <span
+                className="size-2 shrink-0 rounded-full bg-primary animate-pulse"
+                aria-hidden
+              />
+              <div className="min-w-0 flex-1">
+                <p className="text-sm text-foreground">
+                  {firstScanError
+                    ? "Gmail scan needs another try"
+                    : `Scanning ${scanEmail ?? "new inbox"} for receipts… ${scanCount} found so far`}
+                </p>
+                {firstScanError ? (
+                  <p className="text-xs text-muted-foreground">
+                    {firstScanError}
+                  </p>
+                ) : null}
+              </div>
+              {firstScanError ? (
+                <button
+                  type="button"
+                  onClick={retryFirstScan}
+                  className="ml-auto shrink-0 rounded-full border border-white/[0.08] bg-secondary px-3 py-1.5 font-mono text-[11px] text-muted-foreground transition-colors hover:text-foreground"
+                >
+                  Try again
+                </button>
+              ) : null}
+            </div>
+          ) : null}
 
           <SummaryHeader
             paceItems={paceItems as Doc<"subscriptions">[]}

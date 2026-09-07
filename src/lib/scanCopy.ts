@@ -6,7 +6,8 @@ export function scanReasonCopy(reason?: string): string | null {
     return "Gmail access not granted. Reconnect your Google account from the Connections page.";
   if (reason === "scan_failed")
     return "Gmail scan hit a temporary error. Try again in a moment.";
-  return reason.slice(0, 300);
+  // Unknown reason codes are never shown raw — log server-side instead.
+  return "Gmail scan hit a temporary error. Try again in a moment.";
 }
 
 export function scanResultCopy(res: {
