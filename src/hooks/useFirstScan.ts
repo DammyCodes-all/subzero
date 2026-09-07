@@ -31,8 +31,8 @@ export function useFirstScan({
   const scan = useAction(api.gmailActions.scanGmail);
   const [scanning, setScanning] = useState(false);
   const [scanError, setScanError] = useState<string | null>(null);
-  // Latched at the moment a never-scanned episode begins — prevents
-  // full→banner flips as receipts stream in mid-scan.
+  // Latched at the moment a never-scanned episode begins. Prevents
+  // full-to-banner flips as receipts stream in mid-scan.
   const [startedZero, setStartedZero] = useState<boolean | null>(null);
   const triedRef = useRef(false);
   const inFlightRef = useRef(false);
@@ -79,8 +79,8 @@ export function useFirstScan({
       const copy = scanResultCopy(res);
       if (copy.kind === "error") {
         if (mountedRef.current) {
-          // Auth failures flip connected→false, which unmounts this UI on
-          // its own — don't leave a stale retry behind.
+          // Auth failures flip connected to false, which unmounts this UI
+          // on its own. Don't leave a stale retry behind.
           if (res.reason === "no_consent" || res.reason === "token_failed") {
             setScanError(null);
           } else {
@@ -97,8 +97,8 @@ export function useFirstScan({
         setScanError(scanReasonCopy("scan_failed"));
       }
       sileo.error({
-        title: "Gmail scan failed",
-        description: "Gmail scan hit a temporary error. Try again in a moment.",
+        title: "Scan failed",
+        description: "Something hiccuped on our side. Try again in a bit.",
       });
     } finally {
       inFlightRef.current = false;
@@ -132,7 +132,7 @@ export function useFirstScan({
   return {
     showFullFirstScan,
     showScanBanner,
-    /** Legacy alias — prefer showFullFirstScan. */
+    /** Legacy alias. Prefer showFullFirstScan. */
     showFirstScan: showFullFirstScan,
     scanning,
     scanError,

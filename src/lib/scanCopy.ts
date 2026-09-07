@@ -1,13 +1,13 @@
 export function scanReasonCopy(reason?: string): string | null {
   if (!reason) return null;
   if (reason === "cooldown")
-    return "You scanned recently. Wait a few minutes and try again.";
+    return "That was quick. Give it a few minutes, then try again.";
   if (reason === "no_consent" || reason === "token_failed")
-    return "Gmail access not granted. Reconnect your Google account from the Connections page.";
+    return "SubZero lost access to that Gmail account. Reconnect it and scan again.";
   if (reason === "scan_failed")
-    return "Gmail scan hit a temporary error. Try again in a moment.";
-  // Unknown reason codes are never shown raw — log server-side instead.
-  return "Gmail scan hit a temporary error. Try again in a moment.";
+    return "Something hiccuped on our side. Try again in a bit.";
+  // Unknown reason codes are never shown raw. Log server-side instead.
+  return "Something hiccuped on our side. Try again in a bit.";
 }
 
 export function scanResultCopy(res: {
@@ -18,14 +18,14 @@ export function scanResultCopy(res: {
   const mapped = scanReasonCopy(res.reason);
   if (mapped) {
     return {
-      title: "Couldn't complete Gmail scan",
+      title: "Scan didn't finish",
       description: mapped,
       kind: "error",
     };
   }
   return {
-    title: "Gmail scan finished",
-    description: `Checked ${res.scanned} recent emails and found ${res.created} new subscription${res.created === 1 ? "" : "s"}`,
+    title: "Scan done",
+    description: `Synced ${res.scanned} emails, ${res.created} new.`,
     kind: "success",
   };
 }

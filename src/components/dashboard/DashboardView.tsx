@@ -172,7 +172,7 @@ export function DashboardView() {
               <div className="min-w-0 flex-1">
                 <p className="text-sm text-foreground">
                   {firstScanError
-                    ? "Gmail scan needs another try"
+                    ? "This scan needs another try"
                     : `Scanning ${scanEmail ?? "new inbox"} for receipts… ${scanCount} found so far`}
                 </p>
                 {firstScanError ? (
