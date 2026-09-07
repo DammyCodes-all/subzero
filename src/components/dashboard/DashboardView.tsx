@@ -14,6 +14,8 @@ import {
   NoSubscriptionsState,
   ZeroAttentionState,
 } from "@/components/EmptyState";
+import { FirstScanView } from "@/components/ingestion/FirstScanView";
+import { useFirstScan } from "@/hooks/useFirstScan";
 import { ProcessingRows } from "@/components/ingestion/ProcessingRows";
 import { DashboardSkeleton } from "@/components/Skeleton";
 import { SummaryHeader } from "@/components/SummaryHeader";
@@ -30,8 +32,11 @@ export function DashboardView() {
   const all = useQuery(api.subscriptions.list);
   const gmailStatus = useQuery(api.gmail.getGmailStatus);
   const viewer = useQuery(api.users.getViewer);
+  const { showFirstScan, email: scanEmail, foundCount: scanCount } =
+    useFirstScan();
 
-  const isLoading = attention === undefined || all === undefined;
+  const isLoading =
+    attention === undefined || all === undefined || gmailStatus === undefined;
 
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -53,7 +58,7 @@ export function DashboardView() {
       );
     } else if (gmailConnected) {
       sileo.success({
-        title: "Gmail connected successfully",
+        title: "Gmail connected — starting first scan…",
         description:
           "We're now scanning your inbox for subscription receipts and trial emails",
       });
@@ -119,6 +124,17 @@ export function DashboardView() {
       )}
       {isLoading ? (
         <DashboardSkeleton />
+      ) : showFirstScan ? (
+        /* ── First scan owns the screen until lastGmailScanAt is set.
+            Stays mounted even as receipts stream in — previously the
+            populated branch unmounted it on the first created sub. ── */
+        <div className="flex flex-col gap-4 py-2">
+          <DashboardGreeting name={firstName} />
+          <FirstScanView
+            email={scanEmail ?? undefined}
+            foundCount={scanCount}
+          />
+        </div>
       ) : (all?.length ?? 0) === 0 ? (
         /* ── Zero-state ── */
         <div className="flex flex-col gap-4 py-2">

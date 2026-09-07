@@ -5,15 +5,15 @@ import { CheckmarkCircle01Icon, Copy01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useAction, useConvexAuth, useMutation, useQuery } from "convex/react";
 import Image from "next/image";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { sileo } from "sileo";
 import { ConnectGmailButton } from "@/components/ConnectGmailButton";
-import { FirstScanView } from "@/components/ingestion/FirstScanView";
 import { Button } from "@/components/ui/button";
 import {
   GOOGLE_OAUTH_REDIRECT,
   markGoogleOAuthAttempt,
 } from "@/lib/googleAuth";
+import { scanResultCopy } from "@/lib/scanCopy";
 import { api } from "../../convex/_generated/api";
 
 async function copyInbox(inbox: string, setCopied: (v: boolean) => void) {
@@ -97,107 +97,42 @@ export function NoSubscriptionsState() {
 function AuthenticatedEmptyState() {
   const status = useQuery(api.gmail.getGmailStatus);
   const inbox = useQuery(api.agentmail.getInbox);
-  const subs = useQuery(api.subscriptions.list);
   const scan = useAction(api.gmailActions.scanGmail);
   const getOrCreateInbox = useMutation(api.agentmail.getOrCreateInbox);
   const [scanning, setScanning] = useState(false);
-  const [autoTried, setAutoTried] = useState(false);
   const [copied, setCopied] = useState(false);
-  const foundCount = subs?.length ?? 0;
+  const inFlightRef = useRef(false);
 
   useEffect(() => {
     if (inbox === null) void getOrCreateInbox({});
   }, [inbox, getOrCreateInbox]);
 
-  useEffect(() => {
-    if (!status) return;
-    if (!status.connected) {
-      if (autoTried) setAutoTried(false);
-      return;
-    }
-    if (autoTried) return;
-    const last = status.lastGmailScanAt ?? 0;
-    const shouldAuto = Date.now() - last > 10 * 60 * 1000;
-    if (shouldAuto) {
-      setAutoTried(true);
-      setScanning(true);
-      scan({})
-        .then((r) => {
-          const res = r as {
-            scanned: number;
-            created: number;
-            reason?: string;
-          };
-          if (res.reason) {
-            const desc =
-              res.reason === "cooldown"
-                ? "You scanned recently. Wait a few minutes and try again."
-                : res.reason === "no_consent"
-                  ? "Gmail access not granted. Reconnect your Google account from the Connections page."
-                  : res.reason;
-            sileo.error({
-              title: "Couldn't complete Gmail scan",
-              description: desc,
-            });
-          } else {
-            sileo.success({
-              title: "Gmail scan finished",
-              description: `Checked ${res.scanned} recent emails and found ${res.created} new subscription${res.created === 1 ? "" : "s"}`,
-            });
-          }
-        })
-        .catch((e) =>
-          sileo.error({
-            title: "Gmail scan failed",
-            description: `Something went wrong while scanning your inbox: ${String(e).slice(0, 200)}`,
-          }),
-        )
-        .finally(() => setScanning(false));
-    } else {
-      setAutoTried(true);
-    }
-  }, [status, autoTried, scan]);
+  // NOTE: first-scan auto-trigger lives in useFirstScan (DashboardView).
+  // This component only handles manual re-scans so the two can't run
+  // concurrently and unmount each other's UI.
 
   const isConnected = !!status?.connected;
-  const isFirstSync = scanning && isConnected && !status?.lastGmailScanAt;
-
-  if (isFirstSync) {
-    return (
-      <FirstScanView
-        email={status?.accountEmail ?? undefined}
-        foundCount={foundCount}
-      />
-    );
-  }
 
   const handleScan = async () => {
+    if (inFlightRef.current) return;
+    inFlightRef.current = true;
     setScanning(true);
     try {
       const r = await scan({});
       const res = r as { scanned: number; created: number; reason?: string };
-      if (res.reason) {
-        const desc =
-          res.reason === "cooldown"
-            ? "You scanned recently. Wait a few minutes and try again."
-            : res.reason === "no_consent"
-              ? "Gmail access not granted. Reconnect your Google account from the Connections page."
-              : res.reason;
-        sileo.error({
-          title: "Couldn't complete Gmail scan",
-          description: desc,
-        });
+      const copy = scanResultCopy(res);
+      if (copy.kind === "error") {
+        sileo.error({ title: copy.title, description: copy.description });
       } else {
-        sileo.success({
-          title: "Gmail scan finished",
-          description: `Checked ${res.scanned} recent emails and found ${res.created} new subscription${res.created === 1 ? "" : "s"}`,
-        });
+        sileo.success({ title: copy.title, description: copy.description });
       }
-    } catch (e: unknown) {
+    } catch {
       sileo.error({
         title: "Gmail scan failed",
-        description: `Something went wrong while scanning your inbox: ${String(e).slice(0, 200)}`,
+        description: "Gmail scan hit a temporary error. Try again in a moment.",
       });
     } finally {
+      inFlightRef.current = false;
       setScanning(false);
     }
   };
