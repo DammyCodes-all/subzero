@@ -1,5 +1,6 @@
 import { getAuthUserId } from "@convex-dev/auth/server";
 import { v } from "convex/values";
+import type { Id } from "./_generated/dataModel";
 import { internalQuery, query } from "./_generated/server";
 
 export const getUserIdForEmail = internalQuery({
@@ -35,16 +36,45 @@ export const getMyConnections = query({
       agentmailInbox: v.optional(v.string()),
       lastGmailScanAt: v.optional(v.number()),
       gmailScopeGranted: v.optional(v.boolean()),
+      gmailWatchExpiration: v.optional(v.number()),
+      hasHistoryId: v.optional(v.boolean()),
     }),
   ),
   handler: async (ctx) => {
     const userId = await getAuthUserId(ctx);
     if (!userId) return [];
-    const rows = await ctx.db
-      .query("connections")
-      .withIndex("by_user", (q) => q.eq("userId", userId))
-      .collect();
-    return rows.map((c) => ({
+    const ident = await ctx.auth.getUserIdentity();
+    const tokenId = ident?.tokenIdentifier ?? userId;
+    const parts = tokenId.split("|");
+    const plain = parts.length >= 2 ? parts[1] : tokenId;
+    const candidateIds = [
+      ...new Set([userId, tokenId, plain, `user:${plain}`]),
+    ];
+    const seen = new Set<string>();
+    const collected: {
+      _id: Id<"connections">;
+      provider: string;
+      status: string;
+      userId: string;
+      accountEmail?: string;
+      agentmailInbox?: string;
+      lastGmailScanAt?: number;
+      gmailScopeGranted?: boolean;
+      gmailHistoryId?: string;
+      gmailWatchExpiration?: number;
+    }[] = [];
+    for (const uid of candidateIds) {
+      const batch = await ctx.db
+        .query("connections")
+        .withIndex("by_user", (q) => q.eq("userId", uid))
+        .collect();
+      for (const c of batch) {
+        if (seen.has(c._id)) continue;
+        seen.add(c._id);
+        collected.push(c as never);
+      }
+    }
+    return collected.map((c) => ({
       _id: c._id,
       provider: c.provider,
       status: c.status,
@@ -52,6 +82,9 @@ export const getMyConnections = query({
       agentmailInbox: c.agentmailInbox,
       lastGmailScanAt: c.lastGmailScanAt,
       gmailScopeGranted: c.gmailScopeGranted,
+      gmailWatchExpiration: (c as { gmailWatchExpiration?: number })
+        .gmailWatchExpiration,
+      hasHistoryId: !!(c as { gmailHistoryId?: string }).gmailHistoryId,
     }));
   },
 });

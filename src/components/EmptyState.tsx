@@ -128,8 +128,8 @@ function AuthenticatedEmptyState() {
       }
     } catch {
       sileo.error({
-        title: "Gmail scan failed",
-        description: "Gmail scan hit a temporary error. Try again in a moment.",
+        title: "Scan failed",
+        description: "Something hiccuped on our side. Try again in a bit.",
       });
     } finally {
       inFlightRef.current = false;

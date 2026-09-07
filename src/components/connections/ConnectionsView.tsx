@@ -1,43 +1,32 @@
 "use client";
 
-import {
-  CheckmarkCircle01Icon,
-  Copy01Icon,
-  Loading03Icon,
-  MailAccount01Icon,
-  MailSearch01Icon,
-} from "@hugeicons/core-free-icons";
+import { MailAccount01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useAction, useMutation, useQuery } from "convex/react";
 import { useState } from "react";
 import { sileo } from "sileo";
 import { ConnectGmailButton } from "@/components/ConnectGmailButton";
 import { ForwardingCard } from "@/components/ForwardingCard";
-import { ConnectionsAgentMailSkeleton } from "@/components/Skeleton";
-import { Button } from "@/components/ui/button";
 import { useConnectGmail } from "@/hooks/useConnectGmail";
 import { scanResultCopy } from "@/lib/scanCopy";
+import { timeAgo } from "@/lib/timeAgo";
 import { api } from "../../../convex/_generated/api";
+import {
+  GmailInboxRow,
+  type ScanResult,
+} from "./GmailInboxRow";
 
 export function ConnectionsView() {
   const connections = useQuery(api.connections.getMyConnections);
-  const inbox = useQuery(api.agentmail.getInbox);
   const scan = useAction(api.gmailActions.scanGmail);
   const disconnect = useMutation(api.gmail.disconnectGmail);
   const connectGmail = useConnectGmail();
 
-  const [copied, setCopied] = useState(false);
   const [scanningId, setScanningId] = useState<string | null>(null);
   const [disconnectingId, setDisconnectingId] = useState<string | null>(null);
-
-  const handleCopyAlias = async () => {
-    if (!inbox) return;
-    try {
-      await navigator.clipboard.writeText(inbox);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch {}
-  };
+  const [lastResults, setLastResults] = useState<Record<string, ScanResult>>(
+    {},
+  );
 
   const handleScan = async (connId: string) => {
     setScanningId(connId);
@@ -46,15 +35,22 @@ export function ConnectionsView() {
       const r = res as { scanned: number; created: number; reason?: string };
       const copy = scanResultCopy(r);
       if (copy.kind === "error") {
+        setLastResults((p) => ({
+          ...p,
+          [connId]: { ok: false, message: copy.description },
+        }));
         sileo.error({ title: copy.title, description: copy.description });
       } else {
+        setLastResults((p) => ({
+          ...p,
+          [connId]: { ok: true, scanned: r.scanned, created: r.created },
+        }));
         sileo.success({ title: copy.title, description: copy.description });
       }
     } catch {
-      sileo.error({
-        title: "Gmail scan failed",
-        description: "Gmail scan hit a temporary error. Try again in a moment.",
-      });
+      const message = "Something hiccuped on our side. Try again in a bit.";
+      setLastResults((p) => ({ ...p, [connId]: { ok: false, message } }));
+      sileo.error({ title: "Scan failed", description: message });
     } finally {
       setScanningId(null);
     }
@@ -72,6 +68,11 @@ export function ConnectionsView() {
           description: "That connection no longer exists.",
         });
       } else {
+        setLastResults((p) => {
+          const next = { ...p };
+          delete next[connId];
+          return next;
+        });
         sileo.success({
           title: "Gmail disconnected",
           description: accountEmail
@@ -90,240 +91,108 @@ export function ConnectionsView() {
     }
   };
 
-  // Show all Google inboxes — disconnected ones stay visible with a Reconnect action.
   const googleConns =
     connections?.filter((c) => c.provider === "google") ?? [];
+  const lastSync = googleConns.reduce<number | undefined>(
+    (m, c) => (c.lastGmailScanAt && (!m || c.lastGmailScanAt > m) ? c.lastGmailScanAt : m),
+    undefined,
+  );
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="font-heading text-2xl font-bold tracking-tight">
-          Inboxes &amp; Connections
-        </h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Manage your connected email inboxes, AgentMail forwarding alias, and
-          passive sync status.
-        </p>
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h1 className="font-heading text-2xl font-bold tracking-tight">
+            Connections
+          </h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            SubZero automatically picks up new subscription receipts and
+            keeps your data up to date. Anything else, just forward it.
+          </p>
+        </div>
+        {googleConns.length > 0 ? (
+          <ConnectGmailButton className="gap-1.5 rounded-lg border border-border bg-transparent text-xs font-medium text-muted-foreground hover:text-foreground">
+            Add another inbox
+          </ConnectGmailButton>
+        ) : null}
       </div>
 
-      {/* Main Connections Card */}
-      <div className="space-y-6 rounded-xl border border-border bg-card p-6 shadow-xs">
-        <div className="flex items-center justify-between border-b border-border pb-4">
-          <div className="flex items-center gap-2.5">
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 text-primary">
-              <HugeiconsIcon
-                icon={
-                  MailAccount01Icon as unknown as Parameters<
-                    typeof HugeiconsIcon
-                  >[0]["icon"]
-                }
-                size={20}
-                strokeWidth={1.8}
-                color="currentColor"
-              />
-            </div>
-            <div>
-              <h2 className="font-heading text-base font-semibold">
-                Connected Inboxes &amp; Accounts
-              </h2>
-              <p className="text-xs text-muted-foreground">
-                All connected sources feed into your unified subscription
-                engine.
-              </p>
-            </div>
-          </div>
+      {connections === undefined ? (
+        <div className="h-32 animate-pulse rounded-xl bg-border/40" />
+      ) : (
+        <>
+          <p className="font-mono text-[11px] tracking-wide text-muted-foreground">
+            {googleConns.length} inbox{googleConns.length === 1 ? "" : "es"}
+            {lastSync ? ` · last synced ${timeAgo(lastSync)}` : ""}
+          </p>
 
-          <ConnectGmailButton />
-        </div>
-
-        {/* Connections List */}
-        <div className="space-y-3">
-          {/* AgentMail Inbound Alias Row */}
-          {inbox === undefined ? (
-            <ConnectionsAgentMailSkeleton />
-          ) : (
-            <div className="flex flex-col gap-3 rounded-lg border border-border/80 bg-background/50 p-4 sm:flex-row sm:items-center sm:justify-between">
-              <div className="flex items-center gap-3">
-                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-emerald-500/10 text-emerald-400">
-                  <HugeiconsIcon
-                    icon={
-                      CheckmarkCircle01Icon as unknown as Parameters<
-                        typeof HugeiconsIcon
-                      >[0]["icon"]
-                    }
-                    size={16}
-                    strokeWidth={1.8}
-                    color="currentColor"
-                  />
-                </div>
-                <div>
-                  <p className="font-mono text-sm font-medium text-foreground">
-                    {inbox}
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    AgentMail Inbound Alias (Passive forwarding)
-                  </p>
-                </div>
-              </div>
-
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleCopyAlias}
-                className="h-8 gap-1.5 font-mono text-xs"
-              >
+          {/* Gmail inboxes */}
+          <section className="space-y-6 rounded-xl border border-border bg-card p-6 shadow-xs">
+            <div className="flex items-center gap-2.5 border-b border-border pb-4">
+              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 text-primary">
                 <HugeiconsIcon
                   icon={
-                    Copy01Icon as unknown as Parameters<
+                    MailAccount01Icon as unknown as Parameters<
                       typeof HugeiconsIcon
                     >[0]["icon"]
                   }
-                  size={14}
+                  size={20}
+                  strokeWidth={1.8}
                   color="currentColor"
                 />
-                {copied ? "Copied" : "Copy Alias"}
-              </Button>
-            </div>
-          )}
-
-          {/* Google Connections Rows */}
-          {googleConns.map((conn) => {
-            const isDisconnecting = disconnectingId === conn._id;
-            const isDisconnected = conn.status !== "connected";
-            return (
-              <div
-                key={conn._id}
-                className="flex flex-col gap-3 rounded-lg border border-border/80 bg-background/50 p-4 sm:flex-row sm:items-center sm:justify-between"
-              >
-                <div className="flex items-center gap-3">
-                  <div
-                    className={
-                      isDisconnected
-                        ? "flex h-8 w-8 items-center justify-center rounded-full bg-muted text-muted-foreground"
-                        : "flex h-8 w-8 items-center justify-center rounded-full bg-emerald-500/10 text-emerald-400"
-                    }
-                  >
-                    <HugeiconsIcon
-                      icon={
-                        CheckmarkCircle01Icon as unknown as Parameters<
-                          typeof HugeiconsIcon
-                        >[0]["icon"]
-                      }
-                      size={16}
-                      strokeWidth={1.8}
-                      color="currentColor"
-                    />
-                  </div>
-                  <div>
-                    <p className="font-mono text-sm font-medium text-foreground">
-                      {conn.accountEmail ?? "Connected Gmail"}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      {isDisconnected ? (
-                        "Disconnected · Reconnect to resume sync"
-                      ) : (
-                        <>
-                          Gmail API Sync ·{" "}
-                          {conn.lastGmailScanAt
-                            ? `Last scan ${new Date(conn.lastGmailScanAt).toLocaleDateString()}`
-                            : "Never scanned"}
-                        </>
-                      )}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  {isDisconnected ? (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => void connectGmail()}
-                      className="h-8 gap-1.5 text-xs font-medium"
-                    >
-                      Reconnect
-                    </Button>
-                  ) : (
-                    <>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        disabled={scanningId === conn._id}
-                        onClick={() => handleScan(conn._id)}
-                        className="h-8 gap-1.5 text-xs font-medium"
-                      >
-                        {scanningId === conn._id ? (
-                          <>
-                            <HugeiconsIcon
-                              icon={
-                                Loading03Icon as unknown as Parameters<
-                                  typeof HugeiconsIcon
-                                >[0]["icon"]
-                              }
-                              size={14}
-                              color="currentColor"
-                              className="animate-spin"
-                            />
-                            Scanning...
-                          </>
-                        ) : (
-                          <>
-                            <HugeiconsIcon
-                              icon={
-                                MailSearch01Icon as unknown as Parameters<
-                                  typeof HugeiconsIcon
-                                >[0]["icon"]
-                              }
-                              size={14}
-                              color="currentColor"
-                            />
-                            Scan This Inbox
-                          </>
-                        )}
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        disabled={isDisconnecting}
-                        onClick={() =>
-                          void handleDisconnect(conn._id, conn.accountEmail)
-                        }
-                        className="h-8 gap-1.5 text-xs text-muted-foreground hover:text-destructive"
-                      >
-                        {isDisconnecting && (
-                          <HugeiconsIcon
-                            icon={
-                              Loading03Icon as unknown as Parameters<
-                                typeof HugeiconsIcon
-                              >[0]["icon"]
-                            }
-                            size={14}
-                            color="currentColor"
-                            className="animate-spin"
-                          />
-                        )}
-                        {isDisconnecting ? "Disconnecting..." : "Disconnect"}
-                      </Button>
-                    </>
-                  )}
-                </div>
               </div>
-            );
-          })}
-
-          {googleConns.length === 0 && (
-            <div className="rounded-lg border border-dashed border-border/60 p-6 text-center">
-              <p className="text-xs text-muted-foreground">
-                No Gmail accounts connected yet. Connect your Google account to
-                automatically scan for subscription receipts.
-              </p>
+              <div>
+                <h2 className="font-heading text-base font-semibold">
+                  Gmail
+                </h2>
+                <p className="text-xs text-muted-foreground">
+                  Automatically keeps SubZero up to date when new subscription
+                  emails arrive.
+                </p>
+              </div>
             </div>
-          )}
-        </div>
-      </div>
 
-      {/* Auxiliary Forwarding Card */}
-      <ForwardingCard />
+            <div className="space-y-3">
+              {googleConns.map((conn) => (
+                <GmailInboxRow
+                  key={conn._id}
+                  conn={conn}
+                  scanning={scanningId === conn._id}
+                  lastResult={lastResults[conn._id] ?? null}
+                  disconnecting={disconnectingId === conn._id}
+                  onScan={() => void handleScan(conn._id)}
+                  onDisconnect={() =>
+                    void handleDisconnect(conn._id, conn.accountEmail)
+                  }
+                  onReconnect={() => void connectGmail()}
+                />
+              ))}
+
+              {googleConns.length === 0 && (
+                <div className="rounded-lg border border-dashed border-border/60 p-6 text-center">
+                  <p className="text-sm font-medium text-foreground">
+                    Nothing connected yet
+                  </p>
+                  <p className="mx-auto mt-1 max-w-sm text-xs leading-relaxed text-muted-foreground">
+                    Hook up Gmail and SubZero quietly picks up your
+                    subscriptions and trials in the background.
+                  </p>
+                  <ConnectGmailButton className="mx-auto mt-4 gap-1.5 rounded-lg bg-primary text-xs font-semibold text-primary-foreground hover:bg-primary/90">
+                    Connect Gmail
+                  </ConnectGmailButton>
+                </div>
+              )}
+            </div>
+
+            <p className="border-t border-border pt-3 font-mono text-[11px] text-muted-foreground">
+              Read-only access. SubZero looks for receipts, nothing else.
+            </p>
+          </section>
+
+          {/* Forwarding */}
+          <ForwardingCard />
+        </>
+      )}
     </div>
   );
 }
