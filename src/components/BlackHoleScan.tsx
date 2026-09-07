@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import { ShimmeringText } from "@/components/animate-ui/primitives/texts/shimmering";
 
 /**
  * BlackHoleScan — your own version of the Subzero mail-scanning black hole.
@@ -32,14 +33,14 @@ const STAGE = 260;
 const C = STAGE / 2;
 const CX = STAGE / 2;
 const CY = STAGE / 2 + 16;
-const HORIZON = 16;
+const HORIZON = 19;
 const TILT = 0.42;
 const MAIL_COUNT = 5;
 
 const LAYERS = [
-  { r0: 24, r1: 34, n: 38, w: 2.35 },
-  { r0: 36, r1: 50, n: 30, w: 1.35 },
-  { r0: 54, r1: 72, n: 22, w: 0.7 },
+  { r0: 28, r1: 40, n: 38, w: 2.35 },
+  { r0: 42, r1: 58, n: 30, w: 1.35 },
+  { r0: 62, r1: 86, n: 22, w: 0.7 },
 ] as const;
 
 interface Theme {
@@ -91,7 +92,6 @@ interface Scene {
   mails: Mail[];
   bursts: Burst[];
   embers: Ember[];
-  dust: Dust[];
   emberIn: number;
   time: number;
 }
@@ -155,20 +155,11 @@ function createScene(staticFrame: boolean): Scene {
       : rand(0, Math.PI * 2),
     respawnIn: 0,
   }));
-  const dust: Dust[] = Array.from({ length: 28 }, () => ({
-    x: rand(0, STAGE),
-    y: rand(0, STAGE),
-    vx: rand(-3.5, 3.5),
-    vy: rand(-2.8, 2.8),
-    size: rand(0.55, 1.35),
-    alpha: rand(0.035, 0.095),
-  }));
   return {
     disk,
     mails,
     bursts: [],
     embers: [],
-    dust,
     emberIn: 1.8,
     time: staticFrame ? 1.1 : 0,
   };
@@ -199,30 +190,21 @@ function stepScene(scene: Scene, dt: number, isScanning: boolean) {
     const speed = isScanning ? 1 : 0.22;
     p.a += p.w * (32 / p.r) ** 1.5 * dt * speed;
     // gravity: slow inward drift, stronger closer — disk is accreting, not static
-    const pull = isScanning ? 0.11 * (30 / p.r) ** 1.9 : 0.018 * (30 / p.r) ** 1.2;
+    const pull = isScanning ? 0.11 * (34 / p.r) ** 1.9 : 0.018 * (34 / p.r) ** 1.2;
     p.r -= pull * dt;
     if (p.r < HORIZON + 3.5) {
-      p.r = rand(58, 72);
+      p.r = rand(68, 86);
       p.a = rand(0, Math.PI * 2);
       const np = tiltPos(p.r, p.a);
       p.px = np.x;
       p.py = np.y;
     } else if (Math.sin(p.a) < -0.25) {
       // lensing: light from behind the hole is bent over the top
-      const lens = 3.2 * Math.exp(-Math.pow((p.r - 26) / 9, 2));
-      p.py -= lens * 0.6;
+      const lens = 5.0 * Math.exp(-Math.pow((p.r - 30) / 11, 2));
+      p.py -= lens * 0.8;
     }
   }
   if (!isScanning) {
-    // slow drift only when idle
-    for (const d of scene.dust) {
-      d.x += d.vx * dt * 0.35;
-      d.y += d.vy * dt * 0.35;
-      if (d.x < -4) d.x = STAGE + 4;
-      if (d.x > STAGE + 4) d.x = -4;
-      if (d.y < -4) d.y = STAGE + 4;
-      if (d.y > STAGE + 4) d.y = -4;
-    }
     return;
   }
   for (const m of scene.mails) {
@@ -235,7 +217,7 @@ function stepScene(scene: Scene, dt: number, isScanning: boolean) {
       continue;
     }
     const fall = 1 - m.r / 128;
-    m.r -= (10 + 52 * fall * fall) * dt;
+    m.r -= (7 + 34 * fall * fall) * dt;
     m.a += 2.55 * (36 / Math.max(m.r, 14)) ** 1.18 * dt;
     if (m.r <= HORIZON + 0.6) {
       const pos = tiltPos(HORIZON, m.a);
@@ -276,14 +258,6 @@ function stepScene(scene: Scene, dt: number, isScanning: boolean) {
     e.y += e.vy * dt;
     return e.life > 0;
   });
-  for (const d of scene.dust) {
-    d.x += d.vx * dt;
-    d.y += d.vy * dt;
-    if (d.x < -4) d.x = STAGE + 4;
-    if (d.x > STAGE + 4) d.x = -4;
-    if (d.y < -4) d.y = STAGE + 4;
-    if (d.y > STAGE + 4) d.y = -4;
-  }
 }
 
 function drawMail(
@@ -292,14 +266,14 @@ function drawMail(
   m: Mail,
 ) {
   if (m.respawnIn > 0) return;
-  const heat = clamp01((38 - m.r) / (38 - HORIZON));
-  const alpha = m.r > 23 ? 1 : (m.r - HORIZON) / (23 - HORIZON);
+  const heat = clamp01((80 - m.r) / (80 - HORIZON));
+  const alpha = m.r > 28 ? 1 : (m.r - HORIZON) / (28 - HORIZON);
   if (alpha <= 0) return;
   const { x, y } = tiltPos(m.r, m.a);
   // Cheap lensing: nudge y when behind the hole (a near pi)
   const behind = Math.cos(m.a);
-  const lensY = y + behind * -2.5 * Math.exp(-Math.pow((m.r - 24) / 9, 2));
-  const warpedY = behind < -0.3 ? lensY : y;
+  const lensY = y + behind * -4.5 * Math.exp(-Math.pow((m.r - 28) / 11, 2));
+  const warpedY = behind < -0.2 ? lensY : y;
   const ahead = tiltPos(m.r - 3.2, m.a + 0.065);
   const ang = Math.atan2(ahead.y - warpedY, ahead.x - x);
 
@@ -308,13 +282,13 @@ function drawMail(
   ctx.rotate(ang);
   const s = 1 - 0.52 * heat;
   // spaghettification: stretch radially, thin tangentially
-  ctx.scale(s * (1 + 1.45 * heat), s * (1 - 0.48 * heat));
+  ctx.scale(s * (1 + 2.2 * heat), s * (1 - 0.6 * heat));
   ctx.globalAlpha = alpha;
   ctx.strokeStyle = theme.primary;
   ctx.fillStyle = "rgba(0,0,0,0.22)";
   ctx.lineWidth = 1.15;
   ctx.shadowColor = theme.primary;
-  ctx.shadowBlur = 5 + heat * 4;
+  ctx.shadowBlur = 5 + heat * 9;
   // card/envelope silhouette — uniformly rounded
   ctx.beginPath();
   const rr = 2;
@@ -353,31 +327,16 @@ function renderScene(
   ctx.clearRect(0, 0, STAGE, STAGE);
   ctx.drawImage(bg, 0, 0, STAGE, STAGE);
 
-  // Ambient dust (subtle cream)
-  for (const d of scene.dust) {
-    const dx = d.x - CX;
-    const r = Math.hypot(dx, (d.y - CY) / TILT);
-    const warp = 7 * Math.exp(-Math.pow((r - 23) / 10, 2));
-    const behind = dx < 0 ? 1 : 0;
-    const fy = warp && behind ? d.y - warp * 0.12 : d.y;
-    ctx.globalAlpha = d.alpha;
-    ctx.fillStyle = theme.cream;
-    ctx.beginPath();
-    ctx.arc(d.x, fy, d.size, 0, Math.PI * 2);
-    ctx.fill();
-  }
-  ctx.globalAlpha = 1;
-
   // Lensing arcs — light bent over/under horizon
   ctx.strokeStyle = theme.primary;
   ctx.lineWidth = 1.25;
   ctx.globalAlpha = 0.34;
   ctx.beginPath();
-  ctx.ellipse(CX, CY, 26.5, 11.5, 0, Math.PI * 1.07, Math.PI * 1.93);
+  ctx.ellipse(CX, CY, 31, 13, 0, Math.PI * 1.07, Math.PI * 1.93);
   ctx.stroke();
   ctx.globalAlpha = 0.15;
   ctx.beginPath();
-  ctx.ellipse(CX, CY, 26.5, 11.5, 0, Math.PI * 0.07, Math.PI * 0.93);
+  ctx.ellipse(CX, CY, 31, 13, 0, Math.PI * 0.07, Math.PI * 0.93);
   ctx.stroke();
   ctx.globalAlpha = 1;
 
@@ -734,9 +693,19 @@ export function BlackHoleScan({
       {(label || sublabel || progress !== null) && (
         <div className="text-center">
           {label ? (
-            <p className="text-sm font-medium tracking-tight text-foreground">
-              {label}
-            </p>
+            isScanning ? (
+              <ShimmeringText
+                text={label}
+                duration={1.6}
+                color="var(--foreground)"
+                shimmeringColor="var(--muted-foreground)"
+                className="text-sm font-medium tracking-tight"
+              />
+            ) : (
+              <p className="text-sm font-medium tracking-tight text-foreground">
+                {label}
+              </p>
+            )
           ) : null}
           {sublabel ? (
             <p className="mt-1 font-mono text-xs text-muted-foreground">
