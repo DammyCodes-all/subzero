@@ -72,6 +72,8 @@ export default defineSchema({
     sourceEmail: v.optional(v.string()),
     sourceConnectionId: v.optional(v.id("connections")),
     dedupKey: v.string(),
+    muted: v.optional(v.boolean()),
+    hidden: v.optional(v.boolean()),
     researchStatus: v.optional(
       v.union(v.literal("pending"), v.literal("done"), v.literal("failed")),
     ),

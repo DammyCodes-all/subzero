@@ -1,6 +1,9 @@
-import { v } from "convex/values";
-import { query, mutation } from "./_generated/server";
 import { getAuthUserId } from "@convex-dev/auth/server";
+import { v } from "convex/values";
+import { internal } from "./_generated/api";
+import type { Id } from "./_generated/dataModel";
+import type { MutationCtx } from "./_generated/server";
+import { mutation, query } from "./_generated/server";
 
 /** All subscriptions that are in an actionable state for the current user */
 export const listActionable = query({
@@ -47,7 +50,7 @@ export const listActionable = query({
       ),
       nextRenewalAt: v.optional(v.number()),
       trialEndsAt: v.optional(v.number()),
-    })
+    }),
   ),
   handler: async (ctx) => {
     const userId = await getAuthUserId(ctx);
@@ -78,17 +81,108 @@ export const listActionable = query({
   },
 });
 
+/** Load a subscription owned by the caller, or throw. */
+async function ownedSub(ctx: MutationCtx, id: Id<"subscriptions">) {
+  const userId = await getAuthUserId(ctx);
+  if (!userId) throw new Error("Not authenticated");
+  const sub = await ctx.db.get(id);
+  if (!sub || (sub.userId !== userId && !sub.userId.includes(userId)))
+    throw new Error("Not found");
+  return sub;
+}
+
+const NUDGE_TYPES = ["7d", "3d", "24h", "confirmed"] as const;
+
+/** Drop pending (unsent) notifications so silenced subs leave no stale rows. */
+async function clearPendingNudges(
+  ctx: MutationCtx,
+  subscriptionId: Id<"subscriptions">,
+) {
+  for (const type of NUDGE_TYPES) {
+    const rows = await ctx.db
+      .query("notifications")
+      .withIndex("by_subscription_and_type", (q) =>
+        q.eq("subscriptionId", subscriptionId).eq("type", type),
+      )
+      .collect();
+    for (const n of rows) {
+      if (n.status === "pending") await ctx.db.delete(n._id);
+    }
+  }
+}
+
+/** Re-arm future nudges after a sub becomes audible again. */
+async function rescheduleNudges(
+  ctx: MutationCtx,
+  subscriptionId: Id<"subscriptions">,
+) {
+  await ctx.scheduler.runAfter(
+    0,
+    internal.notifications.scheduleNudgesForSubscription,
+    { subscriptionId },
+  );
+}
+
 /** Mark a subscription's cancellation as confirmed (user self-reports) */
 export const markCancelled = mutation({
   args: { id: v.id("subscriptions") },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) throw new Error("Not authenticated");
-    const sub = await ctx.db.get(args.id);
-    if (!sub || (sub.userId !== userId && !sub.userId.includes(userId)))
-      throw new Error("Not found");
+    await ownedSub(ctx, args.id);
     await ctx.db.patch(args.id, { status: "cancelled" });
+    await clearPendingNudges(ctx, args.id);
+    return null;
+  },
+});
+
+/** Restore a cancelled subscription to active (undo). */
+export const markActive = mutation({
+  args: { id: v.id("subscriptions") },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    await ownedSub(ctx, args.id);
+    await ctx.db.patch(args.id, { status: "active" });
+    await rescheduleNudges(ctx, args.id);
+    return null;
+  },
+});
+
+/** Mute or unmute renewal alerts for one subscription. */
+export const setMuted = mutation({
+  args: { id: v.id("subscriptions"), muted: v.boolean() },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    await ownedSub(ctx, args.id);
+    await ctx.db.patch(args.id, { muted: args.muted });
+    if (args.muted) {
+      await clearPendingNudges(ctx, args.id);
+    } else {
+      await rescheduleNudges(ctx, args.id);
+    }
+    return null;
+  },
+});
+
+/** Soft-hide a subscription so it stays out of lists and scans. */
+export const hideSubscription = mutation({
+  args: { id: v.id("subscriptions") },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    await ownedSub(ctx, args.id);
+    await ctx.db.patch(args.id, { hidden: true });
+    await clearPendingNudges(ctx, args.id);
+    return null;
+  },
+});
+
+/** Restore a hidden subscription. */
+export const unhideSubscription = mutation({
+  args: { id: v.id("subscriptions") },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    await ownedSub(ctx, args.id);
+    await ctx.db.patch(args.id, { hidden: false });
+    await rescheduleNudges(ctx, args.id);
     return null;
   },
 });

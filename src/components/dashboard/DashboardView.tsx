@@ -15,7 +15,6 @@ import {
   ZeroAttentionState,
 } from "@/components/EmptyState";
 import { FirstScanView } from "@/components/ingestion/FirstScanView";
-import { useFirstScan } from "@/hooks/useFirstScan";
 import { ProcessingRows } from "@/components/ingestion/ProcessingRows";
 import { DashboardSkeleton } from "@/components/Skeleton";
 import { SummaryHeader } from "@/components/SummaryHeader";
@@ -24,6 +23,7 @@ import {
   LinkPendingOverlay,
   PendingWrap,
 } from "@/components/ui/LinkPending";
+import { useFirstScan } from "@/hooks/useFirstScan";
 import { api } from "../../../convex/_generated/api";
 import type { Doc } from "../../../convex/_generated/dataModel";
 
@@ -83,13 +83,16 @@ export function DashboardView() {
   // Determine what to show in the sub list:
   // - Urgent items (renewing ≤7d) if any exist
   // - Otherwise the 3 closest upcoming renewals
-  const urgentSubs = attention ?? [];
+  const urgentSubs = (attention ?? []).filter((s) => s.hidden !== true);
   const hasUrgent = urgentSubs.length > 0;
 
   const fallbackSubs = hasUrgent
     ? []
     : [...(all ?? [])]
-        .filter((s) => s.status !== "cancelled" && s.nextRenewalAt)
+        .filter(
+          (s) =>
+            s.status !== "cancelled" && s.hidden !== true && s.nextRenewalAt,
+        )
         .sort((a, b) => (a.nextRenewalAt ?? 0) - (b.nextRenewalAt ?? 0))
         .slice(0, 3);
 
@@ -98,18 +101,21 @@ export function DashboardView() {
   const rest = displaySubs.slice(1);
 
   const activeCount = (all ?? []).filter(
-    (s) => s.status !== "cancelled",
+    (s) => s.status !== "cancelled" && s.hidden !== true,
   ).length;
 
   const now = Date.now();
   const trialCount = (all ?? []).filter(
     (s) =>
       s.status !== "cancelled" &&
+      s.hidden !== true &&
       s.trialEndsAt !== undefined &&
       s.trialEndsAt > now,
   ).length;
 
-  const paceItems = (all ?? []).filter((s) => s.status !== "cancelled");
+  const paceItems = (all ?? []).filter(
+    (s) => s.status !== "cancelled" && s.hidden !== true,
+  );
 
   const firstName =
     viewer?.name?.split(" ")[0] ?? viewer?.email?.split("@")[0] ?? null;
@@ -202,7 +208,7 @@ export function DashboardView() {
 
           {hero && (
             <section className="space-y-4">
-                       {!hasUrgent && <ZeroAttentionState />}
+              {!hasUrgent && <ZeroAttentionState />}
               <div className="flex items-center justify-between">
                 <p className="font-mono text-[11px] uppercase tracking-widest text-muted-foreground">
                   {hasUrgent ? "Needs your attention" : "Coming up next"}

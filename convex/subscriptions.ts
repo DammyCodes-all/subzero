@@ -293,12 +293,15 @@ export const getUpcomingForSweep = internalQuery({
   handler: async (ctx) => {
     const now = Date.now();
     const nextWeek = now + 7 * 24 * 60 * 60 * 1000;
-    return await ctx.db
+    const rows = await ctx.db
       .query("subscriptions")
       .withIndex("by_renewal", (q) =>
         q.gte("nextRenewalAt", now).lte("nextRenewalAt", nextWeek),
       )
       .collect();
+    return rows.filter(
+      (s) => s.status !== "cancelled" && !s.muted && !s.hidden,
+    );
   },
 });
 

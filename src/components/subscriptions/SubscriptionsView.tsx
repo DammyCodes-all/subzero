@@ -7,9 +7,10 @@ import {
   Search01Icon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { useQuery } from "convex/react";
+import { useMutation, useQuery } from "convex/react";
 import Link from "next/link";
 import { useState } from "react";
+import { sileo } from "sileo";
 import { ActionCard } from "@/components/ActionCard";
 import {
   Tabs,
@@ -24,7 +25,7 @@ import { LinkPendingDot, PendingWrap } from "@/components/ui/LinkPending";
 import { formatPrice, formatRenewalDate, frictionLabel } from "@/lib/format";
 import { merchantFaviconUrl } from "@/lib/merchantFavicon";
 import { api } from "../../../convex/_generated/api";
-import type { Doc } from "../../../convex/_generated/dataModel";
+import type { Doc, Id } from "../../../convex/_generated/dataModel";
 
 type FilterTab = "all" | "active" | "trials" | "urgent" | "cancelled";
 
@@ -46,6 +47,35 @@ export function SubscriptionsView() {
 
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 8;
+  const markActive = useMutation(api.actions.markActive);
+  const unhideSubscription = useMutation(api.actions.unhideSubscription);
+  const [restoringId, setRestoringId] = useState<string | null>(null);
+
+  const handleRestore = async (sub: {
+    _id: Id<"subscriptions">;
+    merchant: string;
+    hidden?: boolean;
+  }) => {
+    setRestoringId(sub._id);
+    try {
+      if (sub.hidden === true) {
+        await unhideSubscription({ id: sub._id });
+      } else {
+        await markActive({ id: sub._id });
+      }
+      sileo.success({
+        title: "Restored",
+        description: `${sub.merchant} is back in your active list.`,
+      });
+    } catch {
+      sileo.error({
+        title: "Restore failed",
+        description: "Something went wrong. Try again in a bit.",
+      });
+    } finally {
+      setRestoringId(null);
+    }
+  };
 
   if (all === undefined) {
     return <DashboardSkeleton />;
@@ -64,6 +94,9 @@ export function SubscriptionsView() {
 
     if (!matchesSearch) return false;
 
+    // Hidden items live only in the Cancelled tab, where they can be restored.
+    if (sub.hidden === true && filter !== "cancelled") return false;
+
     // Filter tabs match
     if (filter === "active") return sub.status !== "cancelled";
     if (filter === "trials") return sub.trialEndsAt && sub.trialEndsAt > now;
@@ -73,7 +106,8 @@ export function SubscriptionsView() {
         sub.nextRenewalAt &&
         sub.nextRenewalAt <= now + sevenDays
       );
-    if (filter === "cancelled") return sub.status === "cancelled";
+    if (filter === "cancelled")
+      return sub.status === "cancelled" || sub.hidden === true;
     return true;
   });
 
@@ -211,15 +245,35 @@ export function SubscriptionsView() {
         <>
           {viewMode === "grid" ? (
             <div className="grid gap-4 sm:grid-cols-2">
-              {paginatedSubs.map((sub) => (
-                <Link
-                  key={sub._id}
-                  href={`/subscriptions/${sub._id}`}
-                  className="group block"
-                >
-                  <ActionCard sub={sub} />
-                </Link>
-              ))}
+              {paginatedSubs.map((sub) =>
+                sub.status === "cancelled" || sub.hidden === true ? (
+                  <div key={sub._id} className="space-y-2">
+                    <Link
+                      href={`/subscriptions/${sub._id}`}
+                      className="group block"
+                    >
+                      <ActionCard sub={sub} />
+                    </Link>
+                    <Button
+                      variant="secondary"
+                      size="xs"
+                      disabled={restoringId === sub._id}
+                      onClick={() => handleRestore(sub)}
+                      className="h-7 text-xs font-medium"
+                    >
+                      {restoringId === sub._id ? "Restoring..." : "Restore"}
+                    </Button>
+                  </div>
+                ) : (
+                  <Link
+                    key={sub._id}
+                    href={`/subscriptions/${sub._id}`}
+                    className="group block"
+                  >
+                    <ActionCard sub={sub} />
+                  </Link>
+                ),
+              )}
             </div>
           ) : (
             /* Table View */
@@ -276,30 +330,44 @@ export function SubscriptionsView() {
                         <td className="px-4 py-3">
                           <span
                             className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium capitalize ${
-                              sub.status === "cancelled"
+                              sub.status === "cancelled" || sub.hidden === true
                                 ? "bg-slate-500/10 text-slate-400"
                                 : "bg-emerald-500/10 text-emerald-400"
                             }`}
                           >
-                            {sub.status}
+                            {sub.hidden === true ? "Hidden" : sub.status}
                           </span>
                         </td>
                         <td className="px-4 py-3 text-right">
-                          <Link
-                            href={`/subscriptions/${sub._id}`}
-                            className="inline-flex items-center"
-                          >
+                          {sub.status === "cancelled" || sub.hidden === true ? (
                             <Button
                               variant="ghost"
                               size="xs"
-                              className="h-7 gap-1 text-xs"
+                              disabled={restoringId === sub._id}
+                              onClick={() => handleRestore(sub)}
+                              className="h-7 text-xs"
                             >
-                              <PendingWrap className="inline-flex items-center gap-1">
-                                Inspect
-                              </PendingWrap>
-                              <LinkPendingDot />
+                              {restoringId === sub._id
+                                ? "Restoring..."
+                                : "Restore"}
                             </Button>
-                          </Link>
+                          ) : (
+                            <Link
+                              href={`/subscriptions/${sub._id}`}
+                              className="inline-flex items-center"
+                            >
+                              <Button
+                                variant="ghost"
+                                size="xs"
+                                className="h-7 gap-1 text-xs"
+                              >
+                                <PendingWrap className="inline-flex items-center gap-1">
+                                  Inspect
+                                </PendingWrap>
+                                <LinkPendingDot />
+                              </Button>
+                            </Link>
+                          )}
                         </td>
                       </tr>
                     ))}

@@ -3,15 +3,14 @@
 import { ExternalLinkIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useQuery } from "convex/react";
-import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { EvidenceBlock } from "@/components/detail/EvidenceBlock";
 import { HowToCancel } from "@/components/detail/HowToCancel";
 import { ReviewAndSendModal } from "@/components/detail/ReviewAndSendModal";
 import { MerchantAvatar } from "@/components/MerchantAvatar";
+import { SubscriptionManageCard } from "@/components/subscriptions/SubscriptionManageCard";
 import { Button } from "@/components/ui/button";
-import { LinkPendingDot, PendingWrap } from "@/components/ui/LinkPending";
 import { getCancellationCTA, openExternalUrl } from "@/lib/cancellation";
 import {
   formatPrice,
@@ -59,26 +58,11 @@ export function SubscriptionDetailView() {
   if (sub === null) {
     return (
       <div className="mx-auto w-full max-w-[680px]">
-        <Link
-          href="/dashboard"
-          className="inline-flex items-center gap-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground"
-        >
-          <PendingWrap className="inline-flex items-center gap-1.5">
-            ← All subscriptions
-          </PendingWrap>
-          <LinkPendingDot />
-        </Link>
         <div className="mt-8 rounded-lg border border-dashed p-10 text-center">
           <p className="text-sm font-medium">Subscription not found</p>
           <p className="mt-1 text-sm text-muted-foreground">
             It may have been removed or you don&apos;t have access.
           </p>
-          <Link href="/dashboard" className="mt-4 inline-block">
-            <Button variant="outline" size="sm" className="gap-1.5">
-              <PendingWrap>Back to dashboard</PendingWrap>
-              <LinkPendingDot />
-            </Button>
-          </Link>
         </div>
       </div>
     );
@@ -90,17 +74,6 @@ export function SubscriptionDetailView() {
 
   return (
     <div className="mx-auto w-full max-w-[680px]">
-      {/* Back link */}
-      <Link
-        href="/dashboard"
-        className="inline-flex items-center gap-1.5 font-mono text-xs text-muted-foreground transition-colors hover:text-foreground"
-      >
-        <PendingWrap className="inline-flex items-center gap-1.5">
-          ← All subscriptions
-        </PendingWrap>
-        <LinkPendingDot />
-      </Link>
-
       {/* Identity */}
       <div className="mt-6 space-y-6">
         <div>
@@ -146,48 +119,67 @@ export function SubscriptionDetailView() {
               {urgencyLabel(sub.nextRenewalAt, sub.trialEndsAt)}
             </p>
           )}
+          {sub.muted === true && sub.status !== "cancelled" && (
+            <p className="mt-3">
+              <span className="inline-flex items-center rounded-full bg-secondary px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+                Muted
+              </span>
+            </p>
+          )}
         </div>
 
         {/* Primary action */}
-        <div className="flex flex-wrap items-center gap-3">
-          {cta.href ? (
-            <Button
-              className="gap-1.5 font-medium"
-              onClick={() => openExternalUrl(cta.href!, sub.billingProvider)}
-            >
-              {cta.label}
-              <HugeiconsIcon
-                icon={
-                  ExternalLinkIcon as unknown as Parameters<
-                    typeof HugeiconsIcon
-                  >[0]["icon"]
-                }
-                size={14}
-                strokeWidth={1.8}
-                color="currentColor"
-                className="opacity-70"
-              />
-            </Button>
-          ) : (
-            <Button
-              variant={cta.variant}
-              disabled={cta.disabled}
-              className="font-medium"
-              onClick={() => {
-                if (sub.cancellationMethod === "send_email") {
-                  document.dispatchEvent(new CustomEvent("open-email-modal"));
-                }
-              }}
-            >
-              {cta.label}
-            </Button>
-          )}
-          {cta.helper && cta.href && (
-            <span className="font-mono text-xs text-muted-foreground">
-              {cta.helper}
-            </span>
-          )}
-        </div>
+        {sub.status === "cancelled" ? (
+          <div className="rounded-xl border border-emerald-500/30 bg-card p-5">
+            <p className="text-sm font-medium text-foreground">
+              Marked as cancelled
+            </p>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              This is out of your active spend and alerts are off. You can
+              restore it below if that changes.
+            </p>
+          </div>
+        ) : (
+          <div className="flex flex-wrap items-center gap-3">
+            {cta.href ? (
+              <Button
+                className="gap-1.5 font-medium"
+                onClick={() => openExternalUrl(cta.href!, sub.billingProvider)}
+              >
+                {cta.label}
+                <HugeiconsIcon
+                  icon={
+                    ExternalLinkIcon as unknown as Parameters<
+                      typeof HugeiconsIcon
+                    >[0]["icon"]
+                  }
+                  size={14}
+                  strokeWidth={1.8}
+                  color="currentColor"
+                  className="opacity-70"
+                />
+              </Button>
+            ) : (
+              <Button
+                variant={cta.variant}
+                disabled={cta.disabled}
+                className="font-medium"
+                onClick={() => {
+                  if (sub.cancellationMethod === "send_email") {
+                    document.dispatchEvent(new CustomEvent("open-email-modal"));
+                  }
+                }}
+              >
+                {cta.label}
+              </Button>
+            )}
+            {cta.helper && cta.href && (
+              <span className="font-mono text-xs text-muted-foreground">
+                {cta.helper}
+              </span>
+            )}
+          </div>
+        )}
       </div>
 
       {/* How to cancel */}
@@ -210,16 +202,7 @@ export function SubscriptionDetailView() {
         <EvidenceBlock evidence={evidence as never} />
       </section>
 
-      {/* Footer */}
-      <div className="mt-10 flex justify-center border-t border-border/40 pt-6">
-        <Link
-          href="/dashboard"
-          className="inline-flex items-center gap-1 font-mono text-xs text-muted-foreground transition-colors hover:text-foreground"
-        >
-          <PendingWrap>Back to dashboard →</PendingWrap>
-          <LinkPendingDot />
-        </Link>
-      </div>
+      <SubscriptionManageCard sub={sub} />
 
       {isModalOpen && (
         <ReviewAndSendModal

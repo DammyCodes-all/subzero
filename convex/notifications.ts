@@ -19,6 +19,7 @@ export const scheduleNudgesForSubscription = internalMutation({
   handler: async (ctx, args) => {
     const sub = await ctx.db.get(args.subscriptionId);
     if (!sub || !sub.nextRenewalAt || sub.status === "cancelled") return;
+    if (sub.muted || sub.hidden) return;
 
     const now = Date.now();
     const renewalAt = sub.nextRenewalAt;
@@ -157,8 +158,14 @@ export const deliverNudge = internalAction({
 
     const { notif, sub, userEmail } = details;
 
-    // Skip nudge if subscription was cancelled in the meantime
-    if (sub.status === "cancelled" || notif.status !== "pending") return;
+    // Skip nudge if subscription was cancelled, muted, or hidden
+    if (
+      sub.status === "cancelled" ||
+      sub.muted ||
+      sub.hidden ||
+      notif.status !== "pending"
+    )
+      return;
 
     const apiKey = process.env.AGENTMAIL_API_KEY;
     if (!userEmail) {
