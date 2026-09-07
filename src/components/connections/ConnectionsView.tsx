@@ -111,7 +111,7 @@ export function ConnectionsView() {
           </p>
         </div>
         {googleConns.length > 0 ? (
-          <ConnectGmailButton className="gap-1.5 rounded-lg border border-border bg-transparent text-xs font-medium text-muted-foreground hover:text-foreground">
+          <ConnectGmailButton className="h-8 gap-1.5 rounded-lg border border-border bg-transparent px-3 text-xs font-medium text-foreground/80 hover:border-primary hover:bg-primary hover:text-primary-foreground">
             Add another inbox
           </ConnectGmailButton>
         ) : null}
