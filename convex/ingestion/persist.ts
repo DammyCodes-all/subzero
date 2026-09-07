@@ -132,6 +132,11 @@ export const persistExtracted = internalMutation({
           messageId: args.messageId,
         });
         await healUserData(ctx, args.userId);
+        await ctx.scheduler.runAfter(
+          0,
+          internal.notifications.notifyCancelled,
+          { subscriptionId: match._id, origin: "auto" },
+        );
         return {
           subscriptionId: match._id,
           evidenceId,
@@ -176,6 +181,11 @@ export const persistExtracted = internalMutation({
           svixId: args.svixId,
           messageId: args.messageId,
         });
+        await ctx.scheduler.runAfter(
+          0,
+          internal.notifications.notifyCancelled,
+          { subscriptionId: id, origin: "auto" },
+        );
         return {
           subscriptionId: id,
           evidenceId,

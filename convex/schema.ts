@@ -177,4 +177,9 @@ export default defineSchema({
     .index("by_user_receivedAt", ["userId", "receivedAt"])
     .index("by_svixId", ["svixId"])
     .index("by_messageId", ["messageId"]),
+
+  userSettings: defineTable({
+    userId: v.string(),
+    notifyOnCancel: v.optional(v.boolean()),
+  }).index("by_user", ["userId"]),
 });

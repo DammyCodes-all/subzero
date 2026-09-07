@@ -87,7 +87,7 @@ export function SubscriptionManageCard({ sub }: { sub: ManageSub }) {
               <p className="mt-0.5 text-xs text-muted-foreground">
                 {isCancelled
                   ? "Cancelled subscriptions never send alerts."
-                  : "Stay quiet about this one. Everything else keeps working."}
+                  : "Renewal alerts stop for this one. We still tell you if it gets cancelled."}
               </p>
             </div>
           </div>

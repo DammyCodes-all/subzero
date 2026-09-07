@@ -12,6 +12,7 @@ import {
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useMutation, useQuery } from "convex/react";
 import { useState } from "react";
+import { sileo } from "sileo";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/material-design-3-switch";
 import { formatRenewalDate } from "@/lib/format";
@@ -46,6 +47,7 @@ function leadLabel(type: string) {
   if (type === "7d") return "7 days before renewal";
   if (type === "3d") return "3 days before renewal";
   if (type === "24h") return "24 hours before renewal";
+  if (type === "confirmed") return "Cancellation confirmed";
   return type;
 }
 
@@ -80,6 +82,24 @@ export function SettingsView() {
   const notifications = useQuery(api.userNotifications.getMyNotifications);
   const subscriptions = useQuery(api.subscriptions.list);
   const deleteMyData = useMutation(api.userData.deleteMyData);
+  const settings = useQuery(api.userSettings.getMine);
+  const setNotifyOnCancel = useMutation(api.userSettings.setNotifyOnCancel);
+  const [cancelPrefSaving, setCancelPrefSaving] = useState(false);
+  const cancelPref = settings?.notifyOnCancel ?? true;
+
+  const handleCancelPref = async (enabled: boolean) => {
+    setCancelPrefSaving(true);
+    try {
+      await setNotifyOnCancel({ enabled });
+    } catch {
+      sileo.error({
+        title: "Could not save",
+        description: "Try again in a bit.",
+      });
+    } finally {
+      setCancelPrefSaving(false);
+    }
+  };
 
   const [prefs, setPrefs] = useState<NotificationPrefs>({
     enabled7d: true,
@@ -259,6 +279,48 @@ export function SettingsView() {
             />
             Alerts are sent to your connected account email.
           </p>
+        </div>
+      </section>
+
+      {/* ── Cancellation Emails ── */}
+      <section className="space-y-4">
+        <div className="flex items-center gap-2.5">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
+            <HugeiconsIcon
+              icon={
+                CheckmarkCircle01Icon as unknown as Parameters<
+                  typeof HugeiconsIcon
+                >[0]["icon"]
+              }
+              size={18}
+              strokeWidth={1.8}
+              color="currentColor"
+            />
+          </div>
+          <h2 className="font-heading text-base font-semibold">
+            Cancellation Emails
+          </h2>
+        </div>
+
+        <div className="rounded-xl border border-border bg-card">
+          <div className="flex items-center justify-between gap-4 px-5 py-4">
+            <div>
+              <p className="text-sm font-medium text-foreground">
+                Tell me when something is marked cancelled
+              </p>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                One email when SubZero marks a subscription cancelled, so a
+                wrong call never slips by.
+              </p>
+            </div>
+            <Switch
+              size="sm"
+              checked={cancelPref}
+              disabled={settings === undefined || cancelPrefSaving}
+              onCheckedChange={handleCancelPref}
+              aria-label="Email me when a subscription is marked cancelled"
+            />
+          </div>
         </div>
       </section>
 

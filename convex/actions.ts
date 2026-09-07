@@ -131,6 +131,10 @@ export const markCancelled = mutation({
     await ownedSub(ctx, args.id);
     await ctx.db.patch(args.id, { status: "cancelled" });
     await clearPendingNudges(ctx, args.id);
+    await ctx.scheduler.runAfter(0, internal.notifications.notifyCancelled, {
+      subscriptionId: args.id,
+      origin: "manual",
+    });
     return null;
   },
 });

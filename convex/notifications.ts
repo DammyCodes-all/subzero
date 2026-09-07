@@ -5,6 +5,7 @@ import {
   internalMutation,
   internalQuery,
 } from "./_generated/server";
+import { cancelledTemplate } from "./lib/emailTemplates";
 
 const DAY = 24 * 60 * 60 * 1000;
 
@@ -129,6 +130,50 @@ export const getNotificationDetails = internalQuery({
   },
 });
 
+/**
+ * Tell the user a subscription was marked cancelled (auto-detected or manual).
+ * Inserts a "confirmed" notification and delivers it immediately. Skips hidden
+ * subs and skips re-notifying within 30 days so duplicate confirmation emails
+ * or repeated taps stay quiet.
+ */
+export const notifyCancelled = internalMutation({
+  args: {
+    subscriptionId: v.id("subscriptions"),
+    origin: v.union(v.literal("auto"), v.literal("manual")),
+  },
+  handler: async (ctx, args) => {
+    const sub = await ctx.db.get(args.subscriptionId);
+    if (!sub || sub.hidden) return;
+    // Honor the user's cancellation-email preference (defaults to on).
+    // User ids take several shapes across tables, so check every candidate.
+    for (const uid of userIdCandidates(sub.userId)) {
+      const setting = await ctx.db
+        .query("userSettings")
+        .withIndex("by_user", (q) => q.eq("userId", uid))
+        .first();
+      if (setting && setting.notifyOnCancel === false) return;
+    }
+    const recent = await ctx.db
+      .query("notifications")
+      .withIndex("by_subscription_and_type", (q) =>
+        q.eq("subscriptionId", args.subscriptionId).eq("type", "confirmed"),
+      )
+      .collect();
+    if (recent.some((n) => n.scheduledAt > Date.now() - 30 * DAY)) return;
+    const notificationId = await ctx.db.insert("notifications", {
+      userId: sub.userId,
+      subscriptionId: args.subscriptionId,
+      scheduledAt: Date.now(),
+      type: "confirmed",
+      status: "pending",
+    });
+    await ctx.scheduler.runAfter(0, internal.notifications.deliverNudge, {
+      notificationId,
+      origin: args.origin,
+    });
+  },
+});
+
 export const markNotificationSent = internalMutation({
   args: {
     notificationId: v.id("notifications"),
@@ -145,7 +190,10 @@ export const markNotificationSent = internalMutation({
 });
 
 export const deliverNudge = internalAction({
-  args: { notificationId: v.id("notifications") },
+  args: {
+    notificationId: v.id("notifications"),
+    origin: v.optional(v.union(v.literal("auto"), v.literal("manual"))),
+  },
   handler: async (ctx, args) => {
     const details = await ctx.runQuery(
       internal.notifications.getNotificationDetails,
@@ -157,15 +205,13 @@ export const deliverNudge = internalAction({
     if (!details || !details.notif || !details.sub) return;
 
     const { notif, sub, userEmail } = details;
+    const isConfirmation = notif.type === "confirmed";
 
-    // Skip nudge if subscription was cancelled, muted, or hidden
-    if (
-      sub.status === "cancelled" ||
-      sub.muted ||
-      sub.hidden ||
-      notif.status !== "pending"
-    )
-      return;
+    if (notif.status !== "pending" || sub.hidden) return;
+    // Cancellation confirmations go out even for cancelled or muted subs.
+    // That is the point: the user must hear when tracking stops.
+    // Renewal nudges still stop at cancelled or muted.
+    if (!isConfirmation && (sub.status === "cancelled" || sub.muted)) return;
 
     const apiKey = process.env.AGENTMAIL_API_KEY;
     if (!userEmail) {
@@ -178,15 +224,28 @@ export const deliverNudge = internalAction({
     }
     const recipient = userEmail;
 
-    const label =
-      notif.type === "7d"
-        ? "renews in 7 days"
-        : notif.type === "3d"
-          ? "renews in 3 days"
-          : "renews tomorrow!";
-
-    const subject = `⚡ Renewal Alert: ${sub.merchant} ${label}`;
-    const body = `Hi there,
+    const { subject, text } = isConfirmation
+      ? cancelledTemplate(
+          {
+            merchant: sub.merchant,
+            product: sub.product,
+            price: sub.price,
+            currency: sub.currency,
+            billingInterval: sub.billingInterval,
+            subscriptionId: sub._id,
+          },
+          args.origin ?? "auto",
+        )
+      : (() => {
+          const label =
+            notif.type === "7d"
+              ? "renews in 7 days"
+              : notif.type === "3d"
+                ? "renews in 3 days"
+                : "renews tomorrow!";
+          return {
+            subject: `⚡ Renewal Alert: ${sub.merchant} ${label}`,
+            text: `Hi there,
 
 Your ${sub.merchant} subscription (${sub.currency} ${sub.price}/${sub.billingInterval}) is scheduled to renew soon.
 
@@ -200,7 +259,10 @@ Don't want to keep this? Open SubZero to cancel before you are charged:
 http://localhost:3000/subscriptions/${sub._id}
 
 Thanks,
-SubZero Protection Engine`;
+SubZero Protection Engine`,
+          };
+        })();
+    const body = text;
 
     if (apiKey) {
       try {

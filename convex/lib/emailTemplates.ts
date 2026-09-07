@@ -23,7 +23,9 @@ function formatDate(ms?: number): string {
 
 function siteUrl(): string {
   try {
-    const fromEnv = (globalThis as unknown as { process?: { env?: Record<string, string> } })?.process?.env?.SITE_URL as string | undefined;
+    const fromEnv = (
+      globalThis as unknown as { process?: { env?: Record<string, string> } }
+    )?.process?.env?.SITE_URL as string | undefined;
     if (fromEnv) return fromEnv.replace(/\/$/, "");
   } catch {}
   return "http://localhost:3000";
@@ -43,12 +45,22 @@ export type TemplateInput = {
   subscriptionId?: string;
 };
 
-export function renewalNudgeTemplate(input: TemplateInput, type: "7d" | "3d" | "24h") {
-  const label = type === "7d" ? "renews in 7 days" : type === "3d" ? "renews in 3 days" : "renews tomorrow!";
+export function renewalNudgeTemplate(
+  input: TemplateInput,
+  type: "7d" | "3d" | "24h",
+) {
+  const label =
+    type === "7d"
+      ? "renews in 7 days"
+      : type === "3d"
+        ? "renews in 3 days"
+        : "renews tomorrow!";
   const subject = `Renewal Alert: ${input.merchant} ${label}`;
   const priceStr = formatPrice(input.price, input.currency);
   const renewalStr = formatDate(input.nextRenewalAt);
-  const dash = input.dashboardUrl ?? `${siteUrl()}/subscriptions/${input.subscriptionId ?? ""}`;
+  const dash =
+    input.dashboardUrl ??
+    `${siteUrl()}/subscriptions/${input.subscriptionId ?? ""}`;
   const text = `Hi there,
 
 Your ${input.merchant}${input.product ? ` (${input.product})` : ""} subscription (${priceStr}/${input.billingInterval}) ${label} — ${renewalStr}.
@@ -70,7 +82,9 @@ export function trialEndingTemplate(input: TemplateInput) {
   const subject = `Trial ending: ${input.merchant} — ${formatDate(input.trialEndsAt)}`;
   const priceStr = formatPrice(input.price, input.currency);
   const trialStr = formatDate(input.trialEndsAt);
-  const dash = input.dashboardUrl ?? `${siteUrl()}/subscriptions/${input.subscriptionId ?? ""}`;
+  const dash =
+    input.dashboardUrl ??
+    `${siteUrl()}/subscriptions/${input.subscriptionId ?? ""}`;
   const text = `Hi there,
 
 Your ${input.merchant} trial ends on ${trialStr}. After that you'll be charged ${priceStr}/${input.billingInterval}.
@@ -86,25 +100,36 @@ ${dash}
   return { subject, text };
 }
 
-export function cancelledTemplate(input: TemplateInput) {
-  const subject = `Cancelled: ${input.merchant} — you're all set`;
+export function cancelledTemplate(
+  input: TemplateInput,
+  origin: "auto" | "manual" = "auto",
+) {
+  const subject = `Cancelled: ${input.merchant}. You are all set`;
   const priceStr = formatPrice(input.price, input.currency);
-  const dash = input.dashboardUrl ?? siteUrl();
-  const text = `Good news — your ${input.merchant} subscription is marked cancelled.
+  const dash = `${siteUrl()}/subscriptions/${input.subscriptionId ?? ""}`;
+  const first =
+    origin === "manual"
+      ? `You marked your ${input.merchant} subscription cancelled.`
+      : `We spotted ${input.merchant}'s cancellation email and marked it cancelled.`;
+  const text = `Hi there,
+
+${first}
 
 Saved: ${priceStr}/${input.billingInterval}
-If you get charged anyway, forward the receipt to subzero-agent@agentmail.to and we'll flag it.
+If this looks wrong, open SubZero and restore it in one tap.
 
 Manage: ${dash}
 
-— SubZero`;
+SubZero`;
   return { subject, text };
 }
 
 export function actionReminderTemplate(input: TemplateInput) {
   const subject = `Still need to cancel ${input.merchant}?`;
   const priceStr = formatPrice(input.price, input.currency);
-  const dash = input.dashboardUrl ?? `${siteUrl()}/subscriptions/${input.subscriptionId ?? ""}`;
+  const dash =
+    input.dashboardUrl ??
+    `${siteUrl()}/subscriptions/${input.subscriptionId ?? ""}`;
   const text = `Reminder — you started cancelling ${input.merchant} (${priceStr}) but it's still active.
 
 Renews: ${formatDate(input.nextRenewalAt)}
