@@ -1,8 +1,8 @@
 import { getAuthUserId } from "@convex-dev/auth/server";
-import { mutation, query } from "./_generated/server";
+import { mutation } from "./_generated/server";
 
 /**
- * User data export + deletion.
+ * User data deletion.
  *
  * Scope (mirrors the privacy promise: excerpts, not the inbox):
  * - subscriptions
@@ -34,73 +34,6 @@ function belongsToUser(rowUserId: string, candidates: Set<string>): boolean {
   }
   return false;
 }
-
-export const exportMyData = query({
-  args: {},
-  handler: async (ctx) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) return null;
-    const ident = await ctx.auth.getUserIdentity();
-    const candidates = candidateIds(userId, ident?.tokenIdentifier);
-
-    const allSubs = await ctx.db.query("subscriptions").collect();
-    const subs = allSubs
-      .filter((s) => belongsToUser(s.userId, candidates))
-      .slice(0, 1000);
-
-    const evidence = [];
-    const actions = [];
-    for (const s of subs) {
-      const ev = await ctx.db
-        .query("evidence")
-        .withIndex("by_subscription", (q) => q.eq("subscriptionId", s._id))
-        .collect();
-      evidence.push(...ev);
-      const acts = await ctx.db
-        .query("cancellationActions")
-        .withIndex("by_subscription", (q) => q.eq("subscriptionId", s._id))
-        .collect();
-      actions.push(...acts);
-    }
-
-    const seenNotifIds = new Set<string>();
-    const notifications = [];
-    for (const uid of candidates) {
-      const batch = await ctx.db
-        .query("notifications")
-        .withIndex("by_user", (q) => q.eq("userId", uid))
-        .take(500);
-      for (const n of batch) {
-        if (seenNotifIds.has(n._id)) continue;
-        seenNotifIds.add(n._id);
-        notifications.push(n);
-      }
-    }
-
-    const seenAttemptIds = new Set<string>();
-    const scanHistory = [];
-    for (const uid of candidates) {
-      const batch = await ctx.db
-        .query("ingestionAttempts")
-        .withIndex("by_user", (q) => q.eq("userId", uid))
-        .take(500);
-      for (const a of batch) {
-        if (seenAttemptIds.has(a._id)) continue;
-        seenAttemptIds.add(a._id);
-        scanHistory.push(a);
-      }
-    }
-
-    return {
-      exportedAt: Date.now(),
-      subscriptions: subs,
-      evidence,
-      cancellationDrafts: actions,
-      notifications,
-      scanHistory,
-    };
-  },
-});
 
 export const deleteMyData = mutation({
   args: {},

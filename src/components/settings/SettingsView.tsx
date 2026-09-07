@@ -10,7 +10,7 @@ import {
   Shield01Icon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { useConvex, useMutation, useQuery } from "convex/react";
+import { useMutation, useQuery } from "convex/react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/material-design-3-switch";
@@ -53,18 +53,6 @@ function leadLabel(type: string) {
 // Export CSV helper
 // ---------------------------------------------------------------------------
 
-function downloadJson(data: unknown, filename: string) {
-  const blob = new Blob([JSON.stringify(data, null, 2)], {
-    type: "application/json",
-  });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  a.click();
-  URL.revokeObjectURL(url);
-}
-
 function exportToCsv(
   rows: readonly Record<string, unknown>[],
   filename: string,
@@ -89,7 +77,6 @@ function exportToCsv(
 // ---------------------------------------------------------------------------
 
 export function SettingsView() {
-  const convex = useConvex();
   const notifications = useQuery(api.userNotifications.getMyNotifications);
   const subscriptions = useQuery(api.subscriptions.list);
   const deleteMyData = useMutation(api.userData.deleteMyData);
@@ -100,7 +87,11 @@ export function SettingsView() {
     enabled24h: true,
   });
   const [savedPrefs, setSavedPrefs] = useState(false);
-  const [exportingAll, setExportingAll] = useState(false);
+  const [prefsBaseline, setPrefsBaseline] = useState<NotificationPrefs>(prefs);
+  const prefsDirty =
+    prefs.enabled7d !== prefsBaseline.enabled7d ||
+    prefs.enabled3d !== prefsBaseline.enabled3d ||
+    prefs.enabled24h !== prefsBaseline.enabled24h;
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deleteResult, setDeleteResult] = useState<null | {
@@ -120,20 +111,9 @@ export function SettingsView() {
   const handleSavePrefs = () => {
     // Prefs are currently client-side only (no user settings table in schema).
     // When a settings table is added to schema, persist here.
+    setPrefsBaseline(prefs);
     setSavedPrefs(true);
     setTimeout(() => setSavedPrefs(false), 2500);
-  };
-
-  const handleExportAll = async () => {
-    setExportingAll(true);
-    try {
-      const data = await convex.query(api.userData.exportMyData, {});
-      if (!data) return;
-      const day = new Date().toISOString().slice(0, 10);
-      downloadJson(data, `subzero-export-${day}.json`);
-    } finally {
-      setExportingAll(false);
-    }
   };
 
   const handleDelete = async () => {
@@ -247,6 +227,7 @@ export function SettingsView() {
           <Button
             size="sm"
             onClick={handleSavePrefs}
+            disabled={!prefsDirty}
             className="h-8 gap-1.5 bg-primary text-xs font-semibold text-primary-foreground hover:bg-primary/90"
           >
             {savedPrefs ? (
@@ -331,8 +312,8 @@ export function SettingsView() {
           <h2 className="font-heading text-base font-semibold">Data Export</h2>
         </div>
 
-        <div className="rounded-xl border border-border bg-card divide-y divide-border/40">
-          <div className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
+        <div className="rounded-xl border border-border bg-card p-5">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <p className="text-sm font-medium text-foreground">
                 Export all subscriptions as CSV
@@ -362,36 +343,79 @@ export function SettingsView() {
               Download CSV
             </Button>
           </div>
+        </div>
+      </section>
 
-          <div className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <p className="text-sm font-medium text-foreground">
-                Download everything as JSON
-              </p>
-              <p className="mt-0.5 text-xs text-muted-foreground">
-                One file with your subscriptions, receipt excerpts, cancellation
-                drafts, notification history, and recent scan history.
+      {/* ── Notification History ── */}
+      <section className="space-y-4">
+        <div className="flex items-center gap-2.5">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
+            <HugeiconsIcon
+              icon={
+                Clock01Icon as unknown as Parameters<
+                  typeof HugeiconsIcon
+                >[0]["icon"]
+              }
+              size={18}
+              strokeWidth={1.8}
+              color="currentColor"
+            />
+          </div>
+          <h2 className="font-heading text-base font-semibold">
+            Notification History
+          </h2>
+        </div>
+
+        <div className="overflow-hidden rounded-xl border border-border bg-card">
+          {notifications === undefined ? (
+            <div className="space-y-2 p-5">
+              {[...Array(4)].map((_, i) => (
+                <div
+                  key={i}
+                  className="h-8 animate-pulse rounded-lg bg-border/40"
+                />
+              ))}
+            </div>
+          ) : notifications.length === 0 ? (
+            <div className="p-8 text-center">
+              <p className="text-sm text-muted-foreground">
+                No notifications sent yet. They appear here once your first
+                renewal warning fires.
               </p>
             </div>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleExportAll}
-              disabled={exportingAll}
-              className="h-8 gap-1.5 shrink-0 text-xs font-medium"
-            >
-              <HugeiconsIcon
-                icon={
-                  Download04Icon as unknown as Parameters<
-                    typeof HugeiconsIcon
-                  >[0]["icon"]
-                }
-                size={14}
-                color="currentColor"
-              />
-              {exportingAll ? "Preparing..." : "Download JSON"}
-            </Button>
-          </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead className="border-b border-border bg-secondary/40 font-mono text-[11px] uppercase tracking-wider text-muted-foreground">
+                  <tr>
+                    <th className="px-4 py-3">Type</th>
+                    <th className="px-4 py-3">Scheduled</th>
+                    <th className="px-4 py-3">Sent At</th>
+                    <th className="px-4 py-3">Status</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border/40">
+                  {notifications.map((n) => (
+                    <tr
+                      key={n._id}
+                      className="transition-colors hover:bg-secondary/20"
+                    >
+                      <td className="px-4 py-3 text-foreground">
+                        {leadLabel(n.type)}
+                      </td>
+                      <td className="px-4 py-3 font-mono text-muted-foreground">
+                        {formatRenewalDate(n.scheduledAt)}
+                      </td>
+                      <td className="px-4 py-3 font-mono text-muted-foreground">
+                        {n.attemptedAt ? formatRenewalDate(n.attemptedAt) : "—"}
+                      </td>
+                      <td className="px-4 py-3">{statusPill(n.status)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       </section>
 
@@ -501,79 +525,6 @@ export function SettingsView() {
                 />
                 Delete my data
               </Button>
-            </div>
-          )}
-        </div>
-      </section>
-
-      {/* ── Notification History ── */}
-      <section className="space-y-4">
-        <div className="flex items-center gap-2.5">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
-            <HugeiconsIcon
-              icon={
-                Clock01Icon as unknown as Parameters<
-                  typeof HugeiconsIcon
-                >[0]["icon"]
-              }
-              size={18}
-              strokeWidth={1.8}
-              color="currentColor"
-            />
-          </div>
-          <h2 className="font-heading text-base font-semibold">
-            Notification History
-          </h2>
-        </div>
-
-        <div className="overflow-hidden rounded-xl border border-border bg-card">
-          {notifications === undefined ? (
-            <div className="space-y-2 p-5">
-              {[...Array(4)].map((_, i) => (
-                <div
-                  key={i}
-                  className="h-8 animate-pulse rounded-lg bg-border/40"
-                />
-              ))}
-            </div>
-          ) : notifications.length === 0 ? (
-            <div className="p-8 text-center">
-              <p className="text-sm text-muted-foreground">
-                No notifications sent yet. They appear here once your first
-                renewal warning fires.
-              </p>
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
-                <thead className="border-b border-border bg-secondary/40 font-mono text-[11px] uppercase tracking-wider text-muted-foreground">
-                  <tr>
-                    <th className="px-4 py-3">Type</th>
-                    <th className="px-4 py-3">Scheduled</th>
-                    <th className="px-4 py-3">Sent At</th>
-                    <th className="px-4 py-3">Status</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border/40">
-                  {notifications.map((n) => (
-                    <tr
-                      key={n._id}
-                      className="transition-colors hover:bg-secondary/20"
-                    >
-                      <td className="px-4 py-3 text-foreground">
-                        {leadLabel(n.type)}
-                      </td>
-                      <td className="px-4 py-3 font-mono text-muted-foreground">
-                        {formatRenewalDate(n.scheduledAt)}
-                      </td>
-                      <td className="px-4 py-3 font-mono text-muted-foreground">
-                        {n.attemptedAt ? formatRenewalDate(n.attemptedAt) : "—"}
-                      </td>
-                      <td className="px-4 py-3">{statusPill(n.status)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
             </div>
           )}
         </div>
