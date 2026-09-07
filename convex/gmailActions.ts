@@ -16,6 +16,13 @@ import { processOneEmail } from "./lib/processEmail";
 
 const COOLDOWN_MS = 10 * 60 * 1000;
 
+const AUTH_ERROR_RE =
+  /\b(400|401|403)\b|invalid_grant|invalid_client|\brevoked\b|\bexpired\b/i;
+
+function isAuthError(msg: string): boolean {
+  return AUTH_ERROR_RE.test(msg);
+}
+
 export const scanGmail = action({
   args: { connectionId: v.optional(v.id("connections")) },
   returns: v.object({
@@ -120,6 +127,10 @@ export const scanGmail = action({
     }
 
     let anyScanned = false;
+    let authFailed = false;
+    let completedAnyConn = false;
+    const isAuthError = (msg: string) =>
+      /400|401|403|invalid_grant|revoked|expired|invalid_client/i.test(msg);
     for (const conn of active) {
       // Per-connection cooldown — skip connections scanned recently, scan the rest
       if (
@@ -133,6 +144,15 @@ export const scanGmail = action({
         const tok = await getAccessToken(conn.gmailRefreshToken);
         accessToken = tok.accessToken;
       } catch (e: any) {
+        const msg = String(e?.message ?? e);
+        authFailed = true;
+        if (isAuthError(msg)) {
+          try {
+            await ctx.runMutation(internal.gmail.markTokenInvalid, {
+              connId: conn._id,
+            });
+          } catch {}
+        }
         continue;
       }
 
@@ -140,56 +160,73 @@ export const scanGmail = action({
       let pageToken: string | undefined;
       let pages = 0;
       const maxPages = 2;
-      do {
-        const { messages, nextPageToken } = await listMessages(
-          accessToken,
-          q,
-          15,
-          pageToken,
-        );
-        pageToken = nextPageToken;
-        pages++;
-        for (let i = 0; i < messages.length; i += 5) {
-          const batch = messages.slice(i, i + 5);
-          const fetched = await Promise.all(
-            batch.map((m) => getMessage(accessToken, m.id).catch(() => null)),
+      let connCompleted = false;
+      try {
+        do {
+          const { messages, nextPageToken } = await listMessages(
+            accessToken,
+            q,
+            15,
+            pageToken,
           );
-          for (const msg of fetched) {
-            if (!msg) {
-              skipped++;
-              continue;
+          pageToken = nextPageToken;
+          pages++;
+          for (let i = 0; i < messages.length; i += 5) {
+            const batch = messages.slice(i, i + 5);
+            const fetched = await Promise.all(
+              batch.map((m) => getMessage(accessToken, m.id).catch(() => null)),
+            );
+            for (const msg of fetched) {
+              if (!msg) {
+                skipped++;
+                continue;
+              }
+              scanned++;
+              anyScanned = true;
+              try {
+                const r = await processOneEmail(
+                  ctx,
+                  userId,
+                  msg.subject,
+                  msg.text,
+                  msg.html,
+                  msg.id,
+                  conn.accountEmail,
+                  conn._id,
+                  msg.from,
+                );
+                if (r.status === "created") created++;
+                else if (r.status === "merged") merged++;
+                else if (r.status === "skipped") skipped++;
+                else if (r.status === "unparsed") unparsed++;
+                else if (r.status === "duplicate") duplicate++;
+                else if (r.status === "cancelled") cancelled++;
+              } catch {
+                unparsed++;
+              }
+              // Throttle to stay under Groq 8000 TPM when scanning 30 mails
+              await new Promise((rr) => setTimeout(rr, 450));
             }
-            scanned++;
-            anyScanned = true;
-            try {
-              const r = await processOneEmail(
-                ctx,
-                userId,
-                msg.subject,
-                msg.text,
-                msg.html,
-                msg.id,
-                conn.accountEmail,
-                conn._id,
-                msg.from,
-              );
-              if (r.status === "created") created++;
-              else if (r.status === "merged") merged++;
-              else if (r.status === "skipped") skipped++;
-              else if (r.status === "unparsed") unparsed++;
-              else if (r.status === "duplicate") duplicate++;
-              else if (r.status === "cancelled") cancelled++;
-            } catch {
-              unparsed++;
-            }
-            // Throttle to stay under Groq 8000 TPM when scanning 30 mails
-            await new Promise((rr) => setTimeout(rr, 450));
           }
+          if (!pageToken) break;
+        } while (pages < maxPages);
+        connCompleted = true;
+      } catch (e: any) {
+        const msg = String(e?.message ?? e);
+        if (isAuthError(msg)) {
+          authFailed = true;
+          try {
+            await ctx.runMutation(internal.gmail.markTokenInvalid, {
+              connId: conn._id,
+            });
+          } catch {}
         }
-        if (!pageToken) break;
-      } while (pages < maxPages);
+        // Transient list failure — don't touchScan so retry isn't blocked by cooldown.
+        continue;
+      }
 
-      if (conn?._id) {
+      if (connCompleted && conn?._id) {
+        completedAnyConn = true;
         await ctx.runMutation(internal.gmail.touchScan as any, {
           connId: conn._id,
         });
@@ -213,6 +250,18 @@ export const scanGmail = action({
     }
 
     if (!anyScanned && scanned === 0) {
+      if (authFailed && !completedAnyConn) {
+        return {
+          scanned,
+          created,
+          merged,
+          skipped,
+          unparsed,
+          duplicate,
+          cancelled,
+          reason: "no_consent",
+        };
+      }
       const allOnCooldown = active.every(
         (c) =>
           c.lastGmailScanAt && Date.now() - c.lastGmailScanAt < COOLDOWN_MS,
@@ -227,6 +276,18 @@ export const scanGmail = action({
           duplicate,
           cancelled,
           reason: "cooldown",
+        };
+      }
+      if (!completedAnyConn) {
+        return {
+          scanned,
+          created,
+          merged,
+          skipped,
+          unparsed,
+          duplicate,
+          cancelled,
+          reason: "scan_failed",
         };
       }
     }
@@ -331,7 +392,16 @@ export const scanForUser = internalAction({
             });
           } catch {}
         }
-      } catch (e: any) {}
+      } catch (e: any) {
+        const msg = String(e?.message ?? e);
+        if (/400|401|403|invalid_grant|revoked|expired/i.test(msg)) {
+          try {
+            await ctx.runMutation(internal.gmail.markTokenInvalid, {
+              connId: conn._id,
+            });
+          } catch {}
+        }
+      }
     }
     return { scanned, created };
   },

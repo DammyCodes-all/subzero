@@ -33,7 +33,9 @@ export async function GET(req: NextRequest) {
   const cookieToken = req.cookies.get("__gmail_oauth_token")?.value;
   const token = nextjsToken ?? cookieToken ?? getBearerToken(req);
   if (!token) {
-    return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+    return NextResponse.redirect(
+      `${url.origin}/dashboard?gmail_error=${encodeURIComponent("Not signed in — please sign in again and then connect Gmail")}`,
+    );
   }
   const clientId = process.env.GOOGLE_CLIENT_ID || process.env.AUTH_GOOGLE_ID;
   if (!clientId) {
