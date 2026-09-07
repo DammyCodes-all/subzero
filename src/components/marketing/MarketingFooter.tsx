@@ -16,7 +16,7 @@ const COMPANY_LINKS = [
 
 export function MarketingFooter() {
   return (
-    <footer className="border-t border-border bg-card">
+    <footer className=" bg-card">
       <div className="mx-auto max-w-6xl px-4 py-12 md:px-8">
         <div className="grid gap-10 md:grid-cols-[1.5fr_1fr_1fr]">
           <div className="space-y-3">
@@ -69,14 +69,11 @@ export function MarketingFooter() {
           <p className="text-xs text-muted-foreground">
             © <FooterYear /> SubZero. All rights reserved.
           </p>
-          <p className="font-mono text-xs text-muted-foreground">
-            Your subscriptions shouldn&apos;t surprise you.
-          </p>
         </div>
       </div>
 
       <div aria-hidden="true" className="overflow-hidden select-none">
-        <p className="-mb-[0.48em] text-center font-heading text-[20vw] leading-none font-bold tracking-tight whitespace-nowrap">
+        <p className="-mb-[0.48em] text-center font-heading text-[20vw] leading-none font-bold tracking-tight whitespace-nowrap text-foreground/40">
           Sub<span className="text-primary">Z</span>ero
         </p>
       </div>
