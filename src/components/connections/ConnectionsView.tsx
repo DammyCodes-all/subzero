@@ -16,6 +16,7 @@ import { ForwardingCard } from "@/components/ForwardingCard";
 import { ConnectionsAgentMailSkeleton } from "@/components/Skeleton";
 import { Button } from "@/components/ui/button";
 import { useConnectGmail } from "@/hooks/useConnectGmail";
+import { scanResultCopy } from "@/lib/scanCopy";
 import { api } from "../../../convex/_generated/api";
 
 export function ConnectionsView() {
@@ -43,27 +44,16 @@ export function ConnectionsView() {
     try {
       const res = await scan({ connectionId: connId as never });
       const r = res as { scanned: number; created: number; reason?: string };
-      if (r.reason) {
-        const desc =
-          r.reason === "cooldown"
-            ? "You scanned recently. Wait a few minutes and try again."
-            : r.reason === "no_consent"
-              ? "Gmail access not granted. Reconnect your Google account from the Connections page."
-              : r.reason;
-        sileo.error({
-          title: "Couldn't complete Gmail scan",
-          description: desc,
-        });
+      const copy = scanResultCopy(r);
+      if (copy.kind === "error") {
+        sileo.error({ title: copy.title, description: copy.description });
       } else {
-        sileo.success({
-          title: "Gmail scan finished",
-          description: `Checked ${r.scanned} recent emails and found ${r.created} new subscription${r.created === 1 ? "" : "s"}`,
-        });
+        sileo.success({ title: copy.title, description: copy.description });
       }
-    } catch (e: unknown) {
+    } catch {
       sileo.error({
         title: "Gmail scan failed",
-        description: `Something went wrong while scanning your inbox: ${String(e)}`,
+        description: "Gmail scan hit a temporary error. Try again in a moment.",
       });
     } finally {
       setScanningId(null);

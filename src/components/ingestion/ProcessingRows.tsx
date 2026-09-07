@@ -14,6 +14,8 @@ export function ProcessingRows() {
   const recent = useQuery(api.ingestionAttempts.listRecent, { limit: 5 });
   const processing = (recent ?? []).filter((a) => a.status === "processing");
 
+  if (processing.length === 0) return null;
+
   return (
     <div className="space-y-2">
       <AnimatePresence initial={false}>

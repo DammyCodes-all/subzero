@@ -129,8 +129,6 @@ export const scanGmail = action({
     let anyScanned = false;
     let authFailed = false;
     let completedAnyConn = false;
-    const isAuthError = (msg: string) =>
-      /400|401|403|invalid_grant|revoked|expired|invalid_client/i.test(msg);
     for (const conn of active) {
       // Per-connection cooldown — skip connections scanned recently, scan the rest
       if (
@@ -145,14 +143,16 @@ export const scanGmail = action({
         accessToken = tok.accessToken;
       } catch (e: any) {
         const msg = String(e?.message ?? e);
-        authFailed = true;
         if (isAuthError(msg)) {
+          authFailed = true;
           try {
             await ctx.runMutation(internal.gmail.markTokenInvalid, {
               connId: conn._id,
             });
           } catch {}
         }
+        // Non-auth token failures fall through to scan_failed below —
+        // don't misreport them as no_consent.
         continue;
       }
 
@@ -402,8 +402,6 @@ export const scanForUser = internalAction({
           } catch {}
         }
       }
-    }
-    return { scanned, created };
   },
 });
 
