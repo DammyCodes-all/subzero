@@ -190,7 +190,9 @@ function stepScene(scene: Scene, dt: number, isScanning: boolean) {
     const speed = isScanning ? 1 : 0.22;
     p.a += p.w * (32 / p.r) ** 1.5 * dt * speed;
     // gravity: slow inward drift, stronger closer — disk is accreting, not static
-    const pull = isScanning ? 0.11 * (34 / p.r) ** 1.9 : 0.018 * (34 / p.r) ** 1.2;
+    const pull = isScanning
+      ? 0.11 * (34 / p.r) ** 1.9
+      : 0.018 * (34 / p.r) ** 1.2;
     p.r -= pull * dt;
     if (p.r < HORIZON + 3.5) {
       p.r = rand(68, 86);
@@ -260,11 +262,7 @@ function stepScene(scene: Scene, dt: number, isScanning: boolean) {
   });
 }
 
-function drawMail(
-  ctx: CanvasRenderingContext2D,
-  theme: Theme,
-  m: Mail,
-) {
+function drawMail(ctx: CanvasRenderingContext2D, theme: Theme, m: Mail) {
   if (m.respawnIn > 0) return;
   const heat = clamp01((80 - m.r) / (80 - HORIZON));
   const alpha = m.r > 28 ? 1 : (m.r - HORIZON) / (28 - HORIZON);
@@ -448,7 +446,7 @@ function renderScene(
     const grad = ctx.createRadialGradient(0, 0, layer.r0, 0, 0, layer.r1);
     grad.addColorStop(0, hexAlpha(theme.primary, 0));
     grad.addColorStop(0.28, hexAlpha(theme.primary, 0.06));
-    grad.addColorStop(0.42, hexAlpha(theme.primary, 0.30));
+    grad.addColorStop(0.42, hexAlpha(theme.primary, 0.3));
     grad.addColorStop(0.58, hexAlpha(theme.primary, 0.12));
     grad.addColorStop(1, hexAlpha(theme.primary, 0));
     ctx.fillStyle = grad;
@@ -678,10 +676,7 @@ export function BlackHoleScan({
       aria-label={label ?? "Scanning mail"}
       className={`flex flex-col items-center gap-4 ${className ?? ""}`}
     >
-      <div
-        className="relative shrink-0"
-        style={{ width: size, height: size }}
-      >
+      <div className="relative shrink-0" style={{ width: size, height: size }}>
         <canvas
           ref={canvasRef}
           aria-hidden
