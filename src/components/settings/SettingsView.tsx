@@ -1,19 +1,22 @@
 "use client";
 
-import { useState } from "react";
-import { useQuery } from "convex/react";
-import { HugeiconsIcon } from "@hugeicons/react";
 import {
-  Notification01Icon,
   CheckmarkCircle01Icon,
   Clock01Icon,
+  Delete02Icon,
   Download04Icon,
   InformationCircleIcon,
+  Notification01Icon,
+  Shield01Icon,
 } from "@hugeicons/core-free-icons";
+import { HugeiconsIcon } from "@hugeicons/react";
+import { useConvex, useMutation, useQuery } from "convex/react";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/material-design-3-switch";
+import { formatRenewalDate } from "@/lib/format";
 import { api } from "../../../convex/_generated/api";
 import type { NotificationPrefs } from "./types";
-import { formatRenewalDate } from "@/lib/format";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -50,14 +53,27 @@ function leadLabel(type: string) {
 // Export CSV helper
 // ---------------------------------------------------------------------------
 
-function exportToCsv(rows: readonly Record<string, unknown>[], filename: string) {
+function downloadJson(data: unknown, filename: string) {
+  const blob = new Blob([JSON.stringify(data, null, 2)], {
+    type: "application/json",
+  });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function exportToCsv(
+  rows: readonly Record<string, unknown>[],
+  filename: string,
+) {
   if (!rows.length) return;
   const keys = Object.keys(rows[0]);
   const lines = [
     keys.join(","),
-    ...rows.map((r) =>
-      keys.map((k) => JSON.stringify(r[k] ?? "")).join(","),
-    ),
+    ...rows.map((r) => keys.map((k) => JSON.stringify(r[k] ?? "")).join(",")),
   ];
   const blob = new Blob([lines.join("\n")], { type: "text/csv" });
   const url = URL.createObjectURL(blob);
@@ -73,8 +89,10 @@ function exportToCsv(rows: readonly Record<string, unknown>[], filename: string)
 // ---------------------------------------------------------------------------
 
 export function SettingsView() {
+  const convex = useConvex();
   const notifications = useQuery(api.userNotifications.getMyNotifications);
   const subscriptions = useQuery(api.subscriptions.list);
+  const deleteMyData = useMutation(api.userData.deleteMyData);
 
   const [prefs, setPrefs] = useState<NotificationPrefs>({
     enabled7d: true,
@@ -82,6 +100,17 @@ export function SettingsView() {
     enabled24h: true,
   });
   const [savedPrefs, setSavedPrefs] = useState(false);
+  const [exportingAll, setExportingAll] = useState(false);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteResult, setDeleteResult] = useState<null | {
+    subscriptions: number;
+    evidence: number;
+    drafts: number;
+    notifications: number;
+    scans: number;
+  }>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const handleToggle = (key: keyof NotificationPrefs) => {
     setPrefs((p) => ({ ...p, [key]: !p[key] }));
@@ -95,6 +124,35 @@ export function SettingsView() {
     setTimeout(() => setSavedPrefs(false), 2500);
   };
 
+  const handleExportAll = async () => {
+    setExportingAll(true);
+    try {
+      const data = await convex.query(api.userData.exportMyData, {});
+      if (!data) return;
+      const day = new Date().toISOString().slice(0, 10);
+      downloadJson(data, `subzero-export-${day}.json`);
+    } finally {
+      setExportingAll(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    setDeleting(true);
+    setDeleteError(null);
+    try {
+      const result = await deleteMyData({});
+      setDeleteResult(result);
+      setConfirmingDelete(false);
+    } catch (e) {
+      setDeleteError(
+        e instanceof Error
+          ? e.message
+          : "Something went wrong. Try again in a bit.",
+      );
+    } finally {
+      setDeleting(false);
+    }
+  };
   const handleExportSubs = () => {
     if (!subscriptions?.length) return;
     const rows = subscriptions.map((s) => ({
@@ -109,16 +167,21 @@ export function SettingsView() {
         : "",
       cancellationDifficulty: s.cancellationDifficulty ?? "",
     }));
-    exportToCsv(rows as unknown as Record<string, unknown>[], "subzero-subscriptions.csv");
+    exportToCsv(
+      rows as unknown as Record<string, unknown>[],
+      "subzero-subscriptions.csv",
+    );
   };
 
   return (
     <div className="space-y-8">
       {/* Page Header */}
       <div>
-        <h1 className="font-heading text-2xl font-bold tracking-tight">Settings</h1>
+        <h1 className="font-heading text-2xl font-bold tracking-tight">
+          Settings
+        </h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Manage notification lead-times, data export, and account preferences.
+          Manage notifications, your data, and account preferences.
         </p>
       </div>
 
@@ -127,13 +190,19 @@ export function SettingsView() {
         <div className="flex items-center gap-2.5">
           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
             <HugeiconsIcon
-              icon={Notification01Icon as unknown as Parameters<typeof HugeiconsIcon>[0]["icon"]}
+              icon={
+                Notification01Icon as unknown as Parameters<
+                  typeof HugeiconsIcon
+                >[0]["icon"]
+              }
               size={18}
               strokeWidth={1.8}
               color="currentColor"
             />
           </div>
-          <h2 className="font-heading text-base font-semibold">Renewal Notification Lead-Times</h2>
+          <h2 className="font-heading text-base font-semibold">
+            Renewal Notification Lead-Times
+          </h2>
         </div>
 
         <div className="rounded-xl border border-border bg-card divide-y divide-border/40">
@@ -164,21 +233,12 @@ export function SettingsView() {
                 <p className="text-sm font-medium text-foreground">{label}</p>
                 <p className="mt-0.5 text-xs text-muted-foreground">{desc}</p>
               </div>
-              <button
-                type="button"
-                role="switch"
-                aria-checked={prefs[key]}
-                onClick={() => handleToggle(key)}
-                className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${
-                  prefs[key] ? "bg-primary" : "bg-secondary"
-                }`}
-              >
-                <span
-                  className={`pointer-events-none inline-block h-4 w-4 rounded-full bg-white shadow-lg ring-0 transition-transform ${
-                    prefs[key] ? "translate-x-4" : "translate-x-0"
-                  }`}
-                />
-              </button>
+              <Switch
+                size="sm"
+                checked={prefs[key]}
+                onCheckedChange={() => handleToggle(key)}
+                aria-label={label}
+              />
             </div>
           ))}
         </div>
@@ -192,7 +252,11 @@ export function SettingsView() {
             {savedPrefs ? (
               <>
                 <HugeiconsIcon
-                  icon={CheckmarkCircle01Icon as unknown as Parameters<typeof HugeiconsIcon>[0]["icon"]}
+                  icon={
+                    CheckmarkCircle01Icon as unknown as Parameters<
+                      typeof HugeiconsIcon
+                    >[0]["icon"]
+                  }
                   size={14}
                   color="currentColor"
                 />
@@ -204,11 +268,47 @@ export function SettingsView() {
           </Button>
           <p className="flex items-center gap-1 text-xs text-muted-foreground">
             <HugeiconsIcon
-              icon={InformationCircleIcon as unknown as Parameters<typeof HugeiconsIcon>[0]["icon"]}
+              icon={
+                InformationCircleIcon as unknown as Parameters<
+                  typeof HugeiconsIcon
+                >[0]["icon"]
+              }
               size={13}
               color="currentColor"
             />
             Alerts are sent to your connected account email.
+          </p>
+        </div>
+      </section>
+
+      {/* ── Your Data ── */}
+      <section className="space-y-4">
+        <div className="flex items-center gap-2.5">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
+            <HugeiconsIcon
+              icon={
+                Shield01Icon as unknown as Parameters<
+                  typeof HugeiconsIcon
+                >[0]["icon"]
+              }
+              size={18}
+              strokeWidth={1.8}
+              color="currentColor"
+            />
+          </div>
+          <h2 className="font-heading text-base font-semibold">Your Data</h2>
+        </div>
+
+        <div className="rounded-xl border border-border bg-card p-5">
+          <p className="text-sm font-medium text-foreground">
+            We keep receipt excerpts, not your inbox
+          </p>
+          <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+            SubZero stores short excerpts from subscription receipts (merchant,
+            amount, renewal date) plus cancellation research and your
+            notification history. It never stores your full inbox, bank logins,
+            or payment details. Scan history keeps only sender and subject lines
+            for a week, then it is cleaned up automatically.
           </p>
         </div>
       </section>
@@ -218,7 +318,11 @@ export function SettingsView() {
         <div className="flex items-center gap-2.5">
           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
             <HugeiconsIcon
-              icon={Download04Icon as unknown as Parameters<typeof HugeiconsIcon>[0]["icon"]}
+              icon={
+                Download04Icon as unknown as Parameters<
+                  typeof HugeiconsIcon
+                >[0]["icon"]
+              }
               size={18}
               strokeWidth={1.8}
               color="currentColor"
@@ -227,15 +331,16 @@ export function SettingsView() {
           <h2 className="font-heading text-base font-semibold">Data Export</h2>
         </div>
 
-        <div className="rounded-xl border border-border bg-card p-5">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="rounded-xl border border-border bg-card divide-y divide-border/40">
+          <div className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <p className="text-sm font-medium text-foreground">
                 Export all subscriptions as CSV
               </p>
               <p className="mt-0.5 text-xs text-muted-foreground">
-                Downloads a CSV file with merchant, price, interval, status, and renewal date for all{" "}
-                {subscriptions?.length ?? 0} tracked subscriptions.
+                Downloads a CSV file with merchant, price, interval, status, and
+                renewal date for all {subscriptions?.length ?? 0} tracked
+                subscriptions.
               </p>
             </div>
             <Button
@@ -246,13 +351,158 @@ export function SettingsView() {
               className="h-8 gap-1.5 shrink-0 text-xs font-medium"
             >
               <HugeiconsIcon
-                icon={Download04Icon as unknown as Parameters<typeof HugeiconsIcon>[0]["icon"]}
+                icon={
+                  Download04Icon as unknown as Parameters<
+                    typeof HugeiconsIcon
+                  >[0]["icon"]
+                }
                 size={14}
                 color="currentColor"
               />
               Download CSV
             </Button>
           </div>
+
+          <div className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-sm font-medium text-foreground">
+                Download everything as JSON
+              </p>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                One file with your subscriptions, receipt excerpts, cancellation
+                drafts, notification history, and recent scan history.
+              </p>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleExportAll}
+              disabled={exportingAll}
+              className="h-8 gap-1.5 shrink-0 text-xs font-medium"
+            >
+              <HugeiconsIcon
+                icon={
+                  Download04Icon as unknown as Parameters<
+                    typeof HugeiconsIcon
+                  >[0]["icon"]
+                }
+                size={14}
+                color="currentColor"
+              />
+              {exportingAll ? "Preparing..." : "Download JSON"}
+            </Button>
+          </div>
+        </div>
+      </section>
+
+      {/* ── Danger Zone ── */}
+      <section className="space-y-4">
+        <div className="flex items-center gap-2.5">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-destructive/10 text-destructive">
+            <HugeiconsIcon
+              icon={
+                Delete02Icon as unknown as Parameters<
+                  typeof HugeiconsIcon
+                >[0]["icon"]
+              }
+              size={18}
+              strokeWidth={1.8}
+              color="currentColor"
+            />
+          </div>
+          <h2 className="font-heading text-base font-semibold">
+            Delete My Data
+          </h2>
+        </div>
+
+        <div className="rounded-xl border border-destructive/30 bg-card p-5">
+          {deleteResult ? (
+            <div className="flex items-center gap-2.5">
+              <HugeiconsIcon
+                icon={
+                  CheckmarkCircle01Icon as unknown as Parameters<
+                    typeof HugeiconsIcon
+                  >[0]["icon"]
+                }
+                size={18}
+                color="currentColor"
+              />
+              <p className="text-sm text-foreground">
+                All gone. Removed {deleteResult.subscriptions} subscriptions,{" "}
+                {deleteResult.evidence} receipt excerpts, {deleteResult.drafts}{" "}
+                cancellation drafts, {deleteResult.notifications} notifications,
+                and {deleteResult.scans} scan records.
+              </p>
+            </div>
+          ) : confirmingDelete ? (
+            <div className="space-y-4">
+              <div>
+                <p className="text-sm font-medium text-foreground">
+                  Delete everything listed above? This cannot be undone.
+                </p>
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  Your connected inboxes stay connected, so new receipts will
+                  start showing up again unless you disconnect them too.
+                </p>
+              </div>
+              {deleteError && (
+                <p className="text-xs text-destructive">{deleteError}</p>
+              )}
+              <div className="flex items-center gap-3">
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onClick={handleDelete}
+                  disabled={deleting}
+                  className="h-8 text-xs font-semibold"
+                >
+                  {deleting ? "Deleting..." : "Yes, delete everything"}
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setConfirmingDelete(false);
+                    setDeleteError(null);
+                  }}
+                  disabled={deleting}
+                  className="h-8 text-xs font-medium"
+                >
+                  Keep my data
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="text-sm font-medium text-foreground">
+                  Permanently remove everything SubZero knows about you
+                </p>
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  Subscriptions, receipt excerpts, cancellation drafts,
+                  notification history, and scan history. Connected inboxes are
+                  left alone.
+                </p>
+              </div>
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={() => setConfirmingDelete(true)}
+                className="h-8 gap-1.5 shrink-0 text-xs font-semibold"
+              >
+                <HugeiconsIcon
+                  icon={
+                    Delete02Icon as unknown as Parameters<
+                      typeof HugeiconsIcon
+                    >[0]["icon"]
+                  }
+                  size={14}
+                  color="currentColor"
+                />
+                Delete my data
+              </Button>
+            </div>
+          )}
         </div>
       </section>
 
@@ -261,26 +511,36 @@ export function SettingsView() {
         <div className="flex items-center gap-2.5">
           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
             <HugeiconsIcon
-              icon={Clock01Icon as unknown as Parameters<typeof HugeiconsIcon>[0]["icon"]}
+              icon={
+                Clock01Icon as unknown as Parameters<
+                  typeof HugeiconsIcon
+                >[0]["icon"]
+              }
               size={18}
               strokeWidth={1.8}
               color="currentColor"
             />
           </div>
-          <h2 className="font-heading text-base font-semibold">Notification History</h2>
+          <h2 className="font-heading text-base font-semibold">
+            Notification History
+          </h2>
         </div>
 
         <div className="overflow-hidden rounded-xl border border-border bg-card">
           {notifications === undefined ? (
             <div className="space-y-2 p-5">
               {[...Array(4)].map((_, i) => (
-                <div key={i} className="h-8 animate-pulse rounded-lg bg-border/40" />
+                <div
+                  key={i}
+                  className="h-8 animate-pulse rounded-lg bg-border/40"
+                />
               ))}
             </div>
           ) : notifications.length === 0 ? (
             <div className="p-8 text-center">
               <p className="text-sm text-muted-foreground">
-                No notifications sent yet. They appear here once your first renewal warning fires.
+                No notifications sent yet. They appear here once your first
+                renewal warning fires.
               </p>
             </div>
           ) : (
@@ -296,8 +556,13 @@ export function SettingsView() {
                 </thead>
                 <tbody className="divide-y divide-border/40">
                   {notifications.map((n) => (
-                    <tr key={n._id} className="transition-colors hover:bg-secondary/20">
-                      <td className="px-4 py-3 text-foreground">{leadLabel(n.type)}</td>
+                    <tr
+                      key={n._id}
+                      className="transition-colors hover:bg-secondary/20"
+                    >
+                      <td className="px-4 py-3 text-foreground">
+                        {leadLabel(n.type)}
+                      </td>
                       <td className="px-4 py-3 font-mono text-muted-foreground">
                         {formatRenewalDate(n.scheduledAt)}
                       </td>
