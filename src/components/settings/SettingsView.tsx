@@ -85,12 +85,15 @@ export function SettingsView() {
   const settings = useQuery(api.userSettings.getMine);
   const setNotifyOnCancel = useMutation(api.userSettings.setNotifyOnCancel);
   const [cancelPrefSaving, setCancelPrefSaving] = useState(false);
+  const [cancelJustSaved, setCancelJustSaved] = useState(false);
   const cancelPref = settings?.notifyOnCancel ?? true;
 
   const handleCancelPref = async (enabled: boolean) => {
     setCancelPrefSaving(true);
     try {
       await setNotifyOnCancel({ enabled });
+      setCancelJustSaved(true);
+      setTimeout(() => setCancelJustSaved(false), 2500);
     } catch {
       sileo.error({
         title: "Could not save",
@@ -201,7 +204,7 @@ export function SettingsView() {
             />
           </div>
           <h2 className="font-heading text-base font-semibold">
-            Renewal Notification Lead-Times
+            Notifications
           </h2>
         </div>
 
@@ -241,6 +244,38 @@ export function SettingsView() {
               />
             </div>
           ))}
+          <div className="flex items-center justify-between gap-4 px-5 py-4">
+            <div>
+              <p className="flex items-center gap-2 text-sm font-medium text-foreground">
+                Cancellation confirmation
+                {cancelJustSaved && (
+                  <span className="inline-flex items-center gap-1 text-[11px] font-medium text-primary">
+                    <HugeiconsIcon
+                      icon={
+                        CheckmarkCircle01Icon as unknown as Parameters<
+                          typeof HugeiconsIcon
+                        >[0]["icon"]
+                      }
+                      size={12}
+                      color="currentColor"
+                    />
+                    Saved
+                  </span>
+                )}
+              </p>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                One email when SubZero marks a subscription cancelled, so a
+                wrong call never slips by. Saves instantly.
+              </p>
+            </div>
+            <Switch
+              size="sm"
+              checked={cancelPref}
+              disabled={settings === undefined || cancelPrefSaving}
+              onCheckedChange={handleCancelPref}
+              aria-label="Email me when a subscription is marked cancelled"
+            />
+          </div>
         </div>
 
         <div className="flex items-center gap-3">
@@ -279,48 +314,6 @@ export function SettingsView() {
             />
             Alerts are sent to your connected account email.
           </p>
-        </div>
-      </section>
-
-      {/* ── Cancellation Emails ── */}
-      <section className="space-y-4">
-        <div className="flex items-center gap-2.5">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
-            <HugeiconsIcon
-              icon={
-                CheckmarkCircle01Icon as unknown as Parameters<
-                  typeof HugeiconsIcon
-                >[0]["icon"]
-              }
-              size={18}
-              strokeWidth={1.8}
-              color="currentColor"
-            />
-          </div>
-          <h2 className="font-heading text-base font-semibold">
-            Cancellation Emails
-          </h2>
-        </div>
-
-        <div className="rounded-xl border border-border bg-card">
-          <div className="flex items-center justify-between gap-4 px-5 py-4">
-            <div>
-              <p className="text-sm font-medium text-foreground">
-                Tell me when something is marked cancelled
-              </p>
-              <p className="mt-0.5 text-xs text-muted-foreground">
-                One email when SubZero marks a subscription cancelled, so a
-                wrong call never slips by.
-              </p>
-            </div>
-            <Switch
-              size="sm"
-              checked={cancelPref}
-              disabled={settings === undefined || cancelPrefSaving}
-              onCheckedChange={handleCancelPref}
-              aria-label="Email me when a subscription is marked cancelled"
-            />
-          </div>
         </div>
       </section>
 
