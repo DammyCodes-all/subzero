@@ -143,6 +143,7 @@ export function SettingsView() {
     drafts: number;
     notifications: number;
     scans: number;
+    disconnected: number;
   }>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
@@ -179,6 +180,7 @@ export function SettingsView() {
       const result = await deleteMyData({});
       setDeleteResult(result);
       setConfirmingDelete(false);
+      setTimeout(() => setDeleteResult(null), 8000);
     } catch (e) {
       setDeleteError(
         e instanceof Error
@@ -547,6 +549,9 @@ export function SettingsView() {
                 {deleteResult.evidence} receipt excerpts, {deleteResult.drafts}{" "}
                 cancellation drafts, {deleteResult.notifications} notifications,
                 and {deleteResult.scans} scan records.
+                {deleteResult.disconnected > 0
+                  ? ` Disconnected ${deleteResult.disconnected} Gmail inbox${deleteResult.disconnected === 1 ? "" : "es"}.`
+                  : " Your Gmail inboxes are disconnected."}
               </p>
             </div>
           ) : confirmingDelete ? (
@@ -556,8 +561,8 @@ export function SettingsView() {
                   Delete everything listed above? This cannot be undone.
                 </p>
                 <p className="mt-0.5 text-xs text-muted-foreground">
-                  Your connected inboxes stay connected, so new receipts will
-                  start showing up again unless you disconnect them too.
+                  Your Gmail inboxes are disconnected too, so nothing new will
+                  sync in afterwards.
                 </p>
               </div>
               {deleteError && (
@@ -595,8 +600,8 @@ export function SettingsView() {
                 </p>
                 <p className="mt-0.5 text-xs text-muted-foreground">
                   Subscriptions, receipt excerpts, cancellation drafts,
-                  notification history, and scan history. Connected inboxes are
-                  left alone.
+                  notification history, and scan history. Gmail inboxes are
+                  disconnected too.
                 </p>
               </div>
               <Button

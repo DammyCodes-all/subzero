@@ -1,4 +1,5 @@
 import { getAuthUserId } from "@convex-dev/auth/server";
+import { internal } from "./_generated/api";
 import { mutation } from "./_generated/server";
 
 /**
@@ -10,9 +11,9 @@ import { mutation } from "./_generated/server";
  * - cancellationActions (cancellation drafts attached to subscriptions)
  * - notifications (notification history)
  * - ingestionAttempts (scan history: sender + subject metadata, 7 day window)
+ * - google connections are disconnected (tokens cleared, watch stopped)
  *
- * Connections and auth records are intentionally untouched: deleting data
- * does not disconnect inboxes.
+ * Auth records are intentionally untouched.
  */
 
 function candidateIds(userId: string, tokenId?: string): Set<string> {
@@ -111,12 +112,56 @@ export const deleteMyData = mutation({
       }
     }
 
+    // Auto-disconnect Gmail: clearing data also revokes inbox access so
+    // nothing new syncs in afterwards.
+    let disconnected = 0;
+    const seenConns = new Set<string>();
+    for (const uid of candidates) {
+      const batch = await ctx.db
+        .query("connections")
+        .withIndex("by_user", (q) => q.eq("userId", uid))
+        .collect();
+      for (const c of batch) {
+        if (seenConns.has(c._id)) continue;
+        seenConns.add(c._id);
+        if (c.provider !== "google") continue;
+        if (!belongsToUser(c.userId, candidates)) continue;
+        if (c.status === "disconnected" && !c.gmailRefreshToken) continue;
+        const tok = c.gmailRefreshToken;
+        await ctx.db.patch(c._id, {
+          status: "disconnected",
+          gmailScopeGranted: false,
+          gmailRefreshToken: undefined,
+          // Reset the scan cursor so the next connect starts as a true
+          // first scan (black hole shows) instead of a "last synced"
+          // zero-state with a stale timestamp.
+          lastGmailScanAt: undefined,
+          gmailHistoryId: undefined,
+          gmailWatchExpiration: undefined,
+          gmailWatchTopic: undefined,
+          gmailWatchLastRenewedAt: undefined,
+          gmailWatchHistoryIdAtWatch: undefined,
+        } as never);
+        disconnected += 1;
+        if (tok) {
+          try {
+            await ctx.scheduler.runAfter(
+              0,
+              internal.gmailWatch.stopWatchForConn,
+              { connId: c._id, refreshToken: tok },
+            );
+          } catch {}
+        }
+      }
+    }
+
     return {
       subscriptions: subs.length,
       evidence: evidenceCount,
       drafts: draftCount,
       notifications: notificationCount,
       scans: scanCount,
+      disconnected,
     };
   },
 });

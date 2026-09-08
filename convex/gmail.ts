@@ -1,7 +1,7 @@
 import { getAuthUserId } from "@convex-dev/auth/server";
 import { v } from "convex/values";
-import type { Id } from "./_generated/dataModel";
 import { internal } from "./_generated/api";
+import type { Id } from "./_generated/dataModel";
 import {
   internalMutation,
   internalQuery,
@@ -69,7 +69,9 @@ export const getGmailStatus = query({
     const watchExp = (first as any)?.gmailWatchExpiration as number | undefined;
     const hasHist = !!(first as any)?.gmailHistoryId;
     // needsReauth: still marked connected but scope revoked (token refresh 401) — prompt reconnect
-    const needsReauth = googleRows.some((c) => c.status === "connected" && !c.gmailScopeGranted);
+    const needsReauth = googleRows.some(
+      (c) => c.status === "connected" && !c.gmailScopeGranted,
+    );
     return {
       connected: connectedRows.length > 0,
       gmailScopeGranted: first.gmailScopeGranted,
@@ -300,11 +302,20 @@ export const storeGmailToken = internalMutation({
     );
     let connId: Id<"connections"> | null = null;
     if (existing) {
+      const wasDisconnected =
+        (existing as { status?: string }).status === "disconnected";
       await ctx.db.patch(existing._id, {
         gmailRefreshToken: refreshToken,
         gmailScopeGranted: true,
         accountEmail: emailNorm || existing.accountEmail,
         status: "connected",
+        // Reconnecting a disconnected inbox starts fresh: clear the scan
+        // cursor so the first-scan takeover shows instead of a stale
+        // "last synced" zero-state. Already-connected token refreshes
+        // keep their cursor.
+        ...(wasDisconnected
+          ? { lastGmailScanAt: undefined, gmailHistoryId: undefined }
+          : {}),
       });
       connId = existing._id;
     } else {
@@ -343,9 +354,15 @@ export const storeGmailToken = internalMutation({
     }
     if (connId) {
       // Proactive: schedule immediate history-skip-aware poll and watch setup if topic configured
-      await ctx.scheduler.runAfter(0, internal.gmailWatch.pollIncrementalForUser, { userId: args.userId });
+      await ctx.scheduler.runAfter(
+        0,
+        internal.gmailWatch.pollIncrementalForUser,
+        { userId: args.userId },
+      );
       // Watch setup is best-effort — only if GMAIL_PUBSUB_TOPIC is set
-      await ctx.scheduler.runAfter(0, internal.gmailWatch.ensureWatchForConn, { connId });
+      await ctx.scheduler.runAfter(0, internal.gmailWatch.ensureWatchForConn, {
+        connId,
+      });
     }
     return { ok: true };
   },
@@ -394,13 +411,20 @@ export const storeByEmail = mutation({
     );
     let connId2: Id<"connections"> | null = null;
     if (existing) {
-      // Same email reconnecting — update tokens in place
+      // Same email reconnecting — update tokens in place. A disconnected
+      // row reconnects fresh (cursor cleared so first-scan shows);
+      // an already-connected row keeps its cursor.
+      const wasDisconnected =
+        (existing as { status?: string }).status === "disconnected";
       await ctx.db.patch(existing._id, {
         userId,
         gmailRefreshToken: refreshToken,
         gmailScopeGranted: true,
         accountEmail: emailNorm,
         status: "connected",
+        ...(wasDisconnected
+          ? { lastGmailScanAt: undefined, gmailHistoryId: undefined }
+          : {}),
       });
       connId2 = existing._id;
     } else {
@@ -427,8 +451,14 @@ export const storeByEmail = mutation({
       } catch {}
     }
     if (connId2) {
-      await ctx.scheduler.runAfter(0, internal.gmailWatch.pollIncrementalForUser, { userId });
-      await ctx.scheduler.runAfter(0, internal.gmailWatch.ensureWatchForConn, { connId: connId2 });
+      await ctx.scheduler.runAfter(
+        0,
+        internal.gmailWatch.pollIncrementalForUser,
+        { userId },
+      );
+      await ctx.scheduler.runAfter(0, internal.gmailWatch.ensureWatchForConn, {
+        connId: connId2,
+      });
     }
     return { ok: true };
   },
@@ -478,7 +508,11 @@ export const disconnectGmail = mutation({
         } as any);
         if (tok) {
           try {
-            await ctx.scheduler.runAfter(0, internal.gmailWatch.stopWatchForConn, { connId: target._id, refreshToken: tok });
+            await ctx.scheduler.runAfter(
+              0,
+              internal.gmailWatch.stopWatchForConn,
+              { connId: target._id, refreshToken: tok },
+            );
           } catch {}
         }
         return { ok: true };
@@ -529,7 +563,11 @@ export const disconnectGmail = mutation({
       } as any);
       if (tok) {
         try {
-          await ctx.scheduler.runAfter(0, internal.gmailWatch.stopWatchForConn, { connId: g._id, refreshToken: tok });
+          await ctx.scheduler.runAfter(
+            0,
+            internal.gmailWatch.stopWatchForConn,
+            { connId: g._id, refreshToken: tok },
+          );
         } catch {}
       }
     }
@@ -634,7 +672,9 @@ export const getConnectionsByEmailInternal = internalQuery({
   handler: async (ctx, args) => {
     const rows = await ctx.db
       .query("connections")
-      .withIndex("by_accountEmail", (q) => q.eq("accountEmail", args.email.toLowerCase()))
+      .withIndex("by_accountEmail", (q) =>
+        q.eq("accountEmail", args.email.toLowerCase()),
+      )
       .collect();
     return rows
       .filter((c) => c.provider === "google")
