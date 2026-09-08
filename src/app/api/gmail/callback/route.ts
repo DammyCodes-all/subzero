@@ -165,6 +165,20 @@ export async function GET(req: NextRequest) {
       friendly = `Gmail (${email}) does not match your SubZero sign-in. Sign out and sign in with ${email}, then connect Gmail again.`;
     } else if (raw.includes("No user found")) {
       friendly = `No SubZero account for ${email}. Sign in with Google first, then connect Gmail.`;
+    } else if (
+      raw.includes("Not authenticated") ||
+      raw.includes("Invalid token") ||
+      raw.includes("jwt")
+    ) {
+      friendly =
+        "Your sign-in expired before Google finished. Sign in again, then connect Gmail.";
+    } else if (
+      raw.includes("Could not find") ||
+      raw.includes("fetch failed") ||
+      raw.includes("Failed to fetch")
+    ) {
+      friendly =
+        "We couldn't reach our own server to save that. Check your connection and try again.";
     } else {
       console.error("gmail storeByEmail failed", raw.slice(0, 300));
       friendly = "We couldn't save that connection. Try again in a bit.";
@@ -177,6 +191,7 @@ export async function GET(req: NextRequest) {
   const res = NextResponse.redirect(
     `${url.origin}/dashboard?gmail_connected=1`,
   );
+  console.log("gmail oauth success", email.toLowerCase());
   res.cookies.delete("__gmail_oauth_state");
   res.cookies.delete("__gmail_oauth_token");
   return res;
