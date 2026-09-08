@@ -14,6 +14,7 @@ import {
   NoSubscriptionsState,
   ZeroAttentionState,
 } from "@/components/EmptyState";
+import { FirstScanSummary } from "@/components/ingestion/FirstScanSummary";
 import { FirstScanView } from "@/components/ingestion/FirstScanView";
 import { ProcessingRows } from "@/components/ingestion/ProcessingRows";
 import { DashboardSkeleton } from "@/components/Skeleton";
@@ -35,6 +36,8 @@ export function DashboardView() {
   const subCount = all?.length ?? 0;
   const {
     showFullFirstScan,
+    showFirstSummary,
+    dismissSummary,
     showScanBanner,
     scanning: firstScanScanning,
     scanError: firstScanError,
@@ -157,19 +160,31 @@ export function DashboardView() {
       ) : statusLoading && subCount === 0 ? (
         /* Status pending and nothing to show yet — avoid mockup flash. */
         <DashboardSkeleton />
-      ) : showFullFirstScan ? (
+      ) : showFullFirstScan || showFirstSummary ? (
         /* ── First scan owns the screen until lastGmailScanAt is set.
             Latched to zero-sub start so streaming receipts don't unmount
-            it mid-scan (previously flipped to populated on first sub). ── */
+            it mid-scan (previously flipped to populated on first sub).
+            On a productive first scan, hands off once to the results
+            summary instead of dropping straight into the dashboard. ── */
         <div className="flex flex-col gap-4 py-2">
           <DashboardGreeting name={firstName} />
-          <FirstScanView
-            email={scanEmail ?? undefined}
-            foundCount={scanCount}
-            scanning={firstScanScanning}
-            error={firstScanError}
-            onRetry={retryFirstScan}
-          />
+          {showFirstSummary ? (
+            <FirstScanSummary
+              total={activeCount}
+              needCount={urgentSubs.length}
+              topSubs={displaySubs.slice(0, 2)}
+              moreCount={Math.max(0, activeCount - 2)}
+              onShowMe={dismissSummary}
+            />
+          ) : (
+            <FirstScanView
+              email={scanEmail ?? undefined}
+              foundCount={scanCount}
+              scanning={firstScanScanning}
+              error={firstScanError}
+              onRetry={retryFirstScan}
+            />
+          )}
         </div>
       ) : subCount === 0 ? (
         /* ── Zero-state ── */

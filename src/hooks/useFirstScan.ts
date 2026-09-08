@@ -31,6 +31,13 @@ export function useFirstScan({
   const scan = useAction(api.gmailActions.scanGmail);
   const [scanning, setScanning] = useState(false);
   const [scanError, setScanError] = useState<string | null>(null);
+  // Snapshot of the last completed scan in this episode. Powers the
+  // one-time results summary ("We found N…"). Null on fresh episodes.
+  const [scanResult, setScanResult] = useState<{
+    scanned: number;
+    created: number;
+  } | null>(null);
+  const [summaryDismissed, setSummaryDismissed] = useState(false);
   // Latched at the moment a never-scanned episode begins. Prevents
   // full-to-banner flips as receipts stream in mid-scan.
   const [startedZero, setStartedZero] = useState<boolean | null>(null);
@@ -75,6 +82,8 @@ export function useFirstScan({
     if (mountedRef.current) {
       setScanError(null);
       setScanning(true);
+      setScanResult(null);
+      setSummaryDismissed(false);
     }
     try {
       const r = await scan({});
@@ -96,7 +105,13 @@ export function useFirstScan({
         }
         sileo.error({ title: copy.title, description: copy.description });
       } else {
-        if (mountedRef.current) setScanError(null);
+        if (mountedRef.current) {
+          setScanError(null);
+          setScanResult({
+            scanned: res.scanned ?? 0,
+            created: res.created ?? 0,
+          });
+        }
         sileo.success({ title: copy.title, description: copy.description });
       }
     } catch {
@@ -139,6 +154,13 @@ export function useFirstScan({
   return {
     showFullFirstScan,
     showScanBanner,
+    /** One-time summary once the first scan lands with new subs. */
+    showFirstSummary:
+      isNewUserEpisode &&
+      !scanning &&
+      !summaryDismissed &&
+      (scanResult?.created ?? 0) > 0,
+    dismissSummary: () => setSummaryDismissed(true),
     /** Legacy alias. Prefer showFullFirstScan. */
     showFirstScan: showFullFirstScan,
     scanning,

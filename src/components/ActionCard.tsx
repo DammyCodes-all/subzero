@@ -4,6 +4,7 @@ import { ExternalLinkIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { MerchantAvatar } from "@/components/MerchantAvatar";
 import { Button } from "@/components/ui/button";
+import { useCancelStarted } from "@/hooks/useCancelStarted";
 import { getCancellationCTA, openExternalUrl } from "@/lib/cancellation";
 import {
   displayNames,
@@ -42,6 +43,7 @@ export function ActionCard({
   quiet?: boolean;
 }) {
   const cta = getCancellationCTA(sub);
+  const trackStarted = useCancelStarted();
   const urgent = isUrgent(sub.nextRenewalAt) || isUrgent(sub.trialEndsAt);
   const badge = urgencyLabel(sub.nextRenewalAt, sub.trialEndsAt);
   const { title, subtitle } = displayNames(sub.merchant, sub.product);
@@ -116,6 +118,7 @@ export function ActionCard({
               onClick={(e) => {
                 e.preventDefault();
                 e.stopPropagation();
+                trackStarted(sub._id);
                 openExternalUrl(cta.href!, sub.billingProvider);
               }}
             >

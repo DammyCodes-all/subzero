@@ -10,6 +10,7 @@ import {
   mutation,
   query,
 } from "./_generated/server";
+import { flipToStarted } from "./actions";
 
 function extractEmail(raw: string): string | null {
   if (!raw) return null;
@@ -427,6 +428,10 @@ export const sendCancellationEmail = action({
     const sourceHint = sub.sourceEmail
       ? `\n\n(Subscription detected from: ${sub.sourceEmail})`
       : "";
+
+    // Walk the lifecycle in order: started before pending. The shared
+    // flip is forward-only (never clobbers pending).
+    await flipToStarted(ctx, args.subscriptionId);
 
     const apiKey = process.env.AGENTMAIL_API_KEY;
     if (apiKey && recipient) {

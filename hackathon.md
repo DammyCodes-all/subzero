@@ -17,6 +17,9 @@
 ## Log
 
 ### 2026-09-08 - working tree
+Closed three product gaps: lifecycle wiring (CTA clicks in `ActionCard`, `SubscriptionDetailView`, `HowToCancel` flip to `user_started` via `useCancelStarted`, guarded forward-only in `convex/actions.ts`; email send path walks `action_ready → user_started → cancellation_pending` server-side), difficulty reasons (observable-only chips from `difficultyReasons` in `src/lib/cancellation.ts`, rendered in `HowToCancel`), and first-scan results summary (`FirstScanSummary` with live counts + top cards, shown once per productive first scan from `useFirstScan`).
+
+### 2026-09-08 - working tree
 Installed official sponsor components and migrated off raw fetches: `@firecrawl/firecrawl-convex` now powers research search/scrape via `convex/lib/firecrawl.ts` (`convex/research.ts`), and `@agentmail/convex` now powers durable outbound sends (cancellation emails, renewal nudges, confirmations) via `convex/lib/agentmail.ts` (`convex/agentmail.ts`, `convex/notifications.ts`) with workpool retries and reactive delivery status. Inbound AgentMail routing stays custom in `convex/http.ts`. `@convex-dev/static-hosting` installed but not registered — Gmail OAuth lives in Next.js API routes, which a static export cannot serve. Corrected the build log header (components, truthful Groq-first model order, deploy status). Convex features: components, actions, mutations (`convex/convex.config.ts`, `convex/lib/firecrawl.ts`, `convex/lib/agentmail.ts`).
 
 ### 2026-08-28 - working tree

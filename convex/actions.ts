@@ -191,7 +191,18 @@ export const unhideSubscription = mutation({
   },
 });
 
-/** Mark a subscription as "user started" — cancellation in progress */
+/** Forward-only flip to user_started. Shared by the public mutation
+ * (CTA clicks) and server-side callers (email send path). */
+export async function flipToStarted(ctx: any, id: Id<"subscriptions">) {
+  const sub = await ctx.db.get(id);
+  if (sub && (sub.status === "active" || sub.status === "action_ready")) {
+    await ctx.db.patch(id, { status: "user_started" });
+  }
+}
+
+/** Mark a subscription as "user started" — cancellation in progress.
+ * Only flips forward from active/action_ready: re-opening an old link must
+ * never overwrite pending/cancelled/failed. Fire-and-forget from CTA clicks. */
 export const markStarted = mutation({
   args: { id: v.id("subscriptions") },
   returns: v.null(),
@@ -201,7 +212,7 @@ export const markStarted = mutation({
     const sub = await ctx.db.get(args.id);
     if (!sub || (sub.userId !== userId && !sub.userId.includes(userId)))
       throw new Error("Not found");
-    await ctx.db.patch(args.id, { status: "user_started" });
+    await flipToStarted(ctx, args.id);
     return null;
   },
 });

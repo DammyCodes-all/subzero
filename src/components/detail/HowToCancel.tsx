@@ -1,13 +1,14 @@
 "use client";
 
+import { ExternalLinkIcon, Loading03Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { ExternalLinkIcon } from "@hugeicons/core-free-icons";
-import { Loading03Icon } from "@hugeicons/core-free-icons";
 import { Button } from "@/components/ui/button";
-import { openExternalUrl } from "@/lib/cancellation";
+import { useCancelStarted } from "@/hooks/useCancelStarted";
+import { difficultyReasons, openExternalUrl } from "@/lib/cancellation";
 import { frictionLabel } from "@/lib/format";
 
 type Sub = {
+  _id: string;
   merchant: string;
   product?: string;
   cancellationDifficulty?: string;
@@ -30,6 +31,7 @@ export function HowToCancel({
   action?: Action | null;
 }) {
   const method = sub.cancellationMethod ?? "unknown";
+  const trackStarted = useCancelStarted();
   const difficulty = sub.cancellationDifficulty;
   const provider = sub.billingProvider;
   const url = sub.cancellationUrl;
@@ -38,7 +40,12 @@ export function HowToCancel({
   const difficultyBlock = difficulty ? (
     <p className="font-mono text-xs tabular-nums text-muted-foreground">
       {frictionLabel(difficulty)}
-      {action?.instructions?.length ? ` · ${action.instructions.length} steps` : ""}
+      {action?.instructions?.length
+        ? ` · ${action.instructions.length} steps`
+        : ""}
+      {difficultyReasons({ method, billingProvider: provider ?? null }).map(
+        (reason) => ` · ${reason}`,
+      )}
     </p>
   ) : null;
 
@@ -47,10 +54,24 @@ export function HowToCancel({
       <div className="space-y-4">
         {difficultyBlock}
         <div className="rounded-lg border border-dashed bg-card p-5 flex items-center gap-3">
-          <HugeiconsIcon icon={Loading03Icon as unknown as Parameters<typeof HugeiconsIcon>[0]["icon"]} size={16} strokeWidth={1.8} color="currentColor" className="animate-spin text-muted-foreground" />
+          <HugeiconsIcon
+            icon={
+              Loading03Icon as unknown as Parameters<
+                typeof HugeiconsIcon
+              >[0]["icon"]
+            }
+            size={16}
+            strokeWidth={1.8}
+            color="currentColor"
+            className="animate-spin text-muted-foreground"
+          />
           <div>
-            <p className="text-sm font-medium">Researching cancellation route…</p>
-            <p className="text-xs text-muted-foreground">Checking {sub.merchant} help center via Firecrawl. This takes ~5s.</p>
+            <p className="text-sm font-medium">
+              Researching cancellation route…
+            </p>
+            <p className="text-xs text-muted-foreground">
+              Checking {sub.merchant} help center via Firecrawl. This takes ~5s.
+            </p>
           </div>
         </div>
       </div>
@@ -58,7 +79,9 @@ export function HowToCancel({
   }
 
   // Research output is source of truth — use it when present
-  const hasResearchedSteps = !!(action?.instructions && action.instructions.length > 0);
+  const hasResearchedSteps = !!(
+    action?.instructions && action.instructions.length > 0
+  );
 
   // open_provider — must cancel where billed (no hardcoded fallback URL; use verified url only)
   if (method === "open_provider" && provider) {
@@ -72,7 +95,13 @@ export function HowToCancel({
         ];
     // Strip raw URLs from steps — URL is shown as button, not as step text
     const providerSteps = rawSteps
-      .map((s) => s.replace(/https?:\/\/\S+/g, "").replace(/\s{2,}/g, " ").replace(/\s+at\s*$/i, "").trim())
+      .map((s) =>
+        s
+          .replace(/https?:\/\/\S+/g, "")
+          .replace(/\s{2,}/g, " ")
+          .replace(/\s+at\s*$/i, "")
+          .trim(),
+      )
       .filter(Boolean);
     const providerUrl = url ?? undefined;
     return (
@@ -80,11 +109,16 @@ export function HowToCancel({
         {difficultyBlock}
         <div className="rounded-lg border bg-card p-5">
           <p className="text-sm leading-relaxed text-foreground">
-            This subscription is billed through <span className="font-medium">{provider}</span>. Cancel in {provider}, not on {sub.merchant}&apos;s site.
+            This subscription is billed through{" "}
+            <span className="font-medium">{provider}</span>. Cancel in{" "}
+            {provider}, not on {sub.merchant}&apos;s site.
           </p>
           <ol className="mt-4 space-y-2.5">
             {providerSteps.map((step, i) => (
-              <li key={`${i}-${step}`} className="flex gap-3 text-sm leading-relaxed">
+              <li
+                key={`${i}-${step}`}
+                className="flex gap-3 text-sm leading-relaxed"
+              >
                 <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-secondary font-mono text-[11px] font-medium tabular-nums text-muted-foreground">
                   {i + 1}
                 </span>
@@ -95,11 +129,18 @@ export function HowToCancel({
           {providerUrl ? (
             <Button
               className="mt-5 gap-1.5 font-medium"
-              onClick={() => openExternalUrl(providerUrl, provider)}
+              onClick={() => {
+                trackStarted(sub._id);
+                openExternalUrl(providerUrl, provider);
+              }}
             >
               Open {provider}
               <HugeiconsIcon
-                icon={ExternalLinkIcon as unknown as Parameters<typeof HugeiconsIcon>[0]["icon"]}
+                icon={
+                  ExternalLinkIcon as unknown as Parameters<
+                    typeof HugeiconsIcon
+                  >[0]["icon"]
+                }
                 size={14}
                 strokeWidth={1.8}
                 color="currentColor"
@@ -129,25 +170,39 @@ export function HowToCancel({
       <div className="space-y-4">
         {difficultyBlock}
         <div className="rounded-lg border bg-card p-5">
-          <p className="text-sm leading-relaxed text-foreground">Cancel directly on {sub.merchant}&apos;s site.</p>
+          <p className="text-sm leading-relaxed text-foreground">
+            Cancel directly on {sub.merchant}&apos;s site.
+          </p>
           <ol className="mt-4 space-y-2.5">
             {steps.map((step, i) => (
-              <li key={`${i}-${step}`} className="flex gap-3 text-sm leading-relaxed">
+              <li
+                key={`${i}-${step}`}
+                className="flex gap-3 text-sm leading-relaxed"
+              >
                 <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-secondary font-mono text-[11px] font-medium tabular-nums text-muted-foreground">
                   {i + 1}
                 </span>
-                <span className="pt-0.5 text-muted-foreground break-all">{step}</span>
+                <span className="pt-0.5 text-muted-foreground break-all">
+                  {step}
+                </span>
               </li>
             ))}
           </ol>
           {url ? (
             <Button
               className="mt-5 gap-1.5 font-medium"
-              onClick={() => openExternalUrl(url, provider)}
+              onClick={() => {
+                trackStarted(sub._id);
+                openExternalUrl(url, provider);
+              }}
             >
               Open cancellation
               <HugeiconsIcon
-                icon={ExternalLinkIcon as unknown as Parameters<typeof HugeiconsIcon>[0]["icon"]}
+                icon={
+                  ExternalLinkIcon as unknown as Parameters<
+                    typeof HugeiconsIcon
+                  >[0]["icon"]
+                }
                 size={14}
                 strokeWidth={1.8}
                 color="currentColor"
@@ -176,10 +231,15 @@ export function HowToCancel({
       <div className="space-y-4">
         {difficultyBlock}
         <div className="rounded-lg border bg-card p-5">
-          <p className="text-sm leading-relaxed text-foreground">This merchant accepts cancellation by email.</p>
+          <p className="text-sm leading-relaxed text-foreground">
+            This merchant accepts cancellation by email.
+          </p>
           <ol className="mt-4 space-y-2.5">
             {steps.map((s, i) => (
-              <li key={`${i}-${s}`} className="flex gap-3 text-sm leading-relaxed">
+              <li
+                key={`${i}-${s}`}
+                className="flex gap-3 text-sm leading-relaxed"
+              >
                 <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-secondary font-mono text-[11px] font-medium tabular-nums text-muted-foreground">
                   {i + 1}
                 </span>
@@ -191,11 +251,17 @@ export function HowToCancel({
             variant="default"
             size="sm"
             className="mt-5 font-medium"
-            onClick={() => document.dispatchEvent(new CustomEvent("open-email-modal"))}
+            onClick={() =>
+              document.dispatchEvent(new CustomEvent("open-email-modal"))
+            }
           >
             Review &amp; send
           </Button>
-          {url && <p className="mt-2 font-mono text-xs text-muted-foreground break-all">{url}</p>}
+          {url && (
+            <p className="mt-2 font-mono text-xs text-muted-foreground break-all">
+              {url}
+            </p>
+          )}
         </div>
       </div>
     );
@@ -213,14 +279,21 @@ export function HowToCancel({
       <div className="space-y-4">
         {difficultyBlock}
         <div className="rounded-lg border bg-card p-5">
-          <p className="text-sm leading-relaxed text-foreground">Requires contacting support.</p>
+          <p className="text-sm leading-relaxed text-foreground">
+            Requires contacting support.
+          </p>
           <ol className="mt-4 space-y-2.5">
             {steps.map((s, i) => (
-              <li key={`${i}-${s}`} className="flex gap-3 text-sm leading-relaxed">
+              <li
+                key={`${i}-${s}`}
+                className="flex gap-3 text-sm leading-relaxed"
+              >
                 <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-secondary font-mono text-[11px] font-medium tabular-nums text-muted-foreground">
                   {i + 1}
                 </span>
-                <span className="pt-0.5 text-muted-foreground break-all">{s}</span>
+                <span className="pt-0.5 text-muted-foreground break-all">
+                  {s}
+                </span>
               </li>
             ))}
           </ol>
@@ -229,11 +302,18 @@ export function HowToCancel({
               variant="default"
               size="sm"
               className="mt-5 gap-1.5"
-              onClick={() => openExternalUrl(url, provider)}
+              onClick={() => {
+                trackStarted(sub._id);
+                openExternalUrl(url, provider);
+              }}
             >
               Contact support
               <HugeiconsIcon
-                icon={ExternalLinkIcon as unknown as Parameters<typeof HugeiconsIcon>[0]["icon"]}
+                icon={
+                  ExternalLinkIcon as unknown as Parameters<
+                    typeof HugeiconsIcon
+                  >[0]["icon"]
+                }
                 size={14}
                 strokeWidth={1.8}
                 color="currentColor"
@@ -247,7 +327,13 @@ export function HowToCancel({
   }
 
   if (method === "manual") {
-    const steps = hasResearchedSteps ? action!.instructions! : ["Settings → Account → Subscription", "Select Cancel → Confirm", "Save the confirmation"];
+    const steps = hasResearchedSteps
+      ? action!.instructions!
+      : [
+          "Settings → Account → Subscription",
+          "Select Cancel → Confirm",
+          "Save the confirmation",
+        ];
     return (
       <div className="space-y-4">
         {difficultyBlock}
@@ -255,7 +341,10 @@ export function HowToCancel({
           <p className="text-sm font-medium text-foreground">Steps</p>
           <ol className="mt-4 space-y-2.5">
             {steps.map((s, i) => (
-              <li key={`${i}-${s}`} className="flex gap-3 text-sm leading-relaxed">
+              <li
+                key={`${i}-${s}`}
+                className="flex gap-3 text-sm leading-relaxed"
+              >
                 <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-secondary font-mono text-[11px] font-medium tabular-nums text-muted-foreground">
                   {i + 1}
                 </span>
@@ -268,11 +357,18 @@ export function HowToCancel({
               variant="default"
               size="sm"
               className="mt-5 gap-1.5"
-              onClick={() => openExternalUrl(url, provider)}
+              onClick={() => {
+                trackStarted(sub._id);
+                openExternalUrl(url, provider);
+              }}
             >
               View steps
               <HugeiconsIcon
-                icon={ExternalLinkIcon as unknown as Parameters<typeof HugeiconsIcon>[0]["icon"]}
+                icon={
+                  ExternalLinkIcon as unknown as Parameters<
+                    typeof HugeiconsIcon
+                  >[0]["icon"]
+                }
                 size={14}
                 strokeWidth={1.8}
                 color="currentColor"
@@ -293,11 +389,20 @@ export function HowToCancel({
   return (
     <div className="space-y-4">
       <div className="rounded-lg border border-dashed border-border/60 bg-transparent p-5">
-        <p className="text-sm font-medium text-foreground">No verified route yet</p>
-        <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-          We could not verify a current cancellation path for {sub.merchant}. We will not guess. Check the merchant help center or contact support. This page updates when we find a verified source.
+        <p className="text-sm font-medium text-foreground">
+          No verified route yet
         </p>
-        <Button variant="outline" size="sm" disabled className="mt-4 font-mono text-xs">
+        <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+          We could not verify a current cancellation path for {sub.merchant}. We
+          will not guess. Check the merchant help center or contact support.
+          This page updates when we find a verified source.
+        </p>
+        <Button
+          variant="outline"
+          size="sm"
+          disabled
+          className="mt-4 font-mono text-xs"
+        >
           No verified route
         </Button>
       </div>

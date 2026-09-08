@@ -11,6 +11,7 @@ import { ReviewAndSendModal } from "@/components/detail/ReviewAndSendModal";
 import { MerchantAvatar } from "@/components/MerchantAvatar";
 import { SubscriptionManageCard } from "@/components/subscriptions/SubscriptionManageCard";
 import { Button } from "@/components/ui/button";
+import { useCancelStarted } from "@/hooks/useCancelStarted";
 import { getCancellationCTA, openExternalUrl } from "@/lib/cancellation";
 import {
   formatPrice,
@@ -34,6 +35,7 @@ export function SubscriptionDetailView() {
 
   const params = useParams<{ id: string }>();
   const id = params.id as Id<"subscriptions">;
+  const trackStarted = useCancelStarted();
 
   const sub = useQuery(api.subscriptions.get, { id });
   const evidence = useQuery(api.evidence.getBySubscription, {
@@ -126,6 +128,16 @@ export function SubscriptionDetailView() {
               </span>
             </p>
           )}
+          {sub.status === "user_started" && (
+            <p className="mt-3 font-mono text-xs text-muted-foreground">
+              Cancellation started. Pick up where you left off.
+            </p>
+          )}
+          {sub.status === "cancellation_pending" && (
+            <p className="mt-3 font-mono text-xs text-muted-foreground">
+              Cancellation pending. Watching for the confirmation email.
+            </p>
+          )}
         </div>
 
         {/* Primary action */}
@@ -144,7 +156,10 @@ export function SubscriptionDetailView() {
             {cta.href ? (
               <Button
                 className="gap-1.5 font-medium"
-                onClick={() => openExternalUrl(cta.href!, sub.billingProvider)}
+                onClick={() => {
+                  trackStarted(sub._id);
+                  openExternalUrl(cta.href!, sub.billingProvider);
+                }}
               >
                 {cta.label}
                 <HugeiconsIcon

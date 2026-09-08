@@ -51,6 +51,27 @@ export function openExternalUrl(url: string, provider?: string | null) {
   window.open(url, "_blank", "noopener,noreferrer");
 }
 
+/**
+ * Observable reasons behind the difficulty label. Only facts already in
+ * the data: provider detour, support requirement. Step count already shows
+ * in the mono line, so it is not repeated here. Never invents (e.g. no
+ * "login required" — research doesn't capture that yet).
+ */
+export function difficultyReasons({
+  method,
+  billingProvider,
+}: {
+  method?: string | null;
+  billingProvider?: string | null;
+}): string[] {
+  if ((method ?? "unknown") === "unknown") return ["No verified route yet"];
+  const reasons: string[] = [];
+  if (billingProvider) reasons.push(`via ${billingProvider}, not the merchant`);
+  if (method === "contact_support") reasons.push("requires contacting support");
+  if (method === "send_email") reasons.push("handled by email");
+  return reasons;
+}
+
 export function getCancellationCTA(sub: SubLike): CancellationCTA {
   const m = (sub.cancellationMethod ?? "unknown") as CancellationMethod;
   const url = sub.cancellationUrl ?? undefined;
