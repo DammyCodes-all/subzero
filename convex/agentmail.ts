@@ -430,37 +430,23 @@ export const sendCancellationEmail = action({
 
     const apiKey = process.env.AGENTMAIL_API_KEY;
     if (apiKey && recipient) {
+      // Durable send via the official AgentMail component: enqueue from
+      // here, its workpool delivers with bounded retries. Enqueue-time
+      // failures still throw so the action is not marked pending.
+      const inboxId =
+        (process.env.AGENTMAIL_INBOX as string | undefined) ??
+        "subzero-agent@agentmail.to";
       try {
-        const inboxId =
-          (process.env.AGENTMAIL_INBOX as string | undefined) ??
-          "subzero-agent@agentmail.to";
-        const res = await fetch(
-          `https://api.agentmail.to/v0/inboxes/${encodeURIComponent(inboxId)}/messages/send`,
-          {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${apiKey}`,
-            },
-            body: JSON.stringify({
-              to: recipient,
-              subject: `Cancellation Request: ${args.merchant} Subscription`,
-              text: `${args.body}${sourceHint}`,
-            }),
-          },
-        );
-        if (!res.ok) {
-          console.error("AgentMail send failed:", await res.text());
-          throw new Error("Failed to send via AgentMail");
-        }
+        await ctx.runMutation(internal.lib.agentmail.enqueueSend, {
+          inboxId,
+          to: recipient,
+          subject: `Cancellation Request: ${args.merchant} Subscription`,
+          text: `${args.body}${sourceHint}`,
+          labels: ["cancellation"],
+        });
       } catch (err) {
-        if (
-          err instanceof Error &&
-          err.message === "Failed to send via AgentMail"
-        )
-          throw err;
-        console.error("AgentMail send error:", err);
-        throw err;
+        console.error("AgentMail enqueue failed:", err);
+        throw new Error("Failed to send via AgentMail");
       }
     } else if (recipient) {
       console.log(

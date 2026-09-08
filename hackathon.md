@@ -4,17 +4,20 @@
 - **Event:** Convex All Gas Hackathon
 - **What it does:** AI subscription protection assistant — finds subscriptions, warns before renewals, and researches verified cancellation routes with evidence.
 - **Live app:** not deployed
-- **Repo:** none
-- **Frontend:** Convex static hosting
+- **Repo:** local only, not yet public
+- **Frontend:** Next.js locally; Convex static hosting deferred (Gmail OAuth lives in Next.js API routes, which a static export cannot serve)
 - **Convex deployment:** https://aromatic-quail-684.convex.cloud
-- **Components:** none
-- **Convex features:** schema, tables, indexes, auth, queries, mutations, actions, http, scheduler, crons
+- **Components:** `@firecrawl/firecrawl-convex 0.1.1` (research search/scrape), `@agentmail/convex 0.1.0` (durable outbound sends), `@convex-dev/static-hosting 0.2.1` (installed, not registered)
+- **Convex features:** schema, tables, indexes, auth, queries, mutations, actions, http, scheduler, crons, components
 - **Auth:** Convex Auth
-- **AI models:** gpt-4o-mini
+- **AI models:** Groq `openai/gpt-oss-120b` primary, OpenRouter then OpenAI `gpt-4o-mini` fallback (`convex/ingestion/extract.ts`, `convex/research.ts`); no `OPENAI_API_KEY` set on the deployment
 - **Started:** 2026-08-28T08:01:06Z
-- **Last updated:** 2026-09-01T00:00:00Z
+- **Last updated:** 2026-09-08T00:00:00Z
 
 ## Log
+
+### 2026-09-08 - working tree
+Installed official sponsor components and migrated off raw fetches: `@firecrawl/firecrawl-convex` now powers research search/scrape via `convex/lib/firecrawl.ts` (`convex/research.ts`), and `@agentmail/convex` now powers durable outbound sends (cancellation emails, renewal nudges, confirmations) via `convex/lib/agentmail.ts` (`convex/agentmail.ts`, `convex/notifications.ts`) with workpool retries and reactive delivery status. Inbound AgentMail routing stays custom in `convex/http.ts`. `@convex-dev/static-hosting` installed but not registered — Gmail OAuth lives in Next.js API routes, which a static export cannot serve. Corrected the build log header (components, truthful Groq-first model order, deploy status). Convex features: components, actions, mutations (`convex/convex.config.ts`, `convex/lib/firecrawl.ts`, `convex/lib/agentmail.ts`).
 
 ### 2026-08-28 - working tree
 Set up subzero project scaffolding inside dev folder. Initialized hackathon build log, global Convex skills and MCP server, and project-local hackathon skill. No app features yet.

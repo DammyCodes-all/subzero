@@ -8,6 +8,9 @@ importers:
 
   .:
     dependencies:
+      '@agentmail/convex':
+        specifier: ^0.1.0
+        version: 0.1.0(convex-helpers@0.1.124(convex@1.45.0(react@19.2.4))(hono@4.13.5)(react@19.2.4)(typescript@5.9.3)(zod@4.4.3))(convex@1.45.0(react@19.2.4))
       '@auth/core':
         specifier: ^0.37.0
         version: 0.37.0
@@ -20,6 +23,12 @@ importers:
       '@convex-dev/auth':
         specifier: ^0.0.88
         version: 0.0.88(@auth/core@0.37.0)(convex@1.45.0(react@19.2.4))(react@19.2.4)
+      '@convex-dev/static-hosting':
+        specifier: ^0.2.1
+        version: 0.2.1(convex@1.45.0(react@19.2.4))(react@19.2.4)
+      '@firecrawl/firecrawl-convex':
+        specifier: ^0.1.1
+        version: 0.1.1(convex@1.45.0(react@19.2.4))(hono@4.13.5)(react@19.2.4)(typescript@5.9.3)(zod@4.4.3)
       '@hugeicons/core-free-icons':
         specifier: ^4.3.0
         version: 4.3.0
@@ -101,6 +110,12 @@ importers:
         version: 5.9.3
 
 packages:
+
+  '@agentmail/convex@0.1.0':
+    resolution: {integrity: sha512-pqfIBX/XObWqC9M3sqh0Jy8KGOtQzpC0plZok3mJye0ZmEOuo5BZbG6diihjeIzBOEQblnagO9C+IX6+uQNfvg==}
+    peerDependencies:
+      convex: ^1.24.8
+      convex-helpers: ^0.1.106
 
   '@alloc/quick-lru@5.2.0':
     resolution: {integrity: sha512-UrcABB+4bUrFABwbluTIBErXwvbsU/V7TZWfmbgJfbkwiBuziS9gxdODUyuiecfdGQ85jglMW6juS3+z5TsKLw==}
@@ -371,6 +386,19 @@ packages:
       react:
         optional: true
 
+  '@convex-dev/static-hosting@0.2.1':
+    resolution: {integrity: sha512-QMcfKUOB8dHeLa81xzk2GEIn7LzhEvtdgYhfFpIFer6uE/+xMStDxHAZsX5h1qsttYi7wNbEKAMf7MfOQ7ZrMw==}
+    hasBin: true
+    peerDependencies:
+      convex: ^1.37.0
+      react: ^18.3.1 || ^19.0.0
+
+  '@convex-dev/workpool@0.3.2':
+    resolution: {integrity: sha512-jNPBHLCmZQXaztbBntZgIoM8JhKDmGwaIezZS/zPmX74PzON0Fgysgd9u+NOjJ04Dx2pN8ppBH9ElpsKxCOBpA==}
+    peerDependencies:
+      convex: ^1.31.7
+      convex-helpers: ^0.1.94
+
   '@dotenvx/dotenvx@1.75.1':
     resolution: {integrity: sha512-/BITOC9dmS/edY2zQwZNicQ059O6RKabtQfyEafV0nGtfYRNHYy1DIPiYVcov40+tob9hfmBnbR963dS+EQ1DQ==}
     hasBin: true
@@ -536,6 +564,11 @@ packages:
     engines: {node: '>=18'}
     cpu: [x64]
     os: [win32]
+
+  '@firecrawl/firecrawl-convex@0.1.1':
+    resolution: {integrity: sha512-fecepodOAcKLUKFD+4dyqRfU8ATn3y15nYtayyAmmQAV0FT/6sVwKNY0+rpq8/NKTLrEpuHr+cE0htNQ+ssU+g==}
+    peerDependencies:
+      convex: ^1.43.0
 
   '@floating-ui/core@1.8.0':
     resolution: {integrity: sha512-0CIZ5itps/8x7BG8dEIhs53BvCUH2PCoogtakwRTut+Arm58sJooJ0AuZhLw2HJYIR5cMLNPBSS728sPho2khQ==}
@@ -1144,6 +1177,28 @@ packages:
 
   convert-source-map@2.0.0:
     resolution: {integrity: sha512-Kvp459HrV2FEJ1CAsi1Ku+MY3kasH19TFykTz2xWmMeq6bk2NU3XXvfJ+Q61m0xktWwt+1HSYf3JZsTms3aRJg==}
+
+  convex-helpers@0.1.124:
+    resolution: {integrity: sha512-Gbu/jq6I3x5Y51cXP5c7+CI3t15vX5Xi2G0tOym3rxpBtYqrI+qWwxkqZgJYrHHccY42wZudB8h6kS3fak8Aeg==}
+    hasBin: true
+    peerDependencies:
+      '@standard-schema/spec': ^1.0.0
+      convex: ^1.43.0
+      hono: ^4.0.5
+      react: ^17.0.2 || ^18.0.0 || ^19.0.0
+      typescript: ^5.5 || ^6.0.0 || ^7.0.0
+      zod: ^3.25.0 || ^4.0.0
+    peerDependenciesMeta:
+      '@standard-schema/spec':
+        optional: true
+      hono:
+        optional: true
+      react:
+        optional: true
+      typescript:
+        optional: true
+      zod:
+        optional: true
 
   convex@1.45.0:
     resolution: {integrity: sha512-AV3B56Ptu/14d76g3urBJ50dwpiZa6uJaLT84OWox5aCwZIJiuAamdjv3lLHDzs8vv5kC31anEZohhUe3qJ2bA==}
@@ -2297,6 +2352,9 @@ packages:
       babel-plugin-macros:
         optional: true
 
+  svix@1.99.1:
+    resolution: {integrity: sha512-JfpvbAg5iT5NagDAfOq3e6Ci6NbOMbMm6C3DnfDBB60m2JDK+Z2hXPE9XNAmutb53DCdPoih1V70IbklZnX09A==}
+
   svix@2.1.0:
     resolution: {integrity: sha512-ZhZ33DLseN3yBRZxKR6GPIut52kVv5xiCCWiO2AzabhgVZwyitcmw+rRsDsGwDJIw9vCUfAiHt9iZTmlxRDk8Q==}
     engines: {node: '>=22'}
@@ -2446,6 +2504,13 @@ packages:
     resolution: {integrity: sha512-ytENFjIJFl2UwYglde2jchW2Hwm4GJFLDiSXWdTrJQBIN9Fcyp7n4DhxJEiWNAJMV1/BqWfW/kkg71UDcHJyTQ==}
 
 snapshots:
+
+  '@agentmail/convex@0.1.0(convex-helpers@0.1.124(convex@1.45.0(react@19.2.4))(hono@4.13.5)(react@19.2.4)(typescript@5.9.3)(zod@4.4.3))(convex@1.45.0(react@19.2.4))':
+    dependencies:
+      '@convex-dev/workpool': 0.3.2(convex-helpers@0.1.124(convex@1.45.0(react@19.2.4))(hono@4.13.5)(react@19.2.4)(typescript@5.9.3)(zod@4.4.3))(convex@1.45.0(react@19.2.4))
+      convex: 1.45.0(react@19.2.4)
+      convex-helpers: 0.1.124(convex@1.45.0(react@19.2.4))(hono@4.13.5)(react@19.2.4)(typescript@5.9.3)(zod@4.4.3)
+      svix: 1.99.1
 
   '@alloc/quick-lru@5.2.0': {}
 
@@ -2747,6 +2812,16 @@ snapshots:
     optionalDependencies:
       react: 19.2.4
 
+  '@convex-dev/static-hosting@0.2.1(convex@1.45.0(react@19.2.4))(react@19.2.4)':
+    dependencies:
+      convex: 1.45.0(react@19.2.4)
+      react: 19.2.4
+
+  '@convex-dev/workpool@0.3.2(convex-helpers@0.1.124(convex@1.45.0(react@19.2.4))(hono@4.13.5)(react@19.2.4)(typescript@5.9.3)(zod@4.4.3))(convex@1.45.0(react@19.2.4))':
+    dependencies:
+      convex: 1.45.0(react@19.2.4)
+      convex-helpers: 0.1.124(convex@1.45.0(react@19.2.4))(hono@4.13.5)(react@19.2.4)(typescript@5.9.3)(zod@4.4.3)
+
   '@dotenvx/dotenvx@1.75.1':
     dependencies:
       '@dotenvx/primitives': 0.8.0
@@ -2850,6 +2925,17 @@ snapshots:
 
   '@esbuild/win32-x64@0.27.0':
     optional: true
+
+  '@firecrawl/firecrawl-convex@0.1.1(convex@1.45.0(react@19.2.4))(hono@4.13.5)(react@19.2.4)(typescript@5.9.3)(zod@4.4.3)':
+    dependencies:
+      convex: 1.45.0(react@19.2.4)
+      convex-helpers: 0.1.124(convex@1.45.0(react@19.2.4))(hono@4.13.5)(react@19.2.4)(typescript@5.9.3)(zod@4.4.3)
+    transitivePeerDependencies:
+      - '@standard-schema/spec'
+      - hono
+      - react
+      - typescript
+      - zod
 
   '@floating-ui/core@1.8.0':
     dependencies:
@@ -3322,6 +3408,15 @@ snapshots:
   content-type@2.1.0: {}
 
   convert-source-map@2.0.0: {}
+
+  convex-helpers@0.1.124(convex@1.45.0(react@19.2.4))(hono@4.13.5)(react@19.2.4)(typescript@5.9.3)(zod@4.4.3):
+    dependencies:
+      convex: 1.45.0(react@19.2.4)
+    optionalDependencies:
+      hono: 4.13.5
+      react: 19.2.4
+      typescript: 5.9.3
+      zod: 4.4.3
 
   convex@1.45.0(react@19.2.4):
     dependencies:
@@ -4401,6 +4496,10 @@ snapshots:
       react: 19.2.4
     optionalDependencies:
       '@babel/core': 7.29.7
+
+  svix@1.99.1:
+    dependencies:
+      standardwebhooks: 1.0.0
 
   svix@2.1.0:
     dependencies:

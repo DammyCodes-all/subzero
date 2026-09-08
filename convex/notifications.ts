@@ -321,39 +321,26 @@ SubZero Protection Engine`,
     const body = text;
 
     if (apiKey) {
+      // Durable send via the official AgentMail component. Enqueue-time
+      // failures mark the row failed; delivery itself retries in the
+      // component workpool and is observable via its outbound status.
       try {
         const inboxId =
           (process.env.AGENTMAIL_INBOX as string | undefined) ??
           "subzero-agent@agentmail.to";
-        const res = await fetch(
-          `https://api.agentmail.to/v0/inboxes/${encodeURIComponent(inboxId)}/messages/send`,
-          {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${apiKey}`,
-            },
-            body: JSON.stringify({
-              to: recipient,
-              subject,
-              text: body,
-            }),
-          },
-        );
-
-        if (res.ok) {
-          await ctx.runMutation(internal.notifications.markNotificationSent, {
-            notificationId: args.notificationId,
-            status: "sent",
-          });
-        } else {
-          const errText = await res.text();
-          await ctx.runMutation(internal.notifications.markNotificationSent, {
-            notificationId: args.notificationId,
-            status: "failed",
-            error: errText,
-          });
-        }
+        await ctx.runMutation(internal.lib.agentmail.enqueueSend, {
+          inboxId,
+          to: recipient,
+          subject,
+          text: body,
+          labels: isConfirmation
+            ? ["cancellation-confirmed"]
+            : ["renewal-nudge"],
+        });
+        await ctx.runMutation(internal.notifications.markNotificationSent, {
+          notificationId: args.notificationId,
+          status: "sent",
+        });
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : String(err);
         await ctx.runMutation(internal.notifications.markNotificationSent, {

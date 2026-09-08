@@ -17,3 +17,13 @@ Convex agent skills for common tasks can be installed by running
 `npx convex ai-files install`.
 
 <!-- convex-ai-end -->
+
+## Sponsor components
+
+- Use the official Convex components, not raw fetches, for sponsor services:
+  - Firecrawl search/scrape goes through `convex/lib/firecrawl.ts` (`@firecrawl/firecrawl-convex`).
+  - AgentMail outbound sends go through `convex/lib/agentmail.ts` (`@agentmail/convex`, durable enqueue + workpool retries). Inbound routing stays in `convex/http.ts` + `convex/agentmail.ts`.
+  - `@convex-dev/static-hosting` is installed but NOT registered: Gmail OAuth lives in Next.js API routes (`src/app/api/gmail/`), which a static export cannot serve. Register it only after migrating OAuth to Convex HTTP actions.
+- Secrets stay in Convex deployment env, never in args, logs, or toasts.
+- After any `convex/` change, run `npx convex dev --once` (codegen + sync) and `pnpm typecheck`.
+- Keep `hackathon.md` truthful: installed components, real model order, deploy status, and last-updated date.

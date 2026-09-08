@@ -2,6 +2,7 @@ import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import { env, internalAction } from "./_generated/server";
 import { GROQ_EXTRACTION_MODEL } from "./lib/aiModels";
+import { firecrawlScrape, firecrawlSearch } from "./lib/firecrawl";
 
 export const researchCancellationRoute = internalAction({
   args: { subscriptionId: v.id("subscriptions") },
@@ -58,34 +59,7 @@ export const researchCancellationRoute = internalAction({
     };
     let searchHits: SearchHit[] = [];
     try {
-      const controller = new AbortController();
-      const t = setTimeout(() => controller.abort(), 10000);
-      const res = await fetch("https://api.firecrawl.dev/v1/search", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${firecrawlKey}`,
-        },
-        body: JSON.stringify({
-          query: searchQuery,
-          limit: 10,
-        }),
-        signal: controller.signal,
-      });
-      clearTimeout(t);
-      if (res.ok) {
-        const j = (await res.json()) as unknown as {
-          data?: unknown;
-          web?: unknown;
-        };
-        const raw: unknown =
-          (j as { data?: unknown }).data ?? (j as { web?: unknown }).web ?? [];
-        if (Array.isArray(raw)) searchHits = raw as SearchHit[];
-        else if (raw && typeof raw === "object")
-          searchHits = Object.values(
-            raw as Record<string, unknown>,
-          ).flat() as SearchHit[];
-      }
+      searchHits = await firecrawlSearch(ctx, searchQuery, 10);
     } catch {
       searchHits = [];
     }
@@ -254,44 +228,7 @@ export const researchCancellationRoute = internalAction({
     if (urlsToScrape.length > 0) {
       try {
         const scraped = await Promise.all(
-          urlsToScrape.map(async (u) => {
-            try {
-              const controller = new AbortController();
-              const t = setTimeout(() => controller.abort(), 15000);
-              const r = await fetch("https://api.firecrawl.dev/v1/scrape", {
-                method: "POST",
-                headers: {
-                  "Content-Type": "application/json",
-                  Authorization: `Bearer ${firecrawlKey}`,
-                },
-                body: JSON.stringify({
-                  url: u,
-                  formats: ["markdown", "links"],
-                  onlyMainContent: true,
-                }),
-                signal: controller.signal,
-              });
-              clearTimeout(t);
-              if (!r.ok) return null;
-              const j = (await r.json()) as unknown as {
-                markdown?: string;
-                data?: { markdown?: string };
-                links?: string[];
-                data2?: { links?: string[] };
-              };
-              const markdown = String(
-                (j as { markdown?: string }).markdown ??
-                  (j as { data?: { markdown?: string } }).data?.markdown ??
-                  "",
-              );
-              const links = ((j as unknown as { links?: string[] }).links ??
-                (j as unknown as { data?: { links?: string[] } }).data?.links ??
-                []) as string[];
-              return { url: u, markdown, links };
-            } catch {
-              return null;
-            }
-          }),
+          urlsToScrape.map((u) => firecrawlScrape(ctx, u)),
         );
         const valid = scraped.filter(
           (x): x is { url: string; markdown: string; links: string[] } =>
