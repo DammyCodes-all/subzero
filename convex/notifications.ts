@@ -15,6 +15,28 @@ function userIdCandidates(userId: string) {
   return new Set([userId, uid, `user:${uid}`]);
 }
 
+/**
+ * Lead-time prefs for a user, defaulting to on. Checks every id shape
+ * so rows created under any variant are honored.
+ */
+export const leadTimePrefs = internalQuery({
+  args: { userId: v.string() },
+  handler: async (ctx, args) => {
+    const prefs = { notify7d: true, notify3d: true, notify24h: true };
+    for (const uid of userIdCandidates(args.userId)) {
+      const row = await ctx.db
+        .query("userSettings")
+        .withIndex("by_user", (q) => q.eq("userId", uid))
+        .first();
+      if (!row) continue;
+      if (row.notify7d === false) prefs.notify7d = false;
+      if (row.notify3d === false) prefs.notify3d = false;
+      if (row.notify24h === false) prefs.notify24h = false;
+    }
+    return prefs;
+  },
+});
+
 export const scheduleNudgesForSubscription = internalMutation({
   args: { subscriptionId: v.id("subscriptions") },
   handler: async (ctx, args) => {
@@ -25,12 +47,23 @@ export const scheduleNudgesForSubscription = internalMutation({
     const now = Date.now();
     const renewalAt = sub.nextRenewalAt;
 
-    // Define milestones: 7d, 3d, 24h
-    const milestones: Array<{ type: "7d" | "3d" | "24h"; time: number }> = [
+    const prefs = await ctx.runQuery(internal.notifications.leadTimePrefs, {
+      userId: sub.userId,
+    });
+
+    // Define milestones: 7d, 3d, 24h (skipping any the user turned off)
+    const allMilestones: Array<{ type: "7d" | "3d" | "24h"; time: number }> = [
       { type: "7d", time: renewalAt - 7 * DAY },
       { type: "3d", time: renewalAt - 3 * DAY },
       { type: "24h", time: renewalAt - 1 * DAY },
     ];
+    const milestones = allMilestones.filter((m) =>
+      m.type === "7d"
+        ? prefs.notify7d
+        : m.type === "3d"
+          ? prefs.notify3d
+          : prefs.notify24h,
+    );
 
     for (const m of milestones) {
       // Only schedule if the milestone is in the future
@@ -212,6 +245,29 @@ export const deliverNudge = internalAction({
     // That is the point: the user must hear when tracking stops.
     // Renewal nudges still stop at cancelled or muted.
     if (!isConfirmation && (sub.status === "cancelled" || sub.muted)) return;
+
+    // Honor lead-time prefs at delivery too: the user may have turned
+    // a warning off after it was scheduled. Record it plainly so the
+    // history shows what happened instead of a stuck Pending row.
+    if (!isConfirmation) {
+      const prefs = await ctx.runQuery(internal.notifications.leadTimePrefs, {
+        userId: sub.userId,
+      });
+      const allowed =
+        notif.type === "7d"
+          ? prefs.notify7d
+          : notif.type === "3d"
+            ? prefs.notify3d
+            : prefs.notify24h;
+      if (!allowed) {
+        await ctx.runMutation(internal.notifications.markNotificationSent, {
+          notificationId: args.notificationId,
+          status: "failed",
+          error: "Turned off in notification settings",
+        });
+        return;
+      }
+    }
 
     const apiKey = process.env.AGENTMAIL_API_KEY;
     if (!userEmail) {

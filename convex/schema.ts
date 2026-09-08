@@ -181,5 +181,8 @@ export default defineSchema({
   userSettings: defineTable({
     userId: v.string(),
     notifyOnCancel: v.optional(v.boolean()),
+    notify7d: v.optional(v.boolean()),
+    notify3d: v.optional(v.boolean()),
+    notify24h: v.optional(v.boolean()),
   }).index("by_user", ["userId"]),
 });

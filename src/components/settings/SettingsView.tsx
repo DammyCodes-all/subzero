@@ -11,7 +11,7 @@ import {
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useMutation, useQuery } from "convex/react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { sileo } from "sileo";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/material-design-3-switch";
@@ -109,12 +109,32 @@ export function SettingsView() {
     enabled3d: true,
     enabled24h: true,
   });
-  const [savedPrefs, setSavedPrefs] = useState(false);
-  const [prefsBaseline, setPrefsBaseline] = useState<NotificationPrefs>(prefs);
+  const [prefsBaseline, setPrefsBaseline] = useState<NotificationPrefs | null>(
+    null,
+  );
+  const [prefsSaving, setPrefsSaving] = useState(false);
+  const saveLeadTimes = useMutation(api.userSettings.setLeadTimes);
+
+  // Seed switches from the server on first load so the UI never flashes
+  // a default that is not what the user saved.
+  useEffect(() => {
+    if (settings && prefsBaseline === null) {
+      const server: NotificationPrefs = {
+        enabled7d: settings.notify7d,
+        enabled3d: settings.notify3d,
+        enabled24h: settings.notify24h,
+      };
+      setPrefs(server);
+      setPrefsBaseline(server);
+    }
+  }, [settings, prefsBaseline]);
+
   const prefsDirty =
-    prefs.enabled7d !== prefsBaseline.enabled7d ||
-    prefs.enabled3d !== prefsBaseline.enabled3d ||
-    prefs.enabled24h !== prefsBaseline.enabled24h;
+    prefsBaseline !== null &&
+    (prefs.enabled7d !== prefsBaseline.enabled7d ||
+      prefs.enabled3d !== prefsBaseline.enabled3d ||
+      prefs.enabled24h !== prefsBaseline.enabled24h);
+  const [savedPrefs, setSavedPrefs] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deleteResult, setDeleteResult] = useState<null | {
@@ -131,12 +151,25 @@ export function SettingsView() {
     setSavedPrefs(false);
   };
 
-  const handleSavePrefs = () => {
-    // Prefs are currently client-side only (no user settings table in schema).
-    // When a settings table is added to schema, persist here.
-    setPrefsBaseline(prefs);
-    setSavedPrefs(true);
-    setTimeout(() => setSavedPrefs(false), 2500);
+  const handleSavePrefs = async () => {
+    setPrefsSaving(true);
+    try {
+      await saveLeadTimes({
+        notify7d: prefs.enabled7d,
+        notify3d: prefs.enabled3d,
+        notify24h: prefs.enabled24h,
+      });
+      setPrefsBaseline(prefs);
+      setSavedPrefs(true);
+      setTimeout(() => setSavedPrefs(false), 2500);
+    } catch {
+      sileo.error({
+        title: "Could not save",
+        description: "Try again in a bit.",
+      });
+    } finally {
+      setPrefsSaving(false);
+    }
   };
 
   const handleDelete = async () => {
@@ -239,6 +272,7 @@ export function SettingsView() {
               <Switch
                 size="sm"
                 checked={prefs[key]}
+                disabled={settings === undefined || prefsSaving}
                 onCheckedChange={() => handleToggle(key)}
                 aria-label={label}
               />
@@ -282,10 +316,12 @@ export function SettingsView() {
           <Button
             size="sm"
             onClick={handleSavePrefs}
-            disabled={!prefsDirty}
+            disabled={!prefsDirty || prefsSaving || settings === undefined}
             className="h-8 gap-1.5 bg-primary text-xs font-semibold text-primary-foreground hover:bg-primary/90"
           >
-            {savedPrefs ? (
+            {prefsSaving ? (
+              "Saving..."
+            ) : savedPrefs ? (
               <>
                 <HugeiconsIcon
                   icon={
