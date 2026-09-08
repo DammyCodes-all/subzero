@@ -304,16 +304,23 @@ export const storeGmailToken = internalMutation({
     if (existing) {
       const wasDisconnected =
         (existing as { status?: string }).status === "disconnected";
+      // Self-heal rows stuck with a stale scan timestamp and no data:
+      // the next connect starts as a true first scan. Rows with data
+      // keep their cursor on token refresh.
+      let resetCursor = wasDisconnected;
+      if (!resetCursor) {
+        const anySub = await ctx.db
+          .query("subscriptions")
+          .withIndex("by_user", (q) => q.eq("userId", args.userId))
+          .first();
+        if (!anySub) resetCursor = true;
+      }
       await ctx.db.patch(existing._id, {
         gmailRefreshToken: refreshToken,
         gmailScopeGranted: true,
         accountEmail: emailNorm || existing.accountEmail,
         status: "connected",
-        // Reconnecting a disconnected inbox starts fresh: clear the scan
-        // cursor so the first-scan takeover shows instead of a stale
-        // "last synced" zero-state. Already-connected token refreshes
-        // keep their cursor.
-        ...(wasDisconnected
+        ...(resetCursor
           ? { lastGmailScanAt: undefined, gmailHistoryId: undefined }
           : {}),
       });
@@ -412,17 +419,25 @@ export const storeByEmail = mutation({
     let connId2: Id<"connections"> | null = null;
     if (existing) {
       // Same email reconnecting — update tokens in place. A disconnected
-      // row reconnects fresh (cursor cleared so first-scan shows);
-      // an already-connected row keeps its cursor.
+      // row reconnects fresh; a connected row with no data heals its stale
+      // cursor so first-scan shows. Rows with data keep their cursor.
       const wasDisconnected =
         (existing as { status?: string }).status === "disconnected";
+      let resetCursor = wasDisconnected;
+      if (!resetCursor) {
+        const anySub = await ctx.db
+          .query("subscriptions")
+          .withIndex("by_user", (q) => q.eq("userId", userId))
+          .first();
+        if (!anySub) resetCursor = true;
+      }
       await ctx.db.patch(existing._id, {
         userId,
         gmailRefreshToken: refreshToken,
         gmailScopeGranted: true,
         accountEmail: emailNorm,
         status: "connected",
-        ...(wasDisconnected
+        ...(resetCursor
           ? { lastGmailScanAt: undefined, gmailHistoryId: undefined }
           : {}),
       });

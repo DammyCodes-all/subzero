@@ -50,35 +50,51 @@ export function DashboardView() {
   const router = useRouter();
   const gmailError = searchParams.get("gmail_error");
   const gmailConnected = searchParams.get("gmail_connected");
+  const gmailCancelled = searchParams.get("gmail_cancelled");
 
   useEffect(() => {
-    if (gmailError) {
+    if (gmailCancelled) {
+      sileo.info({
+        title: "Connection cancelled",
+        description: "No problem. You can connect Gmail any time.",
+      });
+      const url = new URL(window.location.href);
+      url.searchParams.delete("gmail_error");
+      url.searchParams.delete("gmail_connected");
+      url.searchParams.delete("gmail_cancelled");
+      router.replace(
+        url.pathname + (url.search ? `?${url.searchParams}` : "") + url.hash,
+        { scroll: false },
+      );
+    } else if (gmailError) {
       sileo.error({
-        title: "Gmail connection failed",
+        title: "Couldn't connect Gmail",
         description: gmailError,
       });
       const url = new URL(window.location.href);
       url.searchParams.delete("gmail_error");
       url.searchParams.delete("gmail_connected");
+      url.searchParams.delete("gmail_cancelled");
       router.replace(
         url.pathname + (url.search ? `?${url.searchParams}` : "") + url.hash,
         { scroll: false },
       );
     } else if (gmailConnected) {
       sileo.success({
-        title: "Gmail connected — starting first scan…",
+        title: "Gmail connected",
         description:
-          "We're now scanning your inbox for subscription receipts and trial emails",
+          "Scanning your inbox for subscription receipts and trial emails now.",
       });
       const url = new URL(window.location.href);
       url.searchParams.delete("gmail_error");
       url.searchParams.delete("gmail_connected");
+      url.searchParams.delete("gmail_cancelled");
       router.replace(
         url.pathname + (url.search ? `?${url.searchParams}` : "") + url.hash,
         { scroll: false },
       );
     }
-  }, [gmailError, gmailConnected, router]);
+  }, [gmailError, gmailConnected, gmailCancelled, router]);
 
   // Determine what to show in the sub list:
   // - Urgent items (renewing ≤7d) if any exist

@@ -1,5 +1,5 @@
-import { NextRequest, NextResponse } from "next/server";
 import { convexAuthNextjsToken } from "@convex-dev/auth/nextjs/server";
+import { type NextRequest, NextResponse } from "next/server";
 
 function getBearerToken(req: NextRequest): string | null {
   const h = req.headers.get("authorization");
@@ -34,12 +34,15 @@ export async function GET(req: NextRequest) {
   const token = nextjsToken ?? cookieToken ?? getBearerToken(req);
   if (!token) {
     return NextResponse.redirect(
-      `${url.origin}/dashboard?gmail_error=${encodeURIComponent("Not signed in — please sign in again and then connect Gmail")}`,
+      `${url.origin}/dashboard?gmail_error=${encodeURIComponent("Please sign in first, then connect Gmail.")}`,
     );
   }
   const clientId = process.env.GOOGLE_CLIENT_ID || process.env.AUTH_GOOGLE_ID;
   if (!clientId) {
-    return NextResponse.json({ error: "Missing GOOGLE_CLIENT_ID" }, { status: 500 });
+    console.error("gmail oauth misconfigured: missing google client id");
+    return NextResponse.redirect(
+      `${url.origin}/dashboard?gmail_error=${encodeURIComponent("Something is off on our side. Try again in a bit.")}`,
+    );
   }
   const redirectUri = `${url.origin}/api/gmail/callback`;
   // CSRF protection: random state stored in httpOnly cookie
