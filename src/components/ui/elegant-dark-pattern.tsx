@@ -29,7 +29,7 @@ export function DarkGradientBg({ children, className }: DarkGradientBgProps) {
         >
           {/* Skewed fading chartreuse streaks */}
           <div
-            className="absolute inset-0 opacity-[0.05]"
+            className="absolute inset-0 opacity-[0.03] sm:opacity-[0.05]"
             style={{
               background: STREAK_GRADIENT,
               mask: "linear-gradient(90deg, rgba(0, 0, 0, 0) 0%, rgb(0, 0, 0) 20%, rgba(0, 0, 0, 0) 36%, rgb(0, 0, 0) 55%, rgba(0, 0, 0, 0.13) 67%, rgb(0, 0, 0) 78%, rgba(0, 0, 0, 0) 97%)",
@@ -37,7 +37,7 @@ export function DarkGradientBg({ children, className }: DarkGradientBgProps) {
             }}
           />
           <div
-            className="absolute inset-0 opacity-[0.05]"
+            className="absolute inset-0 opacity-[0.03] sm:opacity-[0.05]"
             style={{
               background: STREAK_GRADIENT,
               mask: "linear-gradient(90deg, rgba(0, 0, 0, 0) 11%, rgb(0, 0, 0) 25%, rgba(0, 0, 0, 0.55) 41%, rgba(0, 0, 0, 0.13) 67%, rgb(0, 0, 0) 78%, rgba(0, 0, 0, 0) 97%)",
@@ -45,7 +45,7 @@ export function DarkGradientBg({ children, className }: DarkGradientBgProps) {
             }}
           />
           <div
-            className="absolute inset-0 opacity-[0.05]"
+            className="absolute inset-0 opacity-[0.03] sm:opacity-[0.05]"
             style={{
               background: STREAK_GRADIENT,
               mask: "linear-gradient(90deg, rgba(0, 0, 0, 0) 9%, rgb(0, 0, 0) 20%, rgba(0, 0, 0, 0.55) 28%, rgba(0, 0, 0, 0.424) 40%, rgb(0, 0, 0) 48%, rgba(0, 0, 0, 0.267) 54%, rgba(0, 0, 0, 0.13) 78%, rgb(0, 0, 0) 88%, rgba(0, 0, 0, 0) 97%)",
@@ -53,7 +53,7 @@ export function DarkGradientBg({ children, className }: DarkGradientBgProps) {
             }}
           />
           <div
-            className="absolute inset-0 opacity-[0.05]"
+            className="absolute inset-0 opacity-[0.03] sm:opacity-[0.05]"
             style={{
               background: STREAK_GRADIENT,
               mask: "linear-gradient(90deg, rgba(0, 0, 0, 0) 0%, rgb(0, 0, 0) 17%, rgba(0, 0, 0, 0.55) 26%, rgb(0, 0, 0) 35%, rgba(0, 0, 0, 0) 47%, rgba(0, 0, 0, 0.13) 69%, rgb(0, 0, 0) 79%, rgba(0, 0, 0, 0) 97%)",
@@ -61,7 +61,7 @@ export function DarkGradientBg({ children, className }: DarkGradientBgProps) {
             }}
           />
           <div
-            className="absolute inset-0 opacity-[0.05]"
+            className="absolute inset-0 opacity-[0.03] sm:opacity-[0.05]"
             style={{
               background: STREAK_GRADIENT,
               mask: "linear-gradient(90deg, rgba(0, 0, 0, 0) 0%, rgb(0, 0, 0) 20%, rgba(0, 0, 0, 0.55) 27%, rgb(0, 0, 0) 42%, rgba(0, 0, 0, 0) 48%, rgba(0, 0, 0, 0.13) 67%, rgb(0, 0, 0) 74%, rgb(0, 0, 0) 82%, rgba(0, 0, 0, 0.47) 88%, rgba(0, 0, 0, 0) 97%)",
@@ -73,7 +73,7 @@ export function DarkGradientBg({ children, className }: DarkGradientBgProps) {
 
       {/* Subtle dot pattern overlay */}
       <div
-        className="absolute inset-0 opacity-10"
+        className="absolute inset-0 opacity-5 sm:opacity-10"
         style={{
           backgroundImage:
             "radial-gradient(circle at 1px 1px, rgba(249,247,242,0.5) 1px, transparent 0)",
@@ -81,14 +81,8 @@ export function DarkGradientBg({ children, className }: DarkGradientBgProps) {
         }}
       />
 
-      {/* Subtle radial highlight */}
-      <div
-        className="absolute inset-0"
-        style={{
-          background:
-            "radial-gradient(60% 50% at 50% 40%, rgba(230, 255, 43, 0.07) 0%, rgba(230, 255, 43, 0) 100%)",
-        }}
-      />
+      {/* Subtle radial glow from the top-left corner */}
+      <div className="absolute inset-0 bg-[radial-gradient(100%_80%_at_0%_0%,rgba(230,255,43,0.06)_0%,rgba(230,255,43,0)_100%)] sm:bg-[radial-gradient(80%_65%_at_0%_0%,rgba(230,255,43,0.09)_0%,rgba(230,255,43,0)_100%)]" />
 
       {/* Content */}
       <div className="relative z-10 h-full">{children}</div>

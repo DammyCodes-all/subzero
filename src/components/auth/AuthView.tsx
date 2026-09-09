@@ -6,6 +6,7 @@ import { motion, useReducedMotion } from "framer-motion";
 import { useRouter, useSearchParams } from "next/navigation";
 import { type ReactNode, useEffect, useState } from "react";
 import { sileo, Toaster } from "sileo";
+import { AuthSkeleton } from "@/components/auth/AuthSkeleton";
 import { LoginForm } from "@/components/auth/LoginForm";
 import { SignupForm } from "@/components/auth/SignupForm";
 import { SubzeroWithWordmark } from "@/components/brand/SubzeroLogo";
@@ -110,11 +111,7 @@ export function AuthView() {
   }
 
   if (isLoading)
-    return (
-      <main className="flex min-h-screen items-center justify-center bg-background p-8">
-        <div className="h-7 w-48 animate-pulse rounded bg-border/60" />
-      </main>
-    );
+    return <AuthSkeleton fields={initialMode === "signup" ? 3 : 2} />;
   if (isAuthenticated) return null;
 
   return (
@@ -135,14 +132,14 @@ export function AuthView() {
           <Rise delay={0.06} className="mt-6">
             <h1 className="font-heading text-[28px] font-bold leading-[1.15] tracking-tight">
               {mode === "signup"
-                ? "Find what you're really paying for."
+                ? "Stop paying for what you forgot."
                 : "Welcome back."}
             </h1>
           </Rise>
           <Rise delay={0.1} className="mt-2">
             <p className="text-sm leading-relaxed text-muted-foreground">
               {mode === "signup"
-                ? "One tap with Google. Every subscription found."
+                ? "One tap with Google."
                 : "Still saving you money while you were gone."}
             </p>
           </Rise>
