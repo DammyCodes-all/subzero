@@ -121,15 +121,15 @@ export function AuthView() {
     <main className="flex min-h-screen bg-background">
       {/* Left: hero visual, desktop only */}
       <aside
-        className="relative hidden w-[48%] overflow-hidden lg:block"
+        className="relative hidden w-[30%] overflow-hidden lg:block"
         aria-hidden
       >
         <Image
-          src="/auth-hero-image.webp"
+          src="/images/auth-hero.webp"
           alt=""
           fill
           priority
-          sizes="48vw"
+          sizes="30vw"
           className="object-cover"
         />
         <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-background via-background/60 to-transparent px-10 pt-16 pb-8 text-center">

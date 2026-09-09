@@ -117,3 +117,9 @@
     font-variant-numeric: tabular-nums;
   }
 }
+
+/* Unlayered so it wins over the Input primitive's chartreuse ring. */
+.auth-input:focus-visible {
+  --tw-ring-color: rgb(249 247 242 / 0.22);
+  border-color: rgb(249 247 242 / 0.4);
+}
