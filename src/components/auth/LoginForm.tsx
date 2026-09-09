@@ -6,6 +6,7 @@ import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { authInputClassName } from "./inputStyles";
 import { PasswordField } from "./PasswordField";
 
 const loginSchema = z.object({
@@ -75,7 +76,7 @@ export function LoginForm() {
 
   return (
     <form onSubmit={handleSubmit} noValidate className="space-y-4">
-      <div className="space-y-1.5">
+      <div className="space-y-2">
         <Label htmlFor="login-email">Email</Label>
         <Input
           id="login-email"
@@ -101,13 +102,10 @@ export function LoginForm() {
           placeholder="you@example.com"
           autoComplete="email"
           inputMode="email"
+          autoFocus
           aria-invalid={!!errors.email}
           aria-describedby={errors.email ? "login-email-error" : undefined}
-          className={
-            errors.email
-              ? "border-destructive focus-visible:ring-destructive/20"
-              : undefined
-          }
+          className={authInputClassName(!!errors.email)}
         />
         {touched.email && errors.email && (
           <p id="login-email-error" className="text-xs text-destructive">
@@ -116,7 +114,7 @@ export function LoginForm() {
         )}
       </div>
 
-      <div className="space-y-1.5">
+      <div className="space-y-2">
         <Label htmlFor="login-password">Password</Label>
         <PasswordField
           value={password}
@@ -126,6 +124,7 @@ export function LoginForm() {
           }}
           id="login-password"
           autoComplete="current-password"
+          className={authInputClassName()}
         />
         {touched.password && errors.password && (
           <p className="text-xs text-destructive">{errors.password}</p>
@@ -141,7 +140,11 @@ export function LoginForm() {
         </p>
       )}
 
-      <Button type="submit" disabled={pending} className="w-full">
+      <Button
+        type="submit"
+        disabled={pending}
+        className="h-11 w-full text-[15px]"
+      >
         {pending ? "Signing in…" : "Log in"}
       </Button>
     </form>
