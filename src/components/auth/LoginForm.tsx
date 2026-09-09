@@ -102,7 +102,6 @@ export function LoginForm() {
           placeholder="you@example.com"
           autoComplete="email"
           inputMode="email"
-          autoFocus
           aria-invalid={!!errors.email}
           aria-describedby={errors.email ? "login-email-error" : undefined}
           className={authInputClassName(!!errors.email)}
