@@ -7,6 +7,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { authInputClassName } from "./inputStyles";
+import {
+  cleanAuthError,
+  fallbackAuthError,
+  mapCredentialError,
+} from "./authErrors";
 import { PasswordField } from "./PasswordField";
 
 const loginSchema = z.object({
@@ -24,15 +29,12 @@ function mapServerError(e: unknown): {
   field?: keyof FieldErrors;
   message: string;
 } {
-  const msg = e instanceof Error ? e.message : String(e);
-  const clean = msg.replace(/^(Uncaught Error:\s*)+/i, "").slice(0, 500);
-  if (/Invalid credentials/i.test(clean))
-    return { message: "Wrong email or password." };
+  const clean = cleanAuthError(e);
+  const credential = mapCredentialError(clean);
+  if (credential) return { message: credential };
   if (/Invalid email/i.test(clean))
     return { field: "email", message: "Enter a valid email address." };
-  if (/Too many/i.test(clean) || /Rate limit/i.test(clean))
-    return { message: "Too many attempts. Try again in a few minutes." };
-  return { message: clean || "Something went wrong. Try again." };
+  return { message: fallbackAuthError(clean) };
 }
 
 export function LoginForm() {

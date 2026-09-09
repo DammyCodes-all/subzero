@@ -8,6 +8,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { authInputClassName } from "./inputStyles";
+import {
+  cleanAuthError,
+  fallbackAuthError,
+  mapCredentialError,
+} from "./authErrors";
 import { PasswordField } from "./PasswordField";
 
 const signupSchema = z.object({
@@ -36,17 +41,12 @@ type FieldErrors = Partial<
   Record<"name" | "email" | "password" | "form", string>
 >;
 
-function cleanServerError(e: unknown) {
-  const msg = e instanceof Error ? e.message : String(e);
-  return msg.replace(/^(Uncaught Error:\s*)+/i, "").slice(0, 500);
-}
-
 function mapServerError(e: unknown): {
   field?: keyof FieldErrors;
   message: string;
   toastTitle?: string;
 } {
-  const clean = cleanServerError(e);
+  const clean = cleanAuthError(e);
   if (/already connected to another SubZero account/i.test(clean)) {
     return {
       field: "email",
@@ -82,11 +82,9 @@ function mapServerError(e: unknown): {
       field: "password",
       message: "Password must be at least 8 characters.",
     };
-  if (/Too many/i.test(clean) || /Rate limit/i.test(clean))
-    return { message: "Too many attempts. Try again in a few minutes." };
-  if (/Invalid credentials/i.test(clean))
-    return { message: "Wrong email or password." };
-  return { message: clean || "Something went wrong. Try again." };
+  const credential = mapCredentialError(clean);
+  if (credential) return { message: credential };
+  return { message: fallbackAuthError(clean) };
 }
 
 export function SignupForm() {
