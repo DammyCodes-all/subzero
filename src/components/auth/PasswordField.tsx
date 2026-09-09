@@ -1,7 +1,7 @@
 "use client";
 
-import { HugeiconsIcon } from "@hugeicons/react";
 import { ViewIcon, ViewOffIcon } from "@hugeicons/core-free-icons";
+import { HugeiconsIcon } from "@hugeicons/react";
 import * as React from "react";
 import { Input } from "@/components/ui/input";
 
@@ -13,6 +13,7 @@ export function PasswordField({
   autoComplete,
   onKeyDown,
   onBlur,
+  className,
 }: {
   value: string;
   onChange: (v: string) => void;
@@ -21,6 +22,7 @@ export function PasswordField({
   autoComplete?: string;
   onKeyDown?: React.KeyboardEventHandler<HTMLInputElement>;
   onBlur?: React.FocusEventHandler<HTMLInputElement>;
+  className?: string;
 }) {
   const [show, setShow] = React.useState(false);
   return (
@@ -34,7 +36,7 @@ export function PasswordField({
         autoComplete={autoComplete}
         onKeyDown={onKeyDown}
         onBlur={onBlur}
-        className="pr-10"
+        className={className ? `${className} pr-10` : "pr-10"}
       />
       <button
         type="button"
@@ -44,7 +46,11 @@ export function PasswordField({
         tabIndex={-1}
       >
         <HugeiconsIcon
-          icon={(show ? ViewOffIcon : ViewIcon) as unknown as Parameters<typeof HugeiconsIcon>[0]["icon"]}
+          icon={
+            (show ? ViewOffIcon : ViewIcon) as unknown as Parameters<
+              typeof HugeiconsIcon
+            >[0]["icon"]
+          }
           size={16}
           strokeWidth={1.8}
           color="currentColor"
