@@ -182,7 +182,6 @@ export function SignupForm() {
           }}
           placeholder="Ada Lovelace"
           autoComplete="name"
-          autoFocus
           maxLength={40}
           aria-invalid={!!errors.name}
           aria-describedby={errors.name ? "signup-name-error" : undefined}

@@ -3,7 +3,6 @@
 import { useAuthActions } from "@convex-dev/auth/react";
 import { useConvexAuth } from "convex/react";
 import { motion, useReducedMotion } from "framer-motion";
-import Image from "next/image";
 import { useRouter, useSearchParams } from "next/navigation";
 import { type ReactNode, useEffect, useState } from "react";
 import { sileo, Toaster } from "sileo";
@@ -11,6 +10,7 @@ import { LoginForm } from "@/components/auth/LoginForm";
 import { SignupForm } from "@/components/auth/SignupForm";
 import { SubzeroWithWordmark } from "@/components/brand/SubzeroLogo";
 import { Button } from "@/components/ui/button";
+import { DarkGradientBg } from "@/components/ui/elegant-dark-pattern";
 import {
   clearGoogleOAuthAttempt,
   GOOGLE_OAUTH_REDIRECT,
@@ -118,28 +118,13 @@ export function AuthView() {
   if (isAuthenticated) return null;
 
   return (
-    <main className="flex min-h-screen bg-background">
-      {/* Left: hero visual, desktop only */}
-      <aside
-        className="relative hidden w-[30%] overflow-hidden lg:block"
-        aria-hidden
-      >
-        <Image
-          src="/images/auth-hero.webp"
-          alt=""
-          fill
-          priority
-          sizes="30vw"
-          className="object-cover"
-        />
-        <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-background via-background/60 to-transparent px-10 pt-16 pb-8 text-center">
-          <p className="font-mono text-xs text-muted-foreground">
-            Green still charges. Frozen does not.
-          </p>
-        </div>
-      </aside>
+    <main className="relative flex min-h-screen items-center justify-center overflow-hidden bg-background">
+      {/* Full-page dark gradient pattern */}
+      <div aria-hidden className="absolute inset-0">
+        <DarkGradientBg className="absolute inset-0" />
+      </div>
 
-      <section className="flex flex-1 items-center justify-center p-6 sm:p-10">
+      <section className="relative z-10 flex flex-1 items-center justify-center p-6 sm:p-10">
         <div className="w-full max-w-sm">
           <Rise delay={0}>
             <a href="/" aria-label="SubZero home" className="flex items-center">
@@ -150,15 +135,15 @@ export function AuthView() {
           <Rise delay={0.06} className="mt-6">
             <h1 className="font-heading text-[28px] font-bold leading-[1.15] tracking-tight">
               {mode === "signup"
-                ? "See every subscription you pay for."
+                ? "Find what you're really paying for."
                 : "Welcome back."}
             </h1>
           </Rise>
           <Rise delay={0.1} className="mt-2">
             <p className="text-sm leading-relaxed text-muted-foreground">
               {mode === "signup"
-                ? "Connect Gmail and SubZero finds the rest. Most people are done in a minute."
-                : "Your subscriptions are where you left them."}
+                ? "One tap with Google. Every subscription found."
+                : "Log in to see what's renewing."}
             </p>
           </Rise>
 
@@ -175,7 +160,7 @@ export function AuthView() {
             </Button>
           </Rise>
 
-          <Rise delay={0.19} className="my-4">
+          <Rise delay={0.19} className="my-5">
             <div className="flex items-center gap-3">
               <div className="h-px flex-1 bg-border" />
               <span className="font-mono text-[11px] text-muted-foreground">
