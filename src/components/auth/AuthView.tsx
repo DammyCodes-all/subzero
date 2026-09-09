@@ -143,7 +143,7 @@ export function AuthView() {
             <p className="text-sm leading-relaxed text-muted-foreground">
               {mode === "signup"
                 ? "One tap with Google. Every subscription found."
-                : "Log in to see what's renewing."}
+                : "Still saving you money while you were gone."}
             </p>
           </Rise>
 
