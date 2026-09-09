@@ -52,9 +52,7 @@ export function IntakeSection() {
               key={card.number}
               className={cn(
                 "relative rounded-2xl border bg-card p-6",
-                card.primary
-                  ? "border-primary/60 shadow-[0_0_60px_-18px_var(--primary)]"
-                  : "border-border",
+                card.primary ? "border-primary/60" : "border-border",
               )}
             >
               {card.primary && (

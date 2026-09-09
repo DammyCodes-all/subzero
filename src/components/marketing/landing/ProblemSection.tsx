@@ -1,35 +1,5 @@
-import {
-  AlarmClockIcon,
-  BellRingIcon,
-  CheckmarkCircle02Icon,
-  MailCheckIcon,
-} from "@hugeicons/core-free-icons";
-import { HugeiconsIcon } from "@hugeicons/react";
-import { cn } from "@/lib/utils";
 import { LandingEyebrow } from "./LandingEyebrow";
-
-const CARDS = [
-  {
-    icon: AlarmClockIcon,
-    title: "Your trial ends soon",
-    className: "lg:rotate-[-5deg] lg:translate-x-2",
-  },
-  {
-    icon: BellRingIcon,
-    title: "Your subscription renews tomorrow",
-    className: "lg:rotate-[3deg] lg:-translate-x-3",
-  },
-  {
-    icon: MailCheckIcon,
-    title: "Your receipt",
-    className: "lg:rotate-[4deg] lg:translate-x-6",
-  },
-  {
-    icon: CheckmarkCircle02Icon,
-    title: "Payment successful",
-    className: "lg:rotate-[-3deg] lg:translate-x-0",
-  },
-];
+import { ProblemVisual } from "./ProblemVisual";
 
 export function ProblemSection() {
   return (
@@ -51,28 +21,7 @@ export function ProblemSection() {
           </p>
         </div>
 
-        <div aria-hidden="true" className="relative">
-          <div className="grid gap-4 sm:grid-cols-2 lg:gap-5">
-            {CARDS.map((card) => (
-              <div
-                key={card.title}
-                className={cn(
-                  "rounded-xl border border-border bg-card p-5 shadow-lg shadow-black/30",
-                  card.className,
-                )}
-              >
-                <span className="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-secondary text-primary">
-                  <HugeiconsIcon
-                    icon={card.icon as never}
-                    size={18}
-                    color="currentColor"
-                  />
-                </span>
-                <p className="mt-3 text-sm font-semibold">{card.title}</p>
-              </div>
-            ))}
-          </div>
-        </div>
+        <ProblemVisual />
       </div>
     </section>
   );
