@@ -143,7 +143,7 @@ export function SettingsView() {
     drafts: number;
     notifications: number;
     scans: number;
-    disconnected: number;
+    connectionsRemoved: number;
   }>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
@@ -549,9 +549,9 @@ export function SettingsView() {
                 {deleteResult.evidence} receipt excerpts, {deleteResult.drafts}{" "}
                 cancellation drafts, {deleteResult.notifications} notifications,
                 and {deleteResult.scans} scan records.
-                {deleteResult.disconnected > 0
-                  ? ` Disconnected ${deleteResult.disconnected} Gmail inbox${deleteResult.disconnected === 1 ? "" : "es"}.`
-                  : " Your Gmail inboxes are disconnected."}
+                {deleteResult.connectionsRemoved > 0
+                  ? ` Removed ${deleteResult.connectionsRemoved} connected inbox${deleteResult.connectionsRemoved === 1 ? "" : "es"} — no email traces kept.`
+                  : " Your connected inboxes are removed."}
               </p>
             </div>
           ) : confirmingDelete ? (
@@ -561,7 +561,7 @@ export function SettingsView() {
                   Delete everything listed above? This cannot be undone.
                 </p>
                 <p className="mt-0.5 text-xs text-muted-foreground">
-                  Your Gmail inboxes are disconnected too, so nothing new will
+                  Your connected inboxes are removed too, so nothing new will
                   sync in afterwards.
                 </p>
               </div>
@@ -600,8 +600,8 @@ export function SettingsView() {
                 </p>
                 <p className="mt-0.5 text-xs text-muted-foreground">
                   Subscriptions, receipt excerpts, cancellation drafts,
-                  notification history, and scan history. Gmail inboxes are
-                  disconnected too.
+                  notification history, and scan history. Connected inboxes
+                  are removed too, leaving no email traces behind.
                 </p>
               </div>
               <Button

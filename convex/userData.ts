@@ -11,7 +11,8 @@ import { mutation } from "./_generated/server";
  * - cancellationActions (cancellation drafts attached to subscriptions)
  * - notifications (notification history)
  * - ingestionAttempts (scan history: sender + subject metadata, 7 day window)
- * - google connections are disconnected (tokens cleared, watch stopped)
+ * - connections are deleted entirely (past Gmail inboxes and forwarding
+ *   rows leave no email traces behind; the Gmail watch is stopped first)
  *
  * Auth records are intentionally untouched.
  */
@@ -112,9 +113,12 @@ export const deleteMyData = mutation({
       }
     }
 
-    // Auto-disconnect Gmail: clearing data also revokes inbox access so
-    // nothing new syncs in afterwards.
-    let disconnected = 0;
+    // Full removal: delete the user's connection rows outright so past
+    // Gmail inboxes leave no email traces behind. Watch shutdown is
+    // scheduled first with the captured token (the action tolerates the
+    // row already being gone). Forwarding rows recreate on demand via
+    // getOrCreateInbox; Gmail rows recreate fresh on the next connect.
+    let connectionsRemoved = 0;
     const seenConns = new Set<string>();
     for (const uid of candidates) {
       const batch = await ctx.db
@@ -124,25 +128,8 @@ export const deleteMyData = mutation({
       for (const c of batch) {
         if (seenConns.has(c._id)) continue;
         seenConns.add(c._id);
-        if (c.provider !== "google") continue;
         if (!belongsToUser(c.userId, candidates)) continue;
-        if (c.status === "disconnected" && !c.gmailRefreshToken) continue;
-        const tok = c.gmailRefreshToken;
-        await ctx.db.patch(c._id, {
-          status: "disconnected",
-          gmailScopeGranted: false,
-          gmailRefreshToken: undefined,
-          // Reset the scan cursor so the next connect starts as a true
-          // first scan (black hole shows) instead of a "last synced"
-          // zero-state with a stale timestamp.
-          lastGmailScanAt: undefined,
-          gmailHistoryId: undefined,
-          gmailWatchExpiration: undefined,
-          gmailWatchTopic: undefined,
-          gmailWatchLastRenewedAt: undefined,
-          gmailWatchHistoryIdAtWatch: undefined,
-        } as never);
-        disconnected += 1;
+        const tok = (c as { gmailRefreshToken?: string }).gmailRefreshToken;
         if (tok) {
           try {
             await ctx.scheduler.runAfter(
@@ -152,6 +139,8 @@ export const deleteMyData = mutation({
             );
           } catch {}
         }
+        await ctx.db.delete(c._id);
+        connectionsRemoved += 1;
       }
     }
 
@@ -161,7 +150,7 @@ export const deleteMyData = mutation({
       drafts: draftCount,
       notifications: notificationCount,
       scans: scanCount,
-      disconnected,
+      connectionsRemoved,
     };
   },
 });
