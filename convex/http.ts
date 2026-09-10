@@ -94,7 +94,7 @@ http.route({
     // Lookup connections by accountEmail (connected gmail accounts)
     let conns: any[] = [];
     try {
-      conns = await ctx.runQuery(internal.gmail.getConnectionsByEmailInternal, { email: emailAddress });
+      conns = await ctx.runQuery(internal.gmailConnectionState.getConnectionsByEmailInternal, { email: emailAddress });
     } catch (e) {
       console.error("gmail push query failed", String(e));
     }
@@ -122,6 +122,7 @@ http.route({
         await ctx.scheduler.runAfter(0, internal.gmailWatch.ingestIncremental, {
           userId: conn.userId,
           connId: conn._id,
+          trigger: "push",
         });
       } catch (e) {
         console.error("gmail push schedule failed", conn._id, String(e));
