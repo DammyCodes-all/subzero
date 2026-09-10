@@ -19,6 +19,13 @@ export default defineSchema({
     gmailWatchTopic: v.optional(v.string()),
     gmailWatchLastRenewedAt: v.optional(v.number()),
     gmailWatchHistoryIdAtWatch: v.optional(v.string()),
+    // Resumable deep-backfill cursor. Present = backfill active.
+    gmailBackfillSeededAt: v.optional(v.number()),
+    gmailBackfillQuery: v.optional(
+      v.union(v.literal("narrow"), v.literal("broad")),
+    ),
+    gmailBackfillPageToken: v.optional(v.string()),
+    gmailBackfillProcessed: v.optional(v.number()),
   })
     .index("by_user", ["userId"])
     .index("by_agentmailInbox", ["agentmailInbox"])
@@ -147,6 +154,47 @@ export default defineSchema({
     .index("by_user", ["userId"])
     .index("by_scheduled", ["scheduledAt"])
     .index("by_subscription_and_type", ["subscriptionId", "type"]),
+
+  // Gmail poll retry queue: messages whose fetch or AI extraction failed
+  // transiently. The history cursor advances past them; this table is the
+  // safety net that brings the worker back. Dead rows are kept as a visible
+  // record of receipts that never got processed.
+  gmailScanFailures: defineTable({
+    userId: v.string(),
+    connId: v.id("connections"),
+    gmailMessageId: v.string(),
+    errorKind: v.union(
+      v.literal("fetch"),
+      v.literal("extract"),
+      v.literal("weak"),
+    ),
+    attempts: v.number(),
+    nextRetryAt: v.number(),
+    status: v.union(v.literal("queued"), v.literal("dead")),
+    lastError: v.optional(v.string()),
+  })
+    .index("by_conn_message", ["connId", "gmailMessageId"])
+    .index("by_conn_status_retry", ["connId", "status", "nextRetryAt"])
+    .index("by_user_status", ["userId", "status"]),
+
+  // One row per scan tick per connection — powers "last synced" state and
+  // real per-connection counts (the cron fan-out itself can't return them).
+  gmailScanRuns: defineTable({
+    userId: v.string(),
+    connId: v.id("connections"),
+    trigger: v.union(
+      v.literal("poll"),
+      v.literal("push"),
+      v.literal("manual"),
+      v.literal("connect"),
+    ),
+    scanned: v.number(),
+    created: v.number(),
+    failed: v.number(),
+    finishedAt: v.number(),
+  })
+    .index("by_conn", ["connId"])
+    .index("by_user", ["userId"]),
 
   ingestionAttempts: defineTable({
     userId: v.string(),
