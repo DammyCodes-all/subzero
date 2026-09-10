@@ -50,12 +50,8 @@ export function HeroSection() {
       </div>
 
       <div className="relative mx-auto -mt-2 w-full md:-mt-4">
-        <div
-          aria-hidden="true"
-          className="absolute -bottom-10 left-1/2 h-28 w-1/2 -translate-x-1/2 rounded-full bg-primary/[0.04] blur-3xl"
-        />
-        <div className="[perspective:1600px]">
-          <div className="relative overflow-hidden rounded-xl bg-card shadow-2xl shadow-black/50 [transform:rotateX(14deg)] md:[transform:rotateX(38deg)]">
+        <div className="perspective-[1600px]">
+          <div className="relative overflow-hidden rounded-xl bg-card  [transform:rotateX(14deg)] md:[transform:rotateX(38deg)]">
             <Image
               src="/images/dashboard.webp"
               alt="SubZero dashboard showing subscriptions that need attention before they renew"
