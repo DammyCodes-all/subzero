@@ -97,7 +97,7 @@ export function NoSubscriptionsState() {
 function AuthenticatedEmptyState() {
   const status = useQuery(api.gmail.getGmailStatus);
   const inbox = useQuery(api.agentmail.getInbox);
-  const scan = useAction(api.gmailActions.scanGmail);
+  const scan = useAction(api.gmailManualScan.scanGmail);
   const getOrCreateInbox = useMutation(api.agentmail.getOrCreateInbox);
   const [scanning, setScanning] = useState(false);
   const [copied, setCopied] = useState(false);
