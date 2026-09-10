@@ -3,6 +3,15 @@
 // Gmail helpers — token refresh, list, get, decode
 // Keep lean, no googleapis SDK (fetch only)
 
+const AUTH_ERROR_RE =
+  /\b(400|401|403)\b|invalid_grant|invalid_client|\brevoked\b|\bexpired\b/i;
+
+// Shared auth-failure classifier: revoked/expired credentials route to
+// reauth; everything else is a transient candidate for the retry queue.
+export function isAuthError(msg: string): boolean {
+  return AUTH_ERROR_RE.test(msg);
+}
+
 function b64UrlDecode(s: string): string {
   // Gmail payload body.data is base64url
   const pad = s.length % 4 === 0 ? "" : "=".repeat(4 - (s.length % 4));
