@@ -17,6 +17,7 @@ export const enqueueSend = internalMutation({
     to: v.string(),
     subject: v.string(),
     text: v.string(),
+    html: v.optional(v.string()),
     labels: v.optional(v.array(v.string())),
   },
   handler: async (ctx, args) => {
@@ -24,6 +25,7 @@ export const enqueueSend = internalMutation({
       to: args.to,
       subject: args.subject,
       text: args.text,
+      html: args.html,
       labels: args.labels,
     });
   },
