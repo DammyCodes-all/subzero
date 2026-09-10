@@ -2,6 +2,17 @@ import { convexAuthNextjsToken } from "@convex-dev/auth/nextjs/server";
 import { ConvexHttpClient } from "convex/browser";
 import { type NextRequest, NextResponse } from "next/server";
 
+// All exits clear the OAuth cookies — success AND failure. Error paths
+// previously left stale __gmail_oauth_state/__gmail_oauth_token behind,
+// so the next retry could fail state comparison ("That attempt expired…")
+// or reuse an expired JWT ("sign in expired") with no visible cause.
+function redirectClean(url: string) {
+  const res = NextResponse.redirect(url);
+  res.cookies.delete("__gmail_oauth_state");
+  res.cookies.delete("__gmail_oauth_token");
+  return res;
+}
+
 export async function GET(req: NextRequest) {
   const url = new URL(req.url);
   const code = url.searchParams.get("code");
@@ -11,22 +22,22 @@ export async function GET(req: NextRequest) {
     // User pressed Deny or closed the Google screen. Not an error,
     // so the dashboard shows a gentle note instead of a failure toast.
     if (error === "access_denied") {
-      return NextResponse.redirect(`${url.origin}/dashboard?gmail_cancelled=1`);
+      return redirectClean(`${url.origin}/dashboard?gmail_cancelled=1`);
     }
     console.error("gmail oauth error from google", error);
-    return NextResponse.redirect(
+    return redirectClean(
       `${url.origin}/dashboard?gmail_error=${encodeURIComponent("Google couldn't finish the connection. Try again in a bit.")}`,
     );
   }
   if (!code) {
-    return NextResponse.redirect(
+    return redirectClean(
       `${url.origin}/dashboard?gmail_error=${encodeURIComponent("Google didn't send us back properly. Try connecting again.")}`,
     );
   }
   // Verify OAuth state (CSRF)
   const expectedState = req.cookies.get("__gmail_oauth_state")?.value;
   if (!expectedState || !state || state !== expectedState) {
-    return NextResponse.redirect(
+    return redirectClean(
       `${url.origin}/dashboard?gmail_error=${encodeURIComponent("That attempt expired before finishing. Try connecting again.")}`,
     );
   }
@@ -37,7 +48,7 @@ export async function GET(req: NextRequest) {
     : null;
   const token = nextjsToken ?? cookieToken ?? bearer;
   if (!token) {
-    return NextResponse.redirect(
+    return redirectClean(
       `${url.origin}/dashboard?gmail_error=${encodeURIComponent("Please sign in first, then connect Gmail.")}`,
     );
   }
@@ -47,7 +58,7 @@ export async function GET(req: NextRequest) {
   const redirectUri = `${url.origin}/api/gmail/callback`;
   if (!clientId || !clientSecret) {
     console.error("gmail oauth misconfigured: missing google credentials");
-    return NextResponse.redirect(
+    return redirectClean(
       `${url.origin}/dashboard?gmail_error=${encodeURIComponent("Something is off on our side. Try again in a bit.")}`,
     );
   }
@@ -79,14 +90,14 @@ export async function GET(req: NextRequest) {
         await new Promise((r) => setTimeout(r, 800 * (attempt + 1)));
       else {
         console.error("gmail token exchange fetch failed after retries", e);
-        return NextResponse.redirect(
+        return redirectClean(
           `${url.origin}/dashboard?gmail_error=${encodeURIComponent("Google took too long to answer. Check your connection and try again.")}`,
         );
       }
     }
   }
   if (!tokenRes) {
-    return NextResponse.redirect(
+    return redirectClean(
       `${url.origin}/dashboard?gmail_error=${encodeURIComponent("Google didn't answer. Check your connection and try again.")}`,
     );
   }
@@ -97,7 +108,7 @@ export async function GET(req: NextRequest) {
       tokenRes.status,
       t.slice(0, 300),
     );
-    return NextResponse.redirect(
+    return redirectClean(
       `${url.origin}/dashboard?gmail_error=${encodeURIComponent("Google couldn't finish the connection. Try again in a bit.")}`,
     );
   }
@@ -132,12 +143,12 @@ export async function GET(req: NextRequest) {
   }
 
   if (!tokens.refresh_token) {
-    return NextResponse.redirect(
+    return redirectClean(
       `${url.origin}/dashboard?gmail_error=${encodeURIComponent("Google didn't include ongoing access. Remove SubZero in your Google Account, then connect again and accept the consent screen.")}`,
     );
   }
   if (!email) {
-    return NextResponse.redirect(
+    return redirectClean(
       `${url.origin}/dashboard?gmail_error=${encodeURIComponent("We couldn't read your Gmail address. Try again.")}`,
     );
   }
@@ -145,7 +156,7 @@ export async function GET(req: NextRequest) {
   const convexUrl = process.env.NEXT_PUBLIC_CONVEX_URL;
   if (!convexUrl) {
     console.error("gmail oauth misconfigured: missing convex url");
-    return NextResponse.redirect(
+    return redirectClean(
       `${url.origin}/dashboard?gmail_error=${encodeURIComponent("Something is off on our side. Try again in a bit.")}`,
     );
   }
@@ -163,6 +174,8 @@ export async function GET(req: NextRequest) {
     let friendly = raw;
     if (raw.includes("Email mismatch")) {
       friendly = `Gmail (${email}) does not match your SubZero sign-in. Sign out and sign in with ${email}, then connect Gmail again.`;
+    } else if (raw.includes("already connected to another account")) {
+      friendly = `That Gmail (${email}) is already connected to a different SubZero account. Sign in to that account to use it, or disconnect it there first.`;
     } else if (raw.includes("No user found")) {
       friendly = `No SubZero account for ${email}. Sign in with Google first, then connect Gmail.`;
     } else if (
@@ -183,16 +196,11 @@ export async function GET(req: NextRequest) {
       console.error("gmail storeByEmail failed", raw.slice(0, 300));
       friendly = "We couldn't save that connection. Try again in a bit.";
     }
-    return NextResponse.redirect(
+    return redirectClean(
       `${url.origin}/dashboard?gmail_error=${encodeURIComponent(friendly)}`,
     );
   }
 
-  const res = NextResponse.redirect(
-    `${url.origin}/dashboard?gmail_connected=1`,
-  );
   console.log("gmail oauth success", email.toLowerCase());
-  res.cookies.delete("__gmail_oauth_state");
-  res.cookies.delete("__gmail_oauth_token");
-  return res;
+  return redirectClean(`${url.origin}/dashboard?gmail_connected=1`);
 }

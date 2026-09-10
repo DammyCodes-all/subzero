@@ -5,7 +5,7 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import { useQuery } from "convex/react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { sileo } from "sileo";
 import { ActionCard } from "@/components/ActionCard";
 import { CompactAttentionRow } from "@/components/CompactAttentionRow";
@@ -54,6 +54,12 @@ export function DashboardView() {
   const gmailError = searchParams.get("gmail_error");
   const gmailConnected = searchParams.get("gmail_connected");
   const gmailCancelled = searchParams.get("gmail_cancelled");
+  // Persistent copy of a connect failure. Query-param toasts auto-dismiss
+  // and are easy to miss — a missed toast used to look exactly like "the
+  // button did nothing". This banner stays until dismissed.
+  const [gmailErrorBanner, setGmailErrorBanner] = useState<string | null>(
+    null,
+  );
 
   useEffect(() => {
     if (gmailCancelled) {
@@ -74,6 +80,7 @@ export function DashboardView() {
         title: "Couldn't connect Gmail",
         description: gmailError,
       });
+      setGmailErrorBanner(gmailError);
       const url = new URL(window.location.href);
       url.searchParams.delete("gmail_error");
       url.searchParams.delete("gmail_connected");
@@ -142,6 +149,24 @@ export function DashboardView() {
   return (
     <div className="w-full space-y-8">
       <ProcessingRows />
+      {gmailErrorBanner && (
+        <div
+          role="alert"
+          className="flex items-start justify-between gap-3 rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-[12px]"
+        >
+          <span>
+            <span className="font-semibold">Couldn't connect Gmail. </span>
+            {gmailErrorBanner}
+          </span>
+          <button
+            type="button"
+            onClick={() => setGmailErrorBanner(null)}
+            className="shrink-0 cursor-pointer font-mono text-[11px] underline underline-offset-2"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
       {gmailStatus?.needsReauth && !gmailStatus?.connected && (
         <div className="flex items-center justify-between gap-3 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-[12px]">
           <span>
@@ -172,8 +197,11 @@ export function DashboardView() {
             <FirstScanSummary
               total={activeCount}
               needCount={urgentSubs.length}
-              topSubs={displaySubs.slice(0, 2)}
-              moreCount={Math.max(0, activeCount - 2)}
+              topSubs={displaySubs.slice(0, 3)}
+              moreCount={Math.max(
+                0,
+                activeCount - Math.min(3, displaySubs.length),
+              )}
               onShowMe={dismissSummary}
             />
           ) : (

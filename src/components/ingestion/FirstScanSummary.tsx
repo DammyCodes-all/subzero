@@ -34,7 +34,7 @@ export function FirstScanSummary({
         </p>
       </div>
       <div className="space-y-3 text-left">
-        {topSubs.map((s) => (
+        {topSubs.slice(0, 3).map((s) => (
           <ActionCard key={s._id} sub={s} />
         ))}
       </div>

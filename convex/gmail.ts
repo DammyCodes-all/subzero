@@ -335,23 +335,26 @@ export const storeGmailToken = internalMutation({
         status: "connected",
       });
     }
+    // Never overwrite signup profile: only fill image if user has none.
     if (args.pictureUrl) {
       try {
         const parts = args.userId.split("|");
         const rawUserId = parts.length >= 2 ? parts[1] : args.userId;
         const user = await ctx.db.get(rawUserId as any);
         if (user) {
-          await ctx.db.patch(
-            rawUserId as any,
-            { image: args.pictureUrl } as any,
-          );
+          if (!(user as any).image) {
+            await ctx.db.patch(
+              rawUserId as any,
+              { image: args.pictureUrl } as any,
+            );
+          }
         } else {
           if (emailNorm) {
             const byEmail = await ctx.db
               .query("users")
               .withIndex("email", (q) => q.eq("email", emailNorm))
               .first();
-            if (byEmail)
+            if (byEmail && !(byEmail as any).image)
               await ctx.db.patch(byEmail._id, {
                 image: args.pictureUrl,
               } as any);
@@ -360,12 +363,11 @@ export const storeGmailToken = internalMutation({
       } catch {}
     }
     if (connId) {
-      // Proactive: schedule immediate history-skip-aware poll and watch setup if topic configured
-      await ctx.scheduler.runAfter(
-        0,
-        internal.gmailWatch.pollIncrementalForUser,
-        { userId: args.userId },
-      );
+      // No immediate incremental poll here on purpose: it only scans a
+      // 7-day window yet stamps lastGmailScanAt, which suppresses the
+      // dashboard's full first scan (useFirstScan fires only when no scan
+      // timestamp exists yet). The dashboard auto-runs the full 60-day
+      // scan right after connect, and the 15-min cron covers background.
       // Watch setup is best-effort — only if GMAIL_PUBSUB_TOPIC is set
       await ctx.scheduler.runAfter(0, internal.gmailWatch.ensureWatchForConn, {
         connId,
@@ -408,11 +410,33 @@ export const storeByEmail = mutation({
         "This email is already connected to another account. Each email can only be linked to one SubZero account.",
       );
     }
-    // Find existing google connection for this user
-    const rows = await ctx.db
-      .query("connections")
-      .withIndex("by_user", (q) => q.eq("userId", userId))
-      .collect();
+    // Find existing google connection for this user across ALL id shapes
+    // (raw userId, session token identifier, user:-prefixed). An
+    // exact-userId-only lookup misses rows written under a different shape
+    // after sign-out/sign-in cycles and inserts a duplicate instead of
+    // reviving the disconnected row — leaving a zombie "Not connected" row
+    // next to the live one.
+    const ident = await ctx.auth.getUserIdentity();
+    if (ident?.tokenIdentifier) {
+      ownerIds.add(ident.tokenIdentifier);
+      const parts = ident.tokenIdentifier.split("|");
+      const plain = parts.length >= 2 ? parts[1] : ident.tokenIdentifier;
+      ownerIds.add(plain);
+      ownerIds.add(`user:${plain}`);
+    }
+    const seenRow = new Set<string>();
+    const rows: any[] = [];
+    for (const uid of ownerIds) {
+      const batch = await ctx.db
+        .query("connections")
+        .withIndex("by_user", (q) => q.eq("userId", uid))
+        .collect();
+      for (const r of batch) {
+        if (seenRow.has(r._id)) continue;
+        seenRow.add(r._id);
+        rows.push(r);
+      }
+    }
     const existing = rows.find(
       (c: any) => c.provider === "google" && c.accountEmail === emailNorm,
     );
@@ -453,12 +477,13 @@ export const storeByEmail = mutation({
         status: "connected",
       } as any);
     }
+    // Never overwrite signup profile: only fill image if user has none.
     if (args.pictureUrl) {
       try {
         const parts = userId.split("|");
         const rawUserId = parts.length >= 2 ? parts[1] : userId;
         const user = await ctx.db.get(rawUserId as any);
-        if (user)
+        if (user && !(user as any).image)
           await ctx.db.patch(
             rawUserId as any,
             { image: args.pictureUrl } as any,
@@ -466,11 +491,9 @@ export const storeByEmail = mutation({
       } catch {}
     }
     if (connId2) {
-      await ctx.scheduler.runAfter(
-        0,
-        internal.gmailWatch.pollIncrementalForUser,
-        { userId },
-      );
+      // Same as storeGmailToken: no immediate incremental poll — it would
+      // stamp lastGmailScanAt from a 7-day scan and suppress the full
+      // first scan. Dashboard auto-scans on connect; cron covers the rest.
       await ctx.scheduler.runAfter(0, internal.gmailWatch.ensureWatchForConn, {
         connId: connId2,
       });
