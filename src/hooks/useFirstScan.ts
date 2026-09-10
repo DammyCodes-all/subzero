@@ -28,7 +28,7 @@ export function useFirstScan({
   gmailStatus: FirstScanStatus | undefined;
   subCount: number;
 }) {
-  const scan = useAction(api.gmailActions.scanGmail);
+  const scan = useAction(api.gmailManualScan.scanGmail);
   const [scanning, setScanning] = useState(false);
   const [scanError, setScanError] = useState<string | null>(null);
   // Snapshot of the last completed scan in this episode. Powers the

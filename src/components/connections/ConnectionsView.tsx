@@ -18,7 +18,8 @@ import {
 
 export function ConnectionsView() {
   const connections = useQuery(api.connections.getMyConnections);
-  const scan = useAction(api.gmailActions.scanGmail);
+  const scanHealth = useQuery(api.gmailRetries.getScanHealth);
+  const scan = useAction(api.gmailManualScan.scanGmail);
   const disconnect = useMutation(api.gmail.disconnectGmail);
   const connectGmail = useConnectGmail();
 
@@ -33,7 +34,12 @@ export function ConnectionsView() {
     setScanningId(connId);
     try {
       const res = await scan({ connectionId: connId as never });
-      const r = res as { scanned: number; created: number; reason?: string };
+      const r = res as {
+        scanned: number;
+        created: number;
+        reason?: string;
+        remaining?: boolean;
+      };
       const copy = scanResultCopy(r);
       if (copy.kind === "error") {
         setLastResults((p) => ({
@@ -44,9 +50,19 @@ export function ConnectionsView() {
       } else {
         setLastResults((p) => ({
           ...p,
-          [connId]: { ok: true, scanned: r.scanned, created: r.created },
+          [connId]: {
+            ok: true,
+            scanned: r.scanned,
+            created: r.created,
+            remaining: r.remaining,
+          },
         }));
-        sileo.success({ title: copy.title, description: copy.description });
+        sileo.success({
+          title: copy.title,
+          description: r.remaining
+            ? `${copy.description} Deep scan continues in the background.`
+            : copy.description,
+        });
       }
     } catch {
       const message = "Something hiccuped on our side. Try again in a bit.";
@@ -94,6 +110,9 @@ export function ConnectionsView() {
 
   const googleConns =
     connections?.filter((c) => c.provider === "google") ?? [];
+  const healthByConn = new Map(
+    (scanHealth ?? []).map((h) => [String(h.connId), h]),
+  );
   const lastSync = googleConns.reduce<number | undefined>(
     (m, c) => (c.lastGmailScanAt && (!m || c.lastGmailScanAt > m) ? c.lastGmailScanAt : m),
     undefined,
@@ -158,6 +177,7 @@ export function ConnectionsView() {
                 <GmailInboxRow
                   key={conn._id}
                   conn={conn}
+                  syncHealth={healthByConn.get(conn._id) ?? null}
                   scanning={scanningId === conn._id}
                   scanBusy={scanningId !== null}
                   lastResult={lastResults[conn._id] ?? null}
