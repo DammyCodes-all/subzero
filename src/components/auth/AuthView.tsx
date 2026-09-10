@@ -177,7 +177,7 @@ export function AuthView() {
                   <button
                     type="button"
                     onClick={() => setMode("login")}
-                    className="font-medium text-primary underline-offset-4 hover:underline"
+                    className="cursor-pointer font-medium text-primary underline-offset-4 hover:underline"
                   >
                     Log in
                   </button>
@@ -188,7 +188,7 @@ export function AuthView() {
                   <button
                     type="button"
                     onClick={() => setMode("signup")}
-                    className="font-medium text-primary underline-offset-4 hover:underline"
+                    className="cursor-pointer font-medium text-primary underline-offset-4 hover:underline"
                   >
                     Create an account
                   </button>
