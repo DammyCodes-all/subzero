@@ -8,6 +8,7 @@ import {
   mutation,
   query,
 } from "./_generated/server";
+import { purgeQueuedForConn } from "./gmailRetries";
 
 function userIdCandidates(userId: string) {
   const parts = userId.split("|");
@@ -119,152 +120,6 @@ export const listConnections = query({
   },
 });
 
-export const getConnectionsInternal = internalQuery({
-  args: { userId: v.string() },
-  returns: v.array(
-    v.object({
-      _id: v.id("connections"),
-      gmailRefreshToken: v.optional(v.string()),
-      gmailScopeGranted: v.optional(v.boolean()),
-      status: v.string(),
-      accountEmail: v.optional(v.string()),
-      lastGmailScanAt: v.optional(v.number()),
-      gmailHistoryId: v.optional(v.string()),
-      gmailWatchExpiration: v.optional(v.number()),
-    }),
-  ),
-  handler: async (ctx, args) => {
-    // Collect all candidate userIds for this user (token-ish or plain)
-    const userIdCandidates = [args.userId];
-    const parts = args.userId.split("|");
-    if (parts.length >= 2) {
-      userIdCandidates.push(parts[1]);
-      userIdCandidates.push(`user:${parts[1]}`);
-    }
-    const seen = new Set<string>();
-    const result: Array<{
-      _id: Id<"connections">;
-      gmailRefreshToken?: string;
-      gmailScopeGranted?: boolean;
-      status: string;
-      accountEmail?: string;
-      lastGmailScanAt?: number;
-      gmailHistoryId?: string;
-      gmailWatchExpiration?: number;
-    }> = [];
-    for (const uid of userIdCandidates) {
-      const rows = await ctx.db
-        .query("connections")
-        .withIndex("by_user", (q) => q.eq("userId", uid))
-        .collect();
-      for (const c of rows) {
-        if (c.provider !== "google") continue;
-        if (seen.has(c._id)) continue;
-        seen.add(c._id);
-        result.push({
-          _id: c._id,
-          gmailRefreshToken: c.gmailRefreshToken,
-          gmailScopeGranted: c.gmailScopeGranted,
-          status: c.status,
-          accountEmail: c.accountEmail,
-          lastGmailScanAt: c.lastGmailScanAt,
-          gmailHistoryId: c.gmailHistoryId,
-          gmailWatchExpiration: (c as any).gmailWatchExpiration,
-        });
-      }
-    }
-    // Fallback: user email -> accountEmail lookup
-    if (result.length === 0) {
-      try {
-        const user = await ctx.db.get(
-          parts.length >= 2 ? (parts[1] as any) : (args.userId as any),
-        );
-        const email = (user as any)?.email?.toLowerCase();
-        if (email) {
-          const byEmail = await ctx.db
-            .query("connections")
-            .withIndex("by_accountEmail", (q) => q.eq("accountEmail", email))
-            .collect();
-          for (const c of byEmail) {
-            if (c.provider !== "google") continue;
-            if (seen.has(c._id)) continue;
-            seen.add(c._id);
-            result.push({
-              _id: c._id,
-              gmailRefreshToken: c.gmailRefreshToken,
-              gmailScopeGranted: c.gmailScopeGranted,
-              status: c.status,
-              accountEmail: c.accountEmail,
-              lastGmailScanAt: c.lastGmailScanAt,
-              gmailHistoryId: c.gmailHistoryId,
-              gmailWatchExpiration: (c as any).gmailWatchExpiration,
-            });
-          }
-        }
-      } catch {}
-    }
-    return result;
-  },
-});
-
-export const getConnectionInternal = internalQuery({
-  args: { userId: v.string() },
-  returns: v.union(
-    v.object({
-      _id: v.id("connections"),
-      gmailRefreshToken: v.optional(v.string()),
-      gmailScopeGranted: v.optional(v.boolean()),
-      status: v.string(),
-      lastGmailScanAt: v.optional(v.number()),
-    }),
-    v.null(),
-  ),
-  handler: async (ctx, args) => {
-    const rows = await ctx.db
-      .query("connections")
-      .withIndex("by_user", (q) => q.eq("userId", args.userId))
-      .collect();
-    let g = rows.find((c) => c.provider === "google");
-    if (!g) {
-      const parts = args.userId.split("|");
-      const uid = parts.length >= 2 ? parts[1] : args.userId;
-      const byPlain = await ctx.db
-        .query("connections")
-        .withIndex("by_user", (q) => q.eq("userId", uid))
-        .collect();
-      g = byPlain.find((c) => c.provider === "google");
-      if (!g) {
-        const byPlain2 = await ctx.db
-          .query("connections")
-          .withIndex("by_user", (q) => q.eq("userId", `user:${uid}`))
-          .collect();
-        g = byPlain2.find((c) => c.provider === "google");
-      }
-      if (!g) {
-        try {
-          const user = await ctx.db.get(uid as any);
-          const email = (user as any)?.email?.toLowerCase();
-          if (email) {
-            const byEmail = await ctx.db
-              .query("connections")
-              .withIndex("by_accountEmail", (q) => q.eq("accountEmail", email))
-              .first();
-            if (byEmail && byEmail.provider === "google") g = byEmail as any;
-          }
-        } catch {}
-      }
-    }
-    if (!g) return null;
-    return {
-      _id: g._id,
-      gmailRefreshToken: g.gmailRefreshToken,
-      gmailScopeGranted: g.gmailScopeGranted,
-      status: g.status,
-      lastGmailScanAt: g.lastGmailScanAt,
-    };
-  },
-});
-
 export const storeGmailToken = internalMutation({
   args: {
     userId: v.string(),
@@ -366,8 +221,9 @@ export const storeGmailToken = internalMutation({
       // No immediate incremental poll here on purpose: it only scans a
       // 7-day window yet stamps lastGmailScanAt, which suppresses the
       // dashboard's full first scan (useFirstScan fires only when no scan
-      // timestamp exists yet). The dashboard auto-runs the full 60-day
-      // scan right after connect, and the 15-min cron covers background.
+      // timestamp exists yet). The dashboard auto-runs the full 90-day
+      // scan right after connect (25 inline, rest auto-chained into the
+      // resumable backfill), and the 15-min cron covers background.
       // Watch setup is best-effort — only if GMAIL_PUBSUB_TOPIC is set
       await ctx.scheduler.runAfter(0, internal.gmailWatch.ensureWatchForConn, {
         connId,
@@ -543,7 +399,12 @@ export const disconnectGmail = mutation({
           gmailWatchTopic: undefined,
           gmailWatchLastRenewedAt: undefined,
           gmailWatchHistoryIdAtWatch: undefined,
+          gmailBackfillSeededAt: undefined,
+          gmailBackfillQuery: undefined,
+          gmailBackfillPageToken: undefined,
+          gmailBackfillProcessed: undefined,
         } as any);
+        await purgeQueuedForConn(ctx, target._id);
         if (tok) {
           try {
             await ctx.scheduler.runAfter(
@@ -598,7 +459,12 @@ export const disconnectGmail = mutation({
         gmailWatchTopic: undefined,
         gmailWatchLastRenewedAt: undefined,
         gmailWatchHistoryIdAtWatch: undefined,
+        gmailBackfillSeededAt: undefined,
+        gmailBackfillQuery: undefined,
+        gmailBackfillPageToken: undefined,
+        gmailBackfillProcessed: undefined,
       } as any);
+      await purgeQueuedForConn(ctx, g._id);
       if (tok) {
         try {
           await ctx.scheduler.runAfter(
@@ -613,122 +479,6 @@ export const disconnectGmail = mutation({
   },
 });
 
-export const touchScan = internalMutation({
-  args: { connId: v.id("connections") },
-  returns: v.null(),
-  handler: async (ctx, args) => {
-    await ctx.db.patch(args.connId, { lastGmailScanAt: Date.now() });
-    return null;
-  },
-});
-
-export const getConnectionByIdInternal = internalQuery({
-  args: { connId: v.id("connections") },
-  returns: v.union(
-    v.object({
-      _id: v.id("connections"),
-      userId: v.string(),
-      gmailRefreshToken: v.optional(v.string()),
-      gmailScopeGranted: v.optional(v.boolean()),
-      status: v.string(),
-      accountEmail: v.optional(v.string()),
-      lastGmailScanAt: v.optional(v.number()),
-      gmailHistoryId: v.optional(v.string()),
-      gmailWatchExpiration: v.optional(v.number()),
-      gmailWatchTopic: v.optional(v.string()),
-    }),
-    v.null(),
-  ),
-  handler: async (ctx, args) => {
-    const c = await ctx.db.get(args.connId);
-    if (!c || c.provider !== "google") return null;
-    return {
-      _id: c._id,
-      userId: c.userId,
-      gmailRefreshToken: c.gmailRefreshToken,
-      gmailScopeGranted: c.gmailScopeGranted,
-      status: c.status,
-      accountEmail: c.accountEmail,
-      lastGmailScanAt: c.lastGmailScanAt,
-      gmailHistoryId: c.gmailHistoryId,
-      gmailWatchExpiration: (c as any).gmailWatchExpiration,
-      gmailWatchTopic: (c as any).gmailWatchTopic,
-    };
-  },
-});
-
-export const listAllGmailConnectionsInternal = internalQuery({
-  args: {},
-  returns: v.array(
-    v.object({
-      _id: v.id("connections"),
-      userId: v.string(),
-      gmailRefreshToken: v.optional(v.string()),
-      gmailScopeGranted: v.optional(v.boolean()),
-      status: v.string(),
-      accountEmail: v.optional(v.string()),
-      lastGmailScanAt: v.optional(v.number()),
-      gmailHistoryId: v.optional(v.string()),
-      gmailWatchExpiration: v.optional(v.number()),
-      gmailWatchTopic: v.optional(v.string()),
-    }),
-  ),
-  handler: async (ctx) => {
-    const rows = await ctx.db
-      .query("connections")
-      .withIndex("by_provider", (q) => q.eq("provider", "google"))
-      .collect();
-    return rows.map((c) => ({
-      _id: c._id,
-      userId: c.userId,
-      gmailRefreshToken: c.gmailRefreshToken,
-      gmailScopeGranted: c.gmailScopeGranted,
-      status: c.status,
-      accountEmail: c.accountEmail,
-      lastGmailScanAt: c.lastGmailScanAt,
-      gmailHistoryId: c.gmailHistoryId,
-      gmailWatchExpiration: (c as any).gmailWatchExpiration,
-      gmailWatchTopic: (c as any).gmailWatchTopic,
-    }));
-  },
-});
-
-export const getConnectionsByEmailInternal = internalQuery({
-  args: { email: v.string() },
-  returns: v.array(
-    v.object({
-      _id: v.id("connections"),
-      userId: v.string(),
-      gmailRefreshToken: v.optional(v.string()),
-      gmailScopeGranted: v.optional(v.boolean()),
-      status: v.string(),
-      accountEmail: v.optional(v.string()),
-      gmailHistoryId: v.optional(v.string()),
-      lastGmailScanAt: v.optional(v.number()),
-    }),
-  ),
-  handler: async (ctx, args) => {
-    const rows = await ctx.db
-      .query("connections")
-      .withIndex("by_accountEmail", (q) =>
-        q.eq("accountEmail", args.email.toLowerCase()),
-      )
-      .collect();
-    return rows
-      .filter((c) => c.provider === "google")
-      .map((c) => ({
-        _id: c._id,
-        userId: c.userId,
-        gmailRefreshToken: c.gmailRefreshToken,
-        gmailScopeGranted: c.gmailScopeGranted,
-        status: c.status,
-        accountEmail: c.accountEmail,
-        gmailHistoryId: c.gmailHistoryId,
-        lastGmailScanAt: c.lastGmailScanAt,
-      }));
-  },
-});
-
 export const markTokenInvalid = internalMutation({
   args: { connId: v.id("connections") },
   handler: async (ctx, args) => {
@@ -736,55 +486,7 @@ export const markTokenInvalid = internalMutation({
     if (!c) return;
     // Keep status connected but clear scope so getGmailStatus flips connected:false + needsReauth:true
     await ctx.db.patch(args.connId, { gmailScopeGranted: false } as any);
+    await purgeQueuedForConn(ctx, args.connId);
   },
 });
 
-export const storeWatchState = internalMutation({
-  args: {
-    connId: v.id("connections"),
-    historyId: v.string(),
-    expiration: v.number(),
-    topic: v.string(),
-  },
-  handler: async (ctx, args) => {
-    await ctx.db.patch(args.connId, {
-      gmailHistoryId: args.historyId,
-      gmailWatchExpiration: args.expiration,
-      gmailWatchTopic: args.topic,
-      gmailWatchLastRenewedAt: Date.now(),
-      gmailWatchHistoryIdAtWatch: args.historyId,
-    } as any);
-  },
-});
-
-export const clearWatchState = internalMutation({
-  args: { connId: v.id("connections") },
-  handler: async (ctx, args) => {
-    await ctx.db.patch(args.connId, {
-      gmailWatchExpiration: undefined,
-      gmailWatchTopic: undefined,
-      gmailWatchLastRenewedAt: undefined,
-      gmailWatchHistoryIdAtWatch: undefined,
-    } as any);
-  },
-});
-
-export const updateHistoryId = internalMutation({
-  args: { connId: v.id("connections"), historyId: v.string() },
-  handler: async (ctx, args) => {
-    await ctx.db.patch(args.connId, {
-      gmailHistoryId: args.historyId,
-      lastGmailScanAt: Date.now(),
-    });
-  },
-});
-
-export const touchHistoryAndScan = internalMutation({
-  args: { connId: v.id("connections"), historyId: v.string() },
-  handler: async (ctx, args) => {
-    await ctx.db.patch(args.connId, {
-      gmailHistoryId: args.historyId,
-      lastGmailScanAt: Date.now(),
-    });
-  },
-});
