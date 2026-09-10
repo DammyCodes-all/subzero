@@ -15,6 +15,7 @@ export function ReminderEmail({ d }: { d: EmailData }) {
     <EmailLayout
       preview={`Still need to cancel ${d.merchant}?`}
       manageUrl={d.manageUrl}
+      logoUrl={d.logoUrl}
     >
       <MailHeader
         merchant={d.merchant}

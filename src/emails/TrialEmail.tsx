@@ -16,6 +16,7 @@ export function TrialEmail({ d }: { d: EmailData }) {
     <EmailLayout
       preview={`${d.merchant} trial ends ${d.trialStr}`}
       manageUrl={d.manageUrl}
+      logoUrl={d.logoUrl}
     >
       <MailHeader
         merchant={d.merchant}

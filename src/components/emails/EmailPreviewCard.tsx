@@ -1,11 +1,24 @@
+"use client";
+
+import { useRef } from "react";
+
 type Props = {
   badge: string;
   subject: string;
   html: string;
 };
 
-// Designed HTML preview — renders exactly what the inbox receives.
+// Borderless iframe that shrinks to the email — the preview shows the
+// mail itself, not a box around it.
 export function EmailPreviewCard({ badge, subject, html }: Props) {
+  const ref = useRef<HTMLIFrameElement>(null);
+  const fit = () => {
+    const doc = ref.current?.contentDocument;
+    if (doc && ref.current) {
+      ref.current.style.height = `${doc.documentElement.scrollHeight}px`;
+    }
+  };
+
   return (
     <article className="overflow-hidden rounded-xl border border-border bg-card">
       <div className="flex items-center justify-between border-b border-border/40 px-5 py-3">
@@ -16,25 +29,18 @@ export function EmailPreviewCard({ badge, subject, html }: Props) {
           text/html
         </span>
       </div>
-      <div className="space-y-1 px-5 pt-4 text-xs text-muted-foreground">
-        <p>
-          <span className="font-medium text-foreground">From:</span> SubZero
-          &lt;hello@subzero.app&gt;
-        </p>
-        <p>
-          <span className="font-medium text-foreground">To:</span> you
-        </p>
-        <p>
-          <span className="font-medium text-foreground">Subject:</span>{" "}
-          <span className="text-foreground">{subject}</span>
-        </p>
-      </div>
-      <div className="px-5 py-4">
+      <p className="space-y-1 px-5 pt-4 text-xs text-muted-foreground">
+        <span className="font-medium text-foreground">Subject: </span>
+        <span className="text-foreground">{subject}</span>
+      </p>
+      <div className="px-2 py-2">
         <iframe
+          ref={ref}
           title={subject}
           srcDoc={html}
           loading="lazy"
-          className="h-[560px] w-full rounded-lg border border-border/40 bg-white"
+          onLoad={fit}
+          className="w-full border-0"
         />
       </div>
     </article>

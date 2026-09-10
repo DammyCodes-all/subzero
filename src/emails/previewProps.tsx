@@ -31,6 +31,7 @@ function demoData(): EmailData {
     ctaUrl: "/subscriptions/demo",
     cancelUrl: "https://play.google.com/store/account/subscriptions",
     manageUrl: "/subscriptions/demo",
+    logoUrl: "/email-logo.png",
   };
 }
 

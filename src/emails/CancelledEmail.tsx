@@ -19,7 +19,7 @@ export function CancelledEmail({
   origin: "auto" | "manual";
 }) {
   return (
-    <EmailLayout preview={`${d.merchant} cancelled`} manageUrl={d.manageUrl}>
+    <EmailLayout preview={`${d.merchant} cancelled`} manageUrl={d.manageUrl} logoUrl={d.logoUrl}>
       <MailHeader
         merchant={d.merchant}
         product={d.product}

@@ -14,6 +14,9 @@ export type EmailData = {
   ctaUrl: string;
   cancelUrl?: string;
   manageUrl: string;
+  /** Absolute in production (email clients need full URLs); the preview
+   *  iframe resolves a relative path against the app automatically. */
+  logoUrl: string;
 };
 
 export function eyebrow(color: string): React.CSSProperties {
@@ -32,8 +35,8 @@ export function eyebrow(color: string): React.CSSProperties {
 export const h: React.CSSProperties = {
   color: t.foreground,
   fontFamily: t.fontHeading,
-  fontSize: "22px",
-  lineHeight: "30px",
+  fontSize: "20px",
+  lineHeight: "28px",
   margin: "0 0 8px",
 };
 
@@ -51,10 +54,10 @@ export const meta: React.CSSProperties = {
   borderRadius: t.radiusInner,
   color: t.foreground,
   fontFamily: t.fontSans,
-  fontSize: "14px",
-  lineHeight: "24px",
-  margin: "16px 0",
-  padding: "12px 16px",
+  fontSize: "13px",
+  lineHeight: "22px",
+  margin: "14px 0",
+  padding: "10px 14px",
 };
 
 export const metaLabel: React.CSSProperties = {
@@ -96,16 +99,16 @@ export function MerchantMark({ name }: { name: string }) {
     <span
       style={{
         backgroundColor: t.primary,
-        borderRadius: "10px",
+        borderRadius: "9px",
         color: t.onPrimary,
         display: "inline-block",
         fontFamily: t.fontHeading,
-        fontSize: "18px",
+        fontSize: "16px",
         fontWeight: "bold",
-        height: "40px",
-        lineHeight: "40px",
+        height: "36px",
+        lineHeight: "36px",
         textAlign: "center",
-        width: "40px",
+        width: "36px",
       }}
     >
       {initial}
@@ -123,10 +126,10 @@ export function Cta({ href, children }: { href: string; children: string }) {
         color: t.onPrimary,
         display: "block",
         fontFamily: t.fontSans,
-        fontSize: "15px",
+        fontSize: "14px",
         fontWeight: "bold",
         margin: "8px 0 4px",
-        padding: "14px 20px",
+        padding: "12px 20px",
         textAlign: "center",
         textDecoration: "none",
         width: "100%",
@@ -179,7 +182,7 @@ export function MailHeader({
           style={{
             color: t.foreground,
             fontFamily: t.fontHeading,
-            fontSize: "22px",
+            fontSize: "20px",
             fontWeight: "bold",
             lineHeight: "28px",
             margin: "0",

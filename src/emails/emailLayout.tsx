@@ -1,16 +1,18 @@
 import type { ReactNode } from "react";
-import { Body, Container, Head, Html, Preview, Section, Text } from "react-email";
+import { Body, Container, Head, Html, Img, Preview, Section, Text } from "react-email";
 import { emailTheme as t } from "./theme";
 
 type Props = {
   preview: string;
   children: ReactNode;
   manageUrl: string;
+  logoUrl: string;
 };
 
-// Shared shell — dark SubZero card on near-black, chartreuse wordmark dot.
-// Plain style objects only: Gmail strips <style>, so no classes or vars.
-export function EmailLayout({ preview, children, manageUrl }: Props) {
+// Flat dark shell — mirrors the app: near-black background, brand row on
+// top, content straight on the background (no enclosing card). Plain style
+// objects only: Gmail strips <style>, so no classes or vars.
+export function EmailLayout({ preview, children, manageUrl, logoUrl }: Props) {
   return (
     <Html>
       <Head />
@@ -25,25 +27,20 @@ export function EmailLayout({ preview, children, manageUrl }: Props) {
       >
         <Container
           style={{
-            backgroundColor: t.card,
-            border: `1px solid ${t.border}`,
-            borderRadius: t.radiusCard,
             margin: "0 auto",
             maxWidth: "560px",
-            padding: "32px",
+            padding: "20px",
           }}
         >
-          <Text
-            style={{
-              color: t.foreground,
-              fontFamily: t.fontHeading,
-              fontSize: "15px",
-              fontWeight: "bold",
-              margin: "0 0 20px",
-            }}
-          >
-            SubZero<span style={{ color: t.primary }}>.</span>
-          </Text>
+          <div style={{ marginBottom: "20px" }}>
+            <Img
+              src={logoUrl}
+              alt="SubZero"
+              width="120"
+              height="30"
+              style={{ display: "block" }}
+            />
+          </div>
           <Section>{children}</Section>
           <Text
             style={{

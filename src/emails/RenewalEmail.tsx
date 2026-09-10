@@ -17,6 +17,7 @@ export function RenewalEmail({ d }: { d: EmailData }) {
     <EmailLayout
       preview={`${d.merchant} ${d.label} — ${d.renewalStr}`}
       manageUrl={d.manageUrl}
+      logoUrl={d.logoUrl}
     >
       <MailHeader
         merchant={d.merchant}
