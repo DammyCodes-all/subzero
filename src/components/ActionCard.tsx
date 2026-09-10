@@ -50,9 +50,9 @@ export function ActionCard({
 
   return (
     <div
-      className={`rounded-lg border bg-card hover:bg-[var(--card-hover)] overflow-hidden transition-colors ${quiet ? "p-5" : "p-6"} ${urgent ? "border-l border-l-destructive/70" : "border-border"}`}
+      className={`rounded-lg border bg-card hover:bg-[var(--card-hover)] overflow-hidden transition-colors ${quiet ? "p-4 sm:p-5" : "p-4 sm:p-6"} ${urgent ? "border-l border-l-destructive/70" : "border-border"}`}
     >
-      <div className="flex items-start justify-between gap-6">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between sm:gap-6">
         <div className="min-w-0 flex-1">
           {/* Product owns the headline — it's what users recognize.
               Merchant drops to the subtitle, only when different. */}
@@ -64,7 +64,7 @@ export function ActionCard({
             />
             <div className="min-w-0">
               <h3
-                className={`truncate font-heading font-bold leading-none tracking-tight ${quiet ? "text-[17px]" : "text-[19px]"}`}
+                className={`truncate font-heading font-bold leading-none tracking-tight ${quiet ? "text-base sm:text-[17px]" : "text-lg sm:text-[19px]"}`}
               >
                 {title}
               </h3>
@@ -103,8 +103,8 @@ export function ActionCard({
             </div>
           )}
         </div>
-        {/* CTA — sole solid chartreuse, bottom-right */}
-        <div className="flex shrink-0 flex-col items-end justify-between self-stretch">
+        {/* CTA — sole solid chartreuse, bottom-right on sm+; full row on mobile */}
+        <div className="flex w-full shrink-0 flex-row items-center justify-between gap-3 sm:w-auto sm:flex-col sm:items-end sm:self-stretch">
           {badge && (
             <span className="font-mono text-xs font-medium tabular-nums tracking-wide text-muted-foreground">
               {badge}

@@ -128,6 +128,35 @@ export function SubscriptionsView() {
     setCurrentPage(1);
   };
 
+  // Card list shared by grid mode and the mobile fallback for table mode
+  // (the table needs far more width than a phone has).
+  const gridCards = paginatedSubs.map((sub) =>
+    sub.status === "cancelled" || sub.hidden === true ? (
+      <div key={sub._id} className="space-y-2">
+        <Link href={`/subscriptions/${sub._id}`} className="group block">
+          <ActionCard sub={sub} />
+        </Link>
+        <Button
+          variant="secondary"
+          size="xs"
+          disabled={restoringId === sub._id}
+          onClick={() => handleRestore(sub)}
+          className="h-7 w-full text-xs font-medium sm:w-auto"
+        >
+          {restoringId === sub._id ? "Restoring..." : "Restore"}
+        </Button>
+      </div>
+    ) : (
+      <Link
+        key={sub._id}
+        href={`/subscriptions/${sub._id}`}
+        className="group block"
+      >
+        <ActionCard sub={sub} />
+      </Link>
+    ),
+  );
+
   return (
     <div className="space-y-6">
       {/* Header & Controls */}
@@ -141,8 +170,8 @@ export function SubscriptionsView() {
           </p>
         </div>
 
-        {/* View Mode Toggle */}
-        <div className="flex items-center gap-1 self-start rounded-lg border border-border bg-card p-1 sm:self-auto">
+        {/* View Mode Toggle — desktop only; mobile always shows cards */}
+        <div className="hidden items-center gap-1 self-start rounded-lg border border-border bg-card p-1 sm:flex sm:self-auto">
           <button
             type="button"
             onClick={() => handleViewModeChange("grid")}
@@ -191,8 +220,9 @@ export function SubscriptionsView() {
         <Tabs
           value={filter}
           onValueChange={(v) => handleFilterChange(v as FilterTab)}
+          className="min-w-0 w-full sm:w-auto"
         >
-          <TabsList className="h-8 max-w-full overflow-x-auto bg-card p-[3px] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          <TabsList className="h-8 w-full justify-start overflow-x-auto bg-card p-[3px] [scrollbar-width:none] sm:w-auto [&::-webkit-scrollbar]:hidden">
             {(
               ["all", "active", "trials", "urgent", "cancelled"] as FilterTab[]
             ).map((tab) => (
@@ -208,7 +238,7 @@ export function SubscriptionsView() {
         </Tabs>
 
         {/* Search input */}
-        <div className="relative w-full sm:w-64">
+        <div className="relative w-full shrink-0 sm:w-64">
           <HugeiconsIcon
             icon={
               Search01Icon as unknown as Parameters<
@@ -244,48 +274,27 @@ export function SubscriptionsView() {
       ) : (
         <>
           {viewMode === "grid" ? (
-            <div className="grid gap-4 sm:grid-cols-2">
-              {paginatedSubs.map((sub) =>
-                sub.status === "cancelled" || sub.hidden === true ? (
-                  <div key={sub._id} className="space-y-2">
-                    <Link
-                      href={`/subscriptions/${sub._id}`}
-                      className="group block"
-                    >
-                      <ActionCard sub={sub} />
-                    </Link>
-                    <Button
-                      variant="secondary"
-                      size="xs"
-                      disabled={restoringId === sub._id}
-                      onClick={() => handleRestore(sub)}
-                      className="h-7 text-xs font-medium"
-                    >
-                      {restoringId === sub._id ? "Restoring..." : "Restore"}
-                    </Button>
-                  </div>
-                ) : (
-                  <Link
-                    key={sub._id}
-                    href={`/subscriptions/${sub._id}`}
-                    className="group block"
-                  >
-                    <ActionCard sub={sub} />
-                  </Link>
-                ),
-              )}
+            <div className="grid grid-cols-1 gap-3 sm:gap-4 lg:grid-cols-2">
+              {gridCards}
             </div>
           ) : (
-            /* Table View */
-            <div className="overflow-hidden rounded-xl border border-border bg-card">
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs">
-                  <thead className="border-b border-border bg-secondary/40 font-mono text-[11px] uppercase tracking-wider text-muted-foreground">
+            <>
+              {/* Mobile fallback: cards — the table needs more width than a phone has */}
+              <div className="grid grid-cols-1 gap-3 sm:hidden">
+                {gridCards}
+              </div>
+              {/* Table View — sm and up */}
+              <div className="hidden overflow-hidden rounded-xl border border-border bg-card sm:block">
+                <div className="-mx-px overflow-x-auto">
+                  <table className="w-full min-w-[620px] text-left text-xs">
+                    <thead className="border-b border-border bg-secondary/40 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                     <tr>
                       <th className="px-4 py-3">Merchant</th>
                       <th className="px-4 py-3">Price</th>
                       <th className="px-4 py-3">Renewal Date</th>
-                      <th className="px-4 py-3">Friction</th>
+                      <th className="hidden px-4 py-3 md:table-cell">
+                        Friction
+                      </th>
                       <th className="px-4 py-3">Status</th>
                       <th className="px-4 py-3 text-right">Action</th>
                     </tr>
@@ -312,17 +321,17 @@ export function SubscriptionsView() {
                             <LinkPendingDot />
                           </Link>
                         </td>
-                        <td className="px-4 py-3 font-numeric text-foreground">
+                        <td className="whitespace-nowrap px-4 py-3 font-numeric text-foreground">
                           {formatPrice(
                             sub.price,
                             sub.currency,
                             sub.billingInterval,
                           )}
                         </td>
-                        <td className="px-4 py-3 text-muted-foreground">
+                        <td className="whitespace-nowrap px-4 py-3 text-muted-foreground">
                           {formatRenewalDate(sub.nextRenewalAt)}
                         </td>
-                        <td className="px-4 py-3 text-muted-foreground">
+                        <td className="hidden whitespace-nowrap px-4 py-3 text-muted-foreground md:table-cell">
                           {sub.cancellationDifficulty
                             ? frictionLabel(sub.cancellationDifficulty)
                             : "—"}
@@ -374,13 +383,14 @@ export function SubscriptionsView() {
                   </tbody>
                 </table>
               </div>
-            </div>
+              </div>
+            </>
           )}
 
           {/* Pagination Controls */}
           {totalPages > 1 && (
-            <div className="flex items-center justify-between border-t border-border/40 pt-4">
-              <p className="font-mono text-xs text-muted-foreground">
+            <div className="flex flex-col gap-3 border-t border-border/40 pt-4 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-center font-mono text-xs text-muted-foreground sm:text-left">
                 Showing {(currentPage - 1) * itemsPerPage + 1}–
                 {Math.min(currentPage * itemsPerPage, filteredSubs.length)} of{" "}
                 {filteredSubs.length} subscriptions
@@ -391,11 +401,11 @@ export function SubscriptionsView() {
                   size="sm"
                   disabled={currentPage === 1}
                   onClick={() => setCurrentPage((p) => p - 1)}
-                  className="h-8 text-xs font-medium"
+                  className="h-8 flex-1 text-xs font-medium sm:flex-none"
                 >
                   Previous
                 </Button>
-                <span className="font-mono text-xs text-muted-foreground">
+                <span className="shrink-0 font-mono text-xs text-muted-foreground">
                   Page {currentPage} of {totalPages}
                 </span>
                 <Button
@@ -403,7 +413,7 @@ export function SubscriptionsView() {
                   size="sm"
                   disabled={currentPage === totalPages}
                   onClick={() => setCurrentPage((p) => p + 1)}
-                  className="h-8 text-xs font-medium"
+                  className="h-8 flex-1 text-xs font-medium sm:flex-none"
                 >
                   Next
                 </Button>
