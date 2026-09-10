@@ -7,14 +7,16 @@ import {
   getAccessToken,
   getHistory,
   getProfileHistoryId,
-  getMessage,
-  listMessages,
-  buildGmailQuery,
-  buildBroadInboxQuery,
+  isAuthError,
   watchGmail,
   stopWatch,
 } from "./lib/gmail";
-import { processOneEmail } from "./lib/processEmail";
+import { BACKFILL_PER_TICK, runBackfillBatch } from "./gmailBackfill";
+import {
+  fetchAndHandle,
+  newScanCounters,
+  runDueRetries,
+} from "./lib/gmailProcess";
 
 const COOLDOWN_MS = 10 * 60 * 1000;
 
@@ -28,7 +30,7 @@ export const ensureWatchForConn = internalAction({
   handler: async (ctx, args) => {
     const topic = process.env.GMAIL_PUBSUB_TOPIC;
     if (!topic) return { watched: false, reason: "no_topic" };
-    const conn: any = await ctx.runQuery(internal.gmail.getConnectionByIdInternal, {
+    const conn: any = await ctx.runQuery(internal.gmailConnectionState.getConnectionByIdInternal, {
       connId: args.connId,
     } as any);
     if (!conn || !conn.gmailRefreshToken || conn.status !== "connected" || !conn.gmailScopeGranted) {
@@ -37,7 +39,7 @@ export const ensureWatchForConn = internalAction({
     try {
       const tok = await getAccessToken(conn.gmailRefreshToken);
       const res = await watchGmail(tok.accessToken, topic);
-      await ctx.runMutation(internal.gmail.storeWatchState, {
+      await ctx.runMutation(internal.gmailConnectionState.storeWatchState, {
         connId: args.connId,
         historyId: res.historyId,
         expiration: res.expiration,
@@ -57,7 +59,7 @@ export const stopWatchForConn = internalAction({
   handler: async (ctx, args) => {
     let token = args.refreshToken;
     if (!token) {
-      const conn: any = await ctx.runQuery(internal.gmail.getConnectionByIdInternal, {
+      const conn: any = await ctx.runQuery(internal.gmailConnectionState.getConnectionByIdInternal, {
         connId: args.connId,
       } as any);
       token = conn?.gmailRefreshToken;
@@ -66,12 +68,12 @@ export const stopWatchForConn = internalAction({
     try {
       const tok = await getAccessToken(token);
       await stopWatch(tok.accessToken);
-      await ctx.runMutation(internal.gmail.clearWatchState, { connId: args.connId });
+      await ctx.runMutation(internal.gmailConnectionState.clearWatchState, { connId: args.connId });
       return { stopped: true };
     } catch (e: any) {
       console.error("stopWatch failed", args.connId, String(e));
       // Still clear local state to avoid stuck expiration
-      try { await ctx.runMutation(internal.gmail.clearWatchState, { connId: args.connId }); } catch {}
+      try { await ctx.runMutation(internal.gmailConnectionState.clearWatchState, { connId: args.connId }); } catch {}
       return { stopped: false, reason: String(e).slice(0, 200) };
     }
   },
@@ -83,7 +85,7 @@ export const renewWatchesForAll = internalAction({
   handler: async (ctx) => {
     const topic = process.env.GMAIL_PUBSUB_TOPIC;
     if (!topic) return { renewed: 0, skipped: 0, failed: 0 };
-    const conns: any[] = await ctx.runQuery(internal.gmail.listAllGmailConnectionsInternal, {} as any);
+    const conns: any[] = await ctx.runQuery(internal.gmailConnectionState.listAllGmailConnectionsInternal, {} as any);
     let renewed = 0, skipped = 0, failed = 0;
     const now = Date.now();
     for (const conn of conns) {
@@ -100,7 +102,7 @@ export const renewWatchesForAll = internalAction({
       try {
         const tok = await getAccessToken(conn.gmailRefreshToken);
         const res = await watchGmail(tok.accessToken, topic);
-        await ctx.runMutation(internal.gmail.storeWatchState, {
+        await ctx.runMutation(internal.gmailConnectionState.storeWatchState, {
           connId: conn._id,
           historyId: res.historyId,
           expiration: res.expiration,
@@ -122,6 +124,14 @@ export const ingestIncremental = internalAction({
     userId: v.string(),
     connId: v.id("connections"),
     startHistoryId: v.optional(v.string()),
+    trigger: v.optional(
+      v.union(
+        v.literal("poll"),
+        v.literal("push"),
+        v.literal("manual"),
+        v.literal("connect"),
+      ),
+    ),
   },
   returns: v.object({
     scanned: v.number(),
@@ -131,16 +141,44 @@ export const ingestIncremental = internalAction({
     unparsed: v.number(),
     duplicate: v.number(),
     cancelled: v.number(),
+    failed: v.number(),
     historyId: v.optional(v.string()),
     reason: v.optional(v.string()),
   }),
   handler: async (ctx, args) => {
+    const trigger = args.trigger ?? "poll";
+    const finish = async (counts: {
+      scanned: number;
+      created: number;
+      merged: number;
+      skipped: number;
+      unparsed: number;
+      duplicate: number;
+      cancelled: number;
+      failed: number;
+      historyId?: string;
+      reason?: string;
+    }) => {
+      try {
+        await ctx.runMutation(internal.gmailRetries.recordRun, {
+          userId: args.userId,
+          connId: args.connId,
+          trigger,
+          scanned: counts.scanned,
+          created: counts.created,
+          failed: counts.failed,
+        });
+      } catch (e) {
+        console.error("recordRun failed", args.connId, String(e).slice(0, 200));
+      }
+      return counts;
+    };
     // Load connection to get refresh token and historyId fallback
-    const conn: any = await ctx.runQuery(internal.gmail.getConnectionByIdInternal, {
+    const conn: any = await ctx.runQuery(internal.gmailConnectionState.getConnectionByIdInternal, {
       connId: args.connId,
     } as any);
     if (!conn || !conn.gmailRefreshToken) {
-      return { scanned: 0, created: 0, merged: 0, skipped: 0, unparsed: 0, duplicate: 0, cancelled: 0, reason: "no_consent" };
+      return await finish({ scanned: 0, created: 0, merged: 0, skipped: 0, unparsed: 0, duplicate: 0, cancelled: 0, failed: 0, reason: "no_consent" });
     }
     const storedHistoryId = conn.gmailHistoryId as string | undefined;
     const startId = args.startHistoryId ?? storedHistoryId;
@@ -151,12 +189,12 @@ export const ingestIncremental = internalAction({
     } catch (e: any) {
       // Surface revoked/expired refresh tokens so UI can prompt reconnect
       const msg = String(e?.message ?? e);
-      if (/400|401|403|invalid_grant|revoked|expired/i.test(msg)) {
+      if (isAuthError(msg)) {
         try {
           await ctx.runMutation(internal.gmail.markTokenInvalid, { connId: args.connId });
         } catch {}
       }
-      return { scanned: 0, created: 0, merged: 0, skipped: 0, unparsed: 0, duplicate: 0, cancelled: 0, reason: "token_failed" };
+      return await finish({ scanned: 0, created: 0, merged: 0, skipped: 0, unparsed: 0, duplicate: 0, cancelled: 0, failed: 0, reason: "token_failed" });
     }
 
     let historyIdToUse = startId;
@@ -170,26 +208,26 @@ export const ingestIncremental = internalAction({
         latestHistoryId = h.historyId;
       } catch (e: any) {
         if (e.code === "INVALID_HISTORY" || String(e.message).includes("404")) {
-          // Fallback to full sync (small window)
-          console.warn("history 404 fallback to list", args.connId, String(e).slice(0, 200));
-          return await fallbackListIngest(ctx, args.userId, conn, accessToken);
+          // Dead cursor — seed the live cursor and start the resumable backfill
+          console.warn("history 404 starting backfill", args.connId, String(e).slice(0, 200));
+          return await finish(await fallbackListIngest(ctx, args.userId, conn, accessToken));
         }
         throw e;
       }
     } else {
       // No historyId yet — fallbackListIngest already seeds historyId via profile
-      return await fallbackListIngest(ctx, args.userId, conn, accessToken);
+      return await finish(await fallbackListIngest(ctx, args.userId, conn, accessToken));
     }
 
     if (messagesAdded.length === 0) {
       // No new messages, but still update historyId to latest to move cursor
       if (latestHistoryId && latestHistoryId !== storedHistoryId) {
-        await ctx.runMutation(internal.gmail.updateHistoryId, { connId: args.connId, historyId: latestHistoryId });
+        await ctx.runMutation(internal.gmailConnectionState.updateHistoryId, { connId: args.connId, historyId: latestHistoryId });
       } else if (latestHistoryId) {
         // Touch scan time to avoid rapid re-poll
-        await ctx.runMutation(internal.gmail.touchScan, { connId: args.connId });
+        await ctx.runMutation(internal.gmailConnectionState.touchScan, { connId: args.connId });
       }
-      return { scanned: 0, created: 0, merged: 0, skipped: 0, unparsed: 0, duplicate: 0, cancelled: 0, historyId: latestHistoryId };
+      return await finish({ scanned: 0, created: 0, merged: 0, skipped: 0, unparsed: 0, duplicate: 0, cancelled: 0, failed: 0, historyId: latestHistoryId });
     }
 
     // Deduplicate message ids — process all (no silent drop); cap at 100 to bound single action
@@ -199,34 +237,25 @@ export const ingestIncremental = internalAction({
     }
     const uniq = deduped.slice(0, 100);
 
-    let scanned = 0, created = 0, merged = 0, skipped = 0, unparsed = 0, duplicate = 0, cancelled = 0;
+    const c = newScanCounters();
 
     for (const m of uniq) {
-      try {
-        const msg = await getMessage(accessToken, m.id).catch(() => null);
-        if (!msg) { skipped++; continue; }
-        scanned++;
-        const r = await processOneEmail(ctx, args.userId, msg.subject, msg.text, msg.html, msg.id, conn.accountEmail, conn._id, msg.from).catch(() => ({ status: "unparsed" as const }));
-        if (r.status === "created") created++;
-        else if (r.status === "merged") merged++;
-        else if (r.status === "skipped") skipped++;
-        else if (r.status === "unparsed") unparsed++;
-        else if (r.status === "duplicate") duplicate++;
-        else if (r.status === "cancelled") cancelled++;
-        await new Promise((rr) => setTimeout(rr, 450));
-      } catch {
-        unparsed++;
-      }
+      await fetchAndHandle(ctx, args.userId, conn, accessToken, m.id, c);
+      await new Promise((rr) => setTimeout(rr, 450));
     }
+
+    // Live mail first, then due retries from the safety net, then backfill.
+    await runDueRetries(ctx, args.userId, conn, accessToken, 25, c);
+    await runBackfillBatch(ctx, args.userId, conn, accessToken, BACKFILL_PER_TICK, c);
 
     const newHistoryId = latestHistoryId ?? storedHistoryId;
     if (newHistoryId) {
-      await ctx.runMutation(internal.gmail.touchHistoryAndScan, { connId: args.connId, historyId: newHistoryId });
+      await ctx.runMutation(internal.gmailConnectionState.touchHistoryAndScan, { connId: args.connId, historyId: newHistoryId });
     } else {
-      await ctx.runMutation(internal.gmail.touchScan, { connId: args.connId });
+      await ctx.runMutation(internal.gmailConnectionState.touchScan, { connId: args.connId });
     }
 
-    return { scanned, created, merged, skipped, unparsed, duplicate, cancelled, historyId: newHistoryId };
+    return await finish({ ...c, historyId: newHistoryId });
   },
 });
 
@@ -235,75 +264,44 @@ async function fallbackListIngest(
   userId: string,
   conn: any,
   accessToken: string,
-): Promise<{ scanned: number; created: number; merged: number; skipped: number; unparsed: number; duplicate: number; cancelled: number; historyId?: string; reason?: string }> {
-  // Hybrid: narrow subject filter first (cheap), if 0 hits retry broad inbox (catches "Thanks for your payment")
-  const res = await ingestListQuery(ctx, userId, conn, accessToken, buildGmailQuery(7), 10);
-  if (res.scanned > 0 || res.messagesFound > 0) {
-    return await seedHistory(ctx, conn, accessToken, res);
-  }
-  const broad = await ingestListQuery(ctx, userId, conn, accessToken, buildBroadInboxQuery(7), 10);
-  // Merge counts so caller sees total work
-  const merged = {
-    scanned: res.scanned + broad.scanned,
-    created: res.created + broad.created,
-    merged: res.merged + broad.merged,
-    skipped: res.skipped + broad.skipped,
-    unparsed: res.unparsed + broad.unparsed,
-    duplicate: res.duplicate + broad.duplicate,
-    cancelled: res.cancelled + broad.cancelled,
-  };
-  return await seedHistory(ctx, conn, accessToken, { ...merged, messagesFound: broad.messagesFound });
-}
-
-async function ingestListQuery(
-  ctx: any,
-  userId: string,
-  conn: any,
-  accessToken: string,
-  q: string,
-  max: number,
-): Promise<{ scanned: number; created: number; merged: number; skipped: number; unparsed: number; duplicate: number; cancelled: number; messagesFound: number }> {
-  let scanned = 0, created = 0, merged = 0, skipped = 0, unparsed = 0, duplicate = 0, cancelled = 0;
-  const { messages } = await listMessages(accessToken, q, max);
-  const slice = messages.slice(0, max);
-  for (const m of slice) {
-    const msg = await getMessage(accessToken, m.id).catch(() => null);
-    if (!msg) { skipped++; continue; }
-    scanned++;
-    const r = await processOneEmail(ctx, userId, msg.subject, msg.text, msg.html, msg.id, conn.accountEmail, conn._id, msg.from).catch(() => ({ status: "unparsed" as const }));
-    if (r.status === "created") created++;
-    else if (r.status === "merged") merged++;
-    else if (r.status === "skipped") skipped++;
-    else if (r.status === "unparsed") unparsed++;
-    else if (r.status === "duplicate") duplicate++;
-    else if (r.status === "cancelled") cancelled++;
-    await new Promise((rr) => setTimeout(rr, 450));
-  }
-  return { scanned, created, merged, skipped, unparsed, duplicate, cancelled, messagesFound: messages.length };
-}
-
-async function seedHistory(
-  ctx: any,
-  conn: any,
-  accessToken: string,
-  counts: { scanned: number; created: number; merged: number; skipped: number; unparsed: number; duplicate: number; cancelled: number; messagesFound?: number },
-): Promise<{ scanned: number; created: number; merged: number; skipped: number; unparsed: number; duplicate: number; cancelled: number; historyId?: string; reason?: string }> {
+): Promise<{ scanned: number; created: number; merged: number; skipped: number; unparsed: number; duplicate: number; cancelled: number; failed: number; historyId?: string; reason?: string }> {
+  // Dead cursor (or first sync): seed the live cursor for future ticks and
+  // start the resumable 90-day backfill instead of a one-shot 7-day list.
+  // The first batch runs inline so a fresh connection shows results fast.
+  let historyId: string | undefined;
   try {
-    const hid = await getProfileHistoryId(accessToken);
-    await ctx.runMutation(internal.gmail.updateHistoryId, { connId: conn._id, historyId: hid });
-    await ctx.runMutation(internal.gmail.touchScan, { connId: conn._id });
-    return { ...counts, historyId: hid, reason: "fallback_list" };
+    historyId = await getProfileHistoryId(accessToken);
+    await ctx.runMutation(internal.gmailConnectionState.updateHistoryId, {
+      connId: conn._id,
+      historyId,
+    });
   } catch {
-    await ctx.runMutation(internal.gmail.touchScan, { connId: conn._id });
-    return { ...counts, reason: "fallback_list" };
+    await ctx.runMutation(internal.gmailConnectionState.touchScan, { connId: conn._id });
   }
+  await ctx.runMutation(internal.gmailBackfill.seedBackfill, { connId: conn._id });
+  const c = newScanCounters();
+  await runBackfillBatch(
+    ctx,
+    userId,
+    {
+      ...conn,
+      gmailBackfillSeededAt: Date.now(),
+      gmailBackfillQuery: "narrow",
+      gmailBackfillPageToken: undefined,
+      gmailBackfillProcessed: 0,
+    },
+    accessToken,
+    BACKFILL_PER_TICK,
+    c,
+  );
+  return { ...c, historyId, reason: "backfill_started" };
 }
 
 export const pollIncrementalForUser = internalAction({
   args: { userId: v.string() },
   returns: v.object({ scanned: v.number(), created: v.number(), reason: v.optional(v.string()) }),
   handler: async (ctx, args) => {
-    const conns: any[] = await ctx.runQuery(internal.gmail.getConnectionsInternal, { userId: args.userId });
+    const conns: any[] = await ctx.runQuery(internal.gmailConnectionState.getConnectionsInternal, { userId: args.userId });
     const fixture = process.env.FIXTURE_GMAIL === "1";
     if (fixture) {
       // In fixture mode, delegate to scanForUser fixtures logic (reuse)
@@ -320,6 +318,7 @@ export const pollIncrementalForUser = internalAction({
         const res: any = await ctx.runAction(internal.gmailWatch.ingestIncremental, {
           userId: args.userId,
           connId: conn._id,
+          trigger: "connect",
         });
         scanned += res.scanned;
         created += res.created;
@@ -333,24 +332,59 @@ export const pollIncrementalForUser = internalAction({
 
 export const pollAllUsersIncremental = internalAction({
   args: {},
-  returns: v.object({ polled: v.number(), scanned: v.number(), created: v.number() }),
+  returns: v.object({
+    polled: v.number(),
+    scanned: v.number(),
+    created: v.number(),
+    failed: v.number(),
+  }),
   handler: async (ctx) => {
-    const conns: any[] = await ctx.runQuery(internal.gmail.listAllGmailConnectionsInternal, {} as any);
-    // Fan-out via scheduler to avoid single-run cron guard timeout at scale
+    const conns: any[] = await ctx.runQuery(internal.gmailConnectionState.listAllGmailConnectionsInternal, {} as any);
+    const eligible = conns.filter(
+      (c) =>
+        c.gmailRefreshToken &&
+        c.status === "connected" &&
+        c.gmailScopeGranted &&
+        !(c.lastGmailScanAt && Date.now() - c.lastGmailScanAt < COOLDOWN_MS),
+    );
+    // Small fleet: run inline and report real totals. Large fleet: fan out
+    // via scheduler to avoid single-run cron guard timeout at scale.
+    if (eligible.length <= 5) {
+      let scanned = 0,
+        created = 0,
+        failed = 0;
+      for (const c of eligible) {
+        try {
+          const res: any = await ctx.runAction(
+            internal.gmailWatch.ingestIncremental,
+            {
+              userId: c.userId,
+              connId: c._id,
+              trigger: "poll",
+            },
+          );
+          scanned += res.scanned;
+          created += res.created;
+          failed += res.failed ?? 0;
+        } catch (e: any) {
+          console.error("pollAll inline failed", c._id, String(e));
+        }
+      }
+      return { polled: eligible.length, scanned, created, failed };
+    }
     let scheduled = 0;
-    for (const c of conns) {
-      if (!c.gmailRefreshToken || c.status !== "connected" || !c.gmailScopeGranted) continue;
-      if (c.lastGmailScanAt && Date.now() - c.lastGmailScanAt < COOLDOWN_MS) continue;
+    for (const c of eligible) {
       try {
         await ctx.scheduler.runAfter(0, internal.gmailWatch.ingestIncremental, {
           userId: c.userId,
           connId: c._id,
+          trigger: "poll",
         });
         scheduled++;
       } catch (e: any) {
         console.error("pollAll schedule failed", c._id, String(e));
       }
     }
-    return { polled: scheduled, scanned: 0, created: 0 };
+    return { polled: scheduled, scanned: 0, created: 0, failed: 0 };
   },
 });
