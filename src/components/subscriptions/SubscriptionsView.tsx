@@ -18,7 +18,7 @@ import {
   TabsTab,
 } from "@/components/animate-ui/components/base/tabs";
 import { MerchantAvatar } from "@/components/MerchantAvatar";
-import { DashboardSkeleton } from "@/components/Skeleton";
+import { SubscriptionsSkeleton } from "@/components/Skeleton";
 import { SubscriptionRow } from "@/components/SubscriptionRow";
 import { Button } from "@/components/ui/button";
 import { LinkPendingDot, PendingWrap } from "@/components/ui/LinkPending";
@@ -78,7 +78,7 @@ export function SubscriptionsView() {
   };
 
   if (all === undefined) {
-    return <DashboardSkeleton />;
+    return <SubscriptionsSkeleton />;
   }
 
   const now = Date.now();

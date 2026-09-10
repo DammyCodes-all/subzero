@@ -7,6 +7,7 @@ import { useState } from "react";
 import { sileo } from "sileo";
 import { ConnectGmailButton } from "@/components/ConnectGmailButton";
 import { ForwardingCard } from "@/components/ForwardingCard";
+import { ConnectionsSkeleton } from "@/components/Skeleton";
 import { useConnectGmail } from "@/hooks/useConnectGmail";
 import { scanResultCopy } from "@/lib/scanCopy";
 import { timeAgo } from "@/lib/timeAgo";
@@ -138,7 +139,7 @@ export function ConnectionsView() {
       </div>
 
       {connections === undefined ? (
-        <div className="h-32 animate-pulse rounded-xl bg-border/40" />
+        <ConnectionsSkeleton />
       ) : (
         <>
           <p className="font-mono text-[11px] tracking-wide text-muted-foreground">

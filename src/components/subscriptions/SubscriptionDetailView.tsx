@@ -9,6 +9,7 @@ import { EvidenceBlock } from "@/components/detail/EvidenceBlock";
 import { HowToCancel } from "@/components/detail/HowToCancel";
 import { ReviewAndSendModal } from "@/components/detail/ReviewAndSendModal";
 import { MerchantAvatar } from "@/components/MerchantAvatar";
+import { DetailSkeleton } from "@/components/Skeleton";
 import { SubscriptionManageCard } from "@/components/subscriptions/SubscriptionManageCard";
 import { Button } from "@/components/ui/button";
 import { useCancelStarted } from "@/hooks/useCancelStarted";
@@ -48,10 +49,8 @@ export function SubscriptionDetailView() {
   if (sub === undefined || evidence === undefined || action === undefined) {
     return (
       <div className="mx-auto w-full max-w-[680px]">
-        <div className="space-y-4 animate-in fade-in duration-200">
-          <div className="h-4 w-28 rounded bg-border/60" />
-          <div className="h-7 w-48 rounded bg-border" />
-          <div className="h-20 rounded-lg border bg-card" />
+        <div className="animate-in fade-in duration-200">
+          <DetailSkeleton />
         </div>
       </div>
     );
