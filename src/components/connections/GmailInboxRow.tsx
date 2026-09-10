@@ -36,12 +36,20 @@ export interface InboxConn {
   hasHistoryId?: boolean;
 }
 
+export interface InboxHealth {
+  queued: number;
+  dead: number;
+  backfillActive: boolean;
+  backfillProcessed: number;
+}
+
 export type ScanResult =
-  | { ok: true; scanned: number; created: number }
+  | { ok: true; scanned: number; created: number; remaining?: boolean }
   | { ok: false; message: string };
 
 export function GmailInboxRow({
   conn,
+  syncHealth,
   scanning,
   scanBusy,
   lastResult,
@@ -51,6 +59,7 @@ export function GmailInboxRow({
   onReconnect,
 }: {
   conn: InboxConn;
+  syncHealth?: InboxHealth | null;
   scanning: boolean;
   scanBusy: boolean;
   lastResult: ScanResult | null;
@@ -175,8 +184,24 @@ export function GmailInboxRow({
                 }`}
               >
                 {lastResult.ok
-                  ? `Synced ${lastResult.scanned} emails, ${lastResult.created} new`
+                  ? `Synced ${lastResult.scanned} emails, ${lastResult.created} new${lastResult.remaining ? " · deep scan continues" : ""}`
                   : lastResult.message}
+              </p>
+            ) : null}
+            {!isDisconnected && syncHealth?.backfillActive ? (
+              <p className="mt-0.5 text-[11px] text-muted-foreground">
+                Deep scan in progress
+                {syncHealth!.backfillProcessed > 0
+                  ? ` · ${syncHealth!.backfillProcessed} processed`
+                  : ""}
+                . New mail still syncs first.
+              </p>
+            ) : null}
+            {!isDisconnected && (syncHealth?.dead ?? 0) > 0 ? (
+              <p className="mt-0.5 text-[11px] text-amber-300">
+                {syncHealth!.dead} email{syncHealth!.dead === 1 ? "" : "s"} couldn't
+                be read after retries. Reconnecting or rescanning may pick{" "}
+                {syncHealth!.dead === 1 ? "it" : "them"} up.
               </p>
             ) : null}
           </div>
