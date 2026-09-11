@@ -6,6 +6,7 @@ import { RequestSentEmail } from "./RequestSentEmail";
 import { TrialEmail } from "./TrialEmail";
 import type { EmailData } from "./shared";
 import { formatPrice } from "./shared";
+import { merchantFaviconUrl } from "@/lib/merchantFavicon";
 
 const DAY = 24 * 60 * 60 * 1000;
 
@@ -18,11 +19,15 @@ function formatDate(ms?: number): string {
   }).format(new Date(ms));
 }
 
-// Synthetic fixtures only — never feed real user rows into preview.
-function demoData(): EmailData {
+// Fixtures mirror the account's live subscriptions (pulled via
+// `npx convex data subscriptions`): same merchants, products, prices,
+// intervals and cancellation URLs. Dates stay relative so "renews in 7
+// days" always reads coherently.
+function googleFixture(): EmailData {
   const now = Date.now();
+  const merchant = "Google One";
   return {
-    merchant: "Google One",
+    merchant,
     product: "Google AI Plus (400 GB)",
     priceStr: formatPrice(7700, "NGN"),
     billingInterval: "monthly",
@@ -33,6 +38,26 @@ function demoData(): EmailData {
     cancelUrl: "https://play.google.com/store/account/subscriptions",
     manageUrl: "/subscriptions/demo",
     logoUrl: "/email-logo.png",
+    iconUrl: merchantFaviconUrl({ merchant }),
+  };
+}
+
+function snapFixture(): EmailData {
+  const now = Date.now();
+  const merchant = "Snap Inc";
+  return {
+    merchant,
+    product: "Snapchat+",
+    priceStr: formatPrice(2300, "NGN"),
+    billingInterval: "yearly",
+    renewalStr: formatDate(now + 20 * DAY),
+    trialStr: formatDate(now + 2 * DAY),
+    label: "",
+    ctaUrl: "/subscriptions/demo",
+    cancelUrl: "https://play.google.com/store/account/subscriptions",
+    manageUrl: "/subscriptions/demo",
+    logoUrl: "/email-logo.png",
+    iconUrl: merchantFaviconUrl({ merchant }),
   };
 }
 
@@ -45,7 +70,8 @@ export type EmailVariant = {
 // Same variants + subjects as the old text templates, so dispatch
 // can switch over without copy drift.
 export function emailVariants(): EmailVariant[] {
-  const d = demoData();
+  const g = googleFixture();
+  const s = snapFixture();
   const renewal = (
     stage: RenewalStage,
     subject: string,
@@ -55,46 +81,46 @@ export function emailVariants(): EmailVariant[] {
         ? "renews in 7 days"
         : stage === "3d"
           ? "renews in 3 days"
-          : "renews tomorrow!";
+          : "renews tomorrow";
     return {
       badge: `renewal • ${stage}`,
       subject,
       element: (
         <RenewalEmail
-          d={{ ...d, label, urgent: stage === "24h" }}
+          d={{ ...g, label, urgent: stage === "24h" }}
           stage={stage}
         />
       ),
     };
   };
   return [
-    renewal("7d", `Renewal Alert: ${d.merchant} renews in 7 days`),
-    renewal("3d", `Renewal Alert: ${d.merchant} renews in 3 days`),
-    renewal("24h", `Renewal Alert: ${d.merchant} renews tomorrow!`),
+    renewal("7d", `Renewal Alert: ${g.merchant} renews in 7 days`),
+    renewal("3d", `Renewal Alert: ${g.merchant} renews in 3 days`),
+    renewal("24h", `Renewal Alert: ${g.merchant} renews tomorrow!`),
     {
       badge: "trial ending",
-      subject: `Trial ending: ${d.merchant} — ${d.trialStr}`,
-      element: <TrialEmail d={d} />,
+      subject: `Trial ending: ${g.merchant} — ${g.trialStr}`,
+      element: <TrialEmail d={g} />,
     },
     {
       badge: "cancelled • auto",
-      subject: `Cancelled: ${d.merchant}. You are all set`,
-      element: <CancelledEmail d={d} origin="auto" />,
+      subject: `Cancelled: ${s.merchant}. You are all set`,
+      element: <CancelledEmail d={s} origin="auto" />,
     },
     {
       badge: "cancelled • manual",
-      subject: `Cancelled: ${d.merchant}. You are all set`,
-      element: <CancelledEmail d={d} origin="manual" />,
+      subject: `Cancelled: ${s.merchant}. You are all set`,
+      element: <CancelledEmail d={s} origin="manual" />,
     },
     {
       badge: "action reminder",
-      subject: `Still need to cancel ${d.merchant}?`,
-      element: <ReminderEmail d={d} />,
+      subject: `Still need to cancel ${s.merchant}?`,
+      element: <ReminderEmail d={s} />,
     },
     {
       badge: "request sent",
-      subject: `Cancellation request sent: ${d.merchant}`,
-      element: <RequestSentEmail d={d} />,
+      subject: `Cancellation request sent: ${g.merchant}`,
+      element: <RequestSentEmail d={g} />,
     },
   ];
 }

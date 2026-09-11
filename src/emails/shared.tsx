@@ -1,4 +1,4 @@
-import { Button, Column, Row, Text } from "react-email";
+import { Button, Column, Img, Row, Text } from "react-email";
 import { EmailLayout } from "./emailLayout";
 import { emailTheme as t } from "./theme";
 
@@ -17,6 +17,8 @@ export type EmailData = {
   /** Absolute in production (email clients need full URLs); the preview
    *  iframe resolves a relative path against the app automatically. */
   logoUrl: string;
+  /** Merchant favicon (same resolver as the app) or null → initial tile. */
+  iconUrl?: string | null;
 };
 
 export function eyebrow(color: string): React.CSSProperties {
@@ -81,14 +83,20 @@ export function formatPrice(price: number, currency: string): string {
   }
 }
 
-export function shortInterval(billingInterval: string): string {
-  const v = billingInterval.toLowerCase();
+export function shortInterval(billingInterval: string): string {  const v = billingInterval.toLowerCase();
   if (v.startsWith("month")) return "mo";
   if (v.startsWith("year") || v.startsWith("annual")) return "yr";
   if (v.startsWith("week")) return "wk";
   if (v.startsWith("quarter")) return "qtr";
   if (v.startsWith("day") || v.startsWith("daily")) return "day";
   return billingInterval;
+}
+
+// "monthly" → "Monthly". Display form for the Billing meta row.
+export function prettyInterval(billingInterval: string): string {
+  const v = billingInterval.trim().toLowerCase();
+  if (!v) return billingInterval;
+  return v.charAt(0).toUpperCase() + v.slice(1);
 }
 
 // Initial tile — visual anchor without external images (which need
@@ -159,22 +167,35 @@ export function DirectCancel({ d }: { d: EmailData }) {
 export { EmailLayout };
 
 // Merchant mark + eyebrow + name as one unit, so every template opens
-// with a visual anchor instead of a bare text stack.
+// with a visual anchor instead of a bare text stack. Real merchant
+// favicon when known (same helper as the app), initial tile otherwise.
 export function MailHeader({
   merchant,
   product,
   eyebrowText,
   accent,
+  iconUrl,
 }: {
   merchant: string;
   product?: string;
   eyebrowText: string;
   accent: string;
+  iconUrl?: string | null;
 }) {
   return (
     <Row>
-      <Column style={{ verticalAlign: "top", width: "52px" }}>
-        <MerchantMark name={merchant} />
+      <Column style={{ verticalAlign: "top", width: "48px" }}>
+        {iconUrl ? (
+          <Img
+            src={iconUrl}
+            alt=""
+            width="36"
+            height="36"
+            style={{ borderRadius: "9px", display: "block" }}
+          />
+        ) : (
+          <MerchantMark name={merchant} />
+        )}
       </Column>
       <Column>
         <Text style={eyebrow(accent)}>{eyebrowText}</Text>
