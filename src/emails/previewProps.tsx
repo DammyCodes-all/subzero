@@ -13,7 +13,6 @@ import {
 } from "./subjects";
 import type { EmailData } from "./shared";
 import { formatPrice } from "./shared";
-import { merchantFaviconUrl } from "@/lib/merchantFavicon";
 
 const DAY = 24 * 60 * 60 * 1000;
 
@@ -40,12 +39,10 @@ function googleFixture(): EmailData {
     billingInterval: "monthly",
     renewalStr: formatDate(now + 6 * DAY),
     trialStr: formatDate(now + 2 * DAY),
-    label: "",
     ctaUrl: "/subscriptions/demo",
     cancelUrl: "https://play.google.com/store/account/subscriptions",
     manageUrl: "/subscriptions/demo",
     logoUrl: "/email-logo.png",
-    iconUrl: merchantFaviconUrl({ merchant }),
   };
 }
 
@@ -59,12 +56,10 @@ function snapFixture(): EmailData {
     billingInterval: "yearly",
     renewalStr: formatDate(now + 20 * DAY),
     trialStr: formatDate(now + 2 * DAY),
-    label: "",
     ctaUrl: "/subscriptions/demo",
     cancelUrl: "https://play.google.com/store/account/subscriptions",
     manageUrl: "/subscriptions/demo",
     logoUrl: "/email-logo.png",
-    iconUrl: merchantFaviconUrl({ merchant }),
   };
 }
 
@@ -79,25 +74,11 @@ export type EmailVariant = {
 export function emailVariants(): EmailVariant[] {
   const g = googleFixture();
   const s = snapFixture();
-  const renewal = (
-    stage: RenewalStage,
-    subject: string,
-  ): EmailVariant => {
-    const label =
-      stage === "7d"
-        ? "renews in 7 days"
-        : stage === "3d"
-          ? "renews in 3 days"
-          : "renews tomorrow";
+  const renewal = (stage: RenewalStage, subject: string): EmailVariant => {
     return {
       badge: `renewal • ${stage}`,
       subject,
-      element: (
-        <RenewalEmail
-          d={{ ...g, label, urgent: stage === "24h" }}
-          stage={stage}
-        />
-      ),
+      element: <RenewalEmail d={g} stage={stage} />,
     };
   };
   return [
