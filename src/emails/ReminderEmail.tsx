@@ -24,7 +24,7 @@ export function ReminderEmail({ d }: { d: EmailData }) {
         accent={t.danger}
       />
       <Text style={p}>
-        {`You started cancelling ${d.merchant} (${d.priceStr}) but it's still active.`}
+        {`You started cancelling ${d.merchant} but didn't finish. It renews on ${d.renewalStr} for ${d.priceStr} — complete it before then.`}
       </Text>
       <Text style={meta}>
         <span style={metaLabel}>Renews</span>
