@@ -1,49 +1,39 @@
 import { Text } from "react-email";
-import { emailTheme as t } from "./theme";
 import {
-  Cta,
   EmailLayout,
-  MailHeader,
-  meta,
-  metaLabel,
+  NarrativeTitle,
+  QuietLink,
+  Strong,
+  namedPlan,
   p,
   shortInterval,
   type EmailData,
 } from "./shared";
 
-// Receipt to the user after SubZero sends a cancellation request to the
-// merchant. Closes the loop: requested → (merchant replies) → confirmed.
+// Receipt after SubZero sends a cancellation request to the merchant.
+// Requested to (merchant replies) to confirmed. Link only, nothing to tap.
 export function RequestSentEmail({ d }: { d: EmailData }) {
+  const plan = namedPlan(d);
   return (
     <EmailLayout
-      preview={`Cancellation request sent — ${d.merchant}`}
+      preview={`Cancellation request sent, ${d.merchant}`}
       manageUrl={d.manageUrl}
       logoUrl={d.logoUrl}
     >
-      <MailHeader
-        merchant={d.merchant}
-        product={d.product}
-        eyebrowText="Cancellation requested"
-        accent={t.primary}
-        iconUrl={d.iconUrl}
-      />
+      <NarrativeTitle>
+        We asked {d.merchant} to cancel for you
+      </NarrativeTitle>
       <Text style={p}>
-        {`We've contacted ${d.merchant} to cancel your subscription.`}
-      </Text>
-      <Text style={meta}>
-        <span style={metaLabel}>Subscription</span>
-        <strong>{d.product ?? d.merchant}</strong>
-        <br />
-        <span style={metaLabel}>Renews</span>
-        <strong>{d.renewalStr}</strong>
-        <br />
-        <span style={metaLabel}>Amount at risk</span>
-        <strong>{`${d.priceStr}/${shortInterval(d.billingInterval)}`}</strong>
+        We contacted {d.merchant} about your {plan}. It sits at{" "}
+        <Strong>{`${d.priceStr}/${shortInterval(d.billingInterval)}`}</Strong>
+        , renewing {d.renewalStr}. That is the charge we are trying to stop.
       </Text>
       <Text style={p}>
-        {`We're waiting for confirmation from ${d.merchant}.`}
+        Now we wait for them to confirm. We will email you when it is done.
+        No need to chase them.{" "}
+        <QuietLink href={d.ctaUrl}>Follow the request in SubZero</QuietLink> if
+        you are curious.
       </Text>
-      <Cta href={d.ctaUrl}>View request</Cta>
     </EmailLayout>
   );
 }
