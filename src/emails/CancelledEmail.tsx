@@ -28,8 +28,8 @@ export function CancelledEmail({
       />
       <Text style={p}>
         {origin === "manual"
-          ? `You marked this subscription cancelled.`
-          : `We spotted ${d.merchant}'s cancellation email and marked it cancelled.`}
+          ? `You marked this subscription cancelled. You won't be charged again.`
+          : `We spotted ${d.merchant}'s cancellation email and marked it cancelled. You won't be charged again.`}
       </Text>
       <Text style={meta}>
         <span style={metaLabel}>Saved</span>
