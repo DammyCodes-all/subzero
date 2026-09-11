@@ -29,10 +29,9 @@ export function RequestSentEmail({ d }: { d: EmailData }) {
         , renewing {d.renewalStr}. That is the charge we are trying to stop.
       </Text>
       <Text style={p}>
-        Now we wait for them to confirm. We will email you when it is done.
-        No need to chase them.{" "}
-        <QuietLink href={d.ctaUrl}>Follow the request in SubZero</QuietLink> if
-        you are curious.
+        Now we wait for them to confirm. We will email you when it is done,
+        so no need to chase them. You can{" "}
+        <QuietLink href={d.ctaUrl}>follow the request in SubZero</QuietLink>.
       </Text>
     </EmailLayout>
   );

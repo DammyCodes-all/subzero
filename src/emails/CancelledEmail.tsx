@@ -37,7 +37,8 @@ export function CancelledEmail({
         {origin === "manual"
           ? "You marked this cancelled in SubZero, so your list is up to date."
           : `We saw ${d.merchant}'s confirmation email and updated your list.`}{" "}
-        Made a mistake? <QuietLink href={d.ctaUrl}>Restore it in SubZero</QuietLink>.
+        If that doesn&apos;t look right,{" "}
+        <QuietLink href={d.ctaUrl}>restore it in SubZero</QuietLink>.
       </Text>
       <Text style={signoff}>SubZero</Text>
     </EmailLayout>
