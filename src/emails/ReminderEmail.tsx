@@ -3,9 +3,8 @@ import { emailTheme as t } from "./theme";
 import {
   Cta,
   EmailLayout,
+  Hero,
   MailHeader,
-  meta,
-  metaLabel,
   p,
   type EmailData,
 } from "./shared";
@@ -24,15 +23,13 @@ export function ReminderEmail({ d }: { d: EmailData }) {
         accent={t.danger}
         iconUrl={d.iconUrl}
       />
+      <Hero
+        amount={d.priceStr}
+        sub={`Renews ${d.renewalStr}`}
+        tone="urgent"
+      />
       <Text style={p}>
-        {`You started cancelling ${d.merchant} but didn't finish. It renews on ${d.renewalStr} for ${d.priceStr} — complete it before then.`}
-      </Text>
-      <Text style={meta}>
-        <span style={metaLabel}>Renews</span>
-        <strong>{d.renewalStr}</strong>
-        <br />
-        <span style={metaLabel}>Next charge</span>
-        <strong>{d.priceStr}</strong>
+        {`You started cancelling ${d.merchant} but didn't finish.`}
       </Text>
       <Cta href={d.ctaUrl}>Finish cancelling</Cta>
     </EmailLayout>
