@@ -1,12 +1,9 @@
-import { Text } from "react-email";
 import { emailTheme as t } from "./theme";
 import {
-  Cta,
+  DecisionButtons,
   EmailLayout,
+  Hero,
   MailHeader,
-  meta,
-  metaLabel,
-  p,
   shortInterval,
   type EmailData,
 } from "./shared";
@@ -25,17 +22,15 @@ export function TrialEmail({ d }: { d: EmailData }) {
         accent={t.primary}
         iconUrl={d.iconUrl}
       />
-      <Text style={p}>
-        {`${d.merchant} becomes ${d.priceStr}/${shortInterval(d.billingInterval)} on ${d.trialStr}. If you don't want it, cancel before then.`}
-      </Text>
-      <Text style={meta}>
-        <span style={metaLabel}>Trial ends</span>
-        <strong>{d.trialStr}</strong>
-        <br />
-        <span style={metaLabel}>Then</span>
-        <strong>{`${d.priceStr}/${shortInterval(d.billingInterval)}`}</strong>
-      </Text>
-      <Cta href={d.ctaUrl}>Cancel before charge</Cta>
+      <Hero
+        amount={`${d.priceStr}/${shortInterval(d.billingInterval)}`}
+        sub={`Free until ${d.trialStr}`}
+      />
+      <DecisionButtons
+        d={d}
+        primaryLabel={`Cancel ${d.merchant} trial`}
+        micro="Do nothing and the trial converts to paid."
+      />
     </EmailLayout>
   );
 }
