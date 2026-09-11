@@ -72,7 +72,7 @@ const TABS = [
 ];
 
 const STAGGER_MS = 280;
-const HOLD_MS = 2600;
+const HOLD_MS = 6000;
 const EXIT_MS = 450;
 const RESTART_MS = 400;
 const FLASH = "rgba(230,255,43,0.10)";
@@ -133,23 +133,15 @@ function InboxRow({
   return (
     <motion.div
       initial={{ opacity: 0, y: -8 }}
-      animate={
-        leaving
-          ? { opacity: 0 }
-          : {
-              opacity: 1,
-              y: 0,
-              backgroundColor: row.unread
-                ? [FLASH, FLASH, "rgba(0,0,0,0)"]
-                : "rgba(0,0,0,0)",
-            }
-      }
+      animate={leaving ? { opacity: 0 } : { opacity: 1, y: 0 }}
       transition={{
         opacity: { duration: 0.38, ease: "easeOut" },
         y: { duration: 0.38, ease: "easeOut" },
-        backgroundColor: { duration: 0.9, times: [0, 0.25, 1] },
       }}
-      className="flex items-center gap-2 border-b border-border/60 px-3 py-3 last:border-b-0 sm:gap-3 sm:px-4"
+      className={cn(
+        "flex items-center gap-2 border-b border-border/60 px-3 py-3 transition-colors duration-700 last:border-b-0 sm:gap-3 sm:px-4",
+        row.unread && !leaving && "bg-primary/[0.06]",
+      )}
     >
       <RowContent row={row} />
     </motion.div>
@@ -159,9 +151,10 @@ function InboxRow({
 export function ProblemVisual() {
   const reduceMotion = useReducedMotion();
   const ref = useRef<HTMLDivElement>(null);
-  const inView = useInView(ref, { once: true, margin: "-64px" });
+  const inView = useInView(ref, { margin: "-64px" });
   const [visible, setVisible] = useState(0);
   const [leaving, setLeaving] = useState(false);
+
 
   useEffect(() => {
     if (!inView || reduceMotion) return;

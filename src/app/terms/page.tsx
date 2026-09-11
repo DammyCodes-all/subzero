@@ -32,11 +32,10 @@ export default function TermsPage() {
           <LegalSection id="what-subzero-is" title="1. What SubZero is">
             <p>
               SubZero is a subscription awareness tool. It detects subscriptions
-              from your connected Gmail inbox, forwarded mail, or manual
-              entries; tracks trial ends and renewal dates; shows the evidence
-              behind each fact; researches each merchant&apos;s current
-              cancellation path; and sends renewal reminders before you are
-              charged.
+              from your connected Gmail inbox or forwarded mail; tracks trial
+              ends and renewal dates; shows the evidence behind each fact;
+              researches each merchant&apos;s current cancellation path; and
+              sends renewal reminders before you are charged.
             </p>
             <LegalNote title="The deal in one paragraph">
               <p>

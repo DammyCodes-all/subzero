@@ -123,3 +123,27 @@
   --tw-ring-color: rgb(249 247 242 / 0.22);
   border-color: rgb(249 247 242 / 0.4);
 }
+
+@keyframes text-shimmer {
+  0% {
+    background-position: 100% 0;
+  }
+  100% {
+    background-position: -100% 0;
+  }
+}
+
+.animate-text-shimmer {
+  animation: text-shimmer var(--shimmer-duration, 1.8s) linear infinite;
+  background-image: linear-gradient(
+    90deg,
+    var(--shimmer-base, var(--muted-foreground)) 0%,
+    var(--shimmer-highlight, var(--foreground)) 50%,
+    var(--shimmer-base, var(--muted-foreground)) 100%
+  );
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+

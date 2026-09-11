@@ -51,7 +51,7 @@ export function HeroSection() {
 
       <div className="relative mx-auto -mt-2 w-full md:-mt-4">
         <div className="perspective-[1600px]">
-          <div className="relative overflow-hidden rounded-xl bg-card  [transform:rotateX(14deg)] md:[transform:rotateX(38deg)]">
+          <div className="relative overflow-hidden rounded-xl bg-card transform-gpu will-change-transform [transform:rotateX(14deg)] md:[transform:rotateX(38deg)]">
             <Image
               src="/images/dashboard.webp"
               alt="SubZero dashboard showing subscriptions that need attention before they renew"

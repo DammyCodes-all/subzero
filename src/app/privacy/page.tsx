@@ -351,8 +351,7 @@ export default function PrivacyPage() {
             <LegalList>
               <li>
                 <strong>Connect or skip Gmail.</strong> Prefer not to connect?
-                Forward receipts to your SubZero inbox address or add
-                subscriptions manually instead.
+                Just forward receipts to your SubZero inbox address instead.
               </li>
               <li>
                 <strong>Control nudges.</strong> Toggle 7-day, 3-day, and

@@ -357,15 +357,12 @@ function renderScene(
     grad.addColorStop(1, hexAlpha(theme.primary, 0));
     ctx.fillStyle = grad;
     ctx.globalAlpha = 1;
-    ctx.shadowColor = theme.primary;
-    ctx.shadowBlur = 10;
     ctx.beginPath();
     ctx.arc(0, 0, layer.r1, 0, Math.PI * 2);
     ctx.arc(0, 0, layer.r0, 0, Math.PI * 2, true);
     ctx.fill("evenodd");
     ctx.restore();
   }
-  ctx.shadowBlur = 0;
   ctx.restore();
   // back particle streaks (sin < 0 → behind)
   for (const p of scene.disk) {
@@ -403,8 +400,6 @@ function renderScene(
   ctx.strokeStyle = theme.primary;
   ctx.globalAlpha = flicker;
   ctx.lineWidth = 1.6;
-  ctx.shadowColor = theme.primary;
-  ctx.shadowBlur = 8;
   ctx.lineJoin = "round";
   ctx.lineCap = "round";
   ctx.beginPath();
@@ -430,7 +425,6 @@ function renderScene(
   }
   ctx.closePath();
   ctx.stroke();
-  ctx.shadowBlur = 0;
   ctx.globalAlpha = 1;
 
   // --- front half of disk (in front of hole) —
@@ -451,15 +445,12 @@ function renderScene(
     grad.addColorStop(1, hexAlpha(theme.primary, 0));
     ctx.fillStyle = grad;
     ctx.globalAlpha = 1;
-    ctx.shadowColor = theme.primary;
-    ctx.shadowBlur = 10;
     ctx.beginPath();
     ctx.arc(0, 0, layer.r1, 0, Math.PI * 2);
     ctx.arc(0, 0, layer.r0, 0, Math.PI * 2, true);
     ctx.fill("evenodd");
     ctx.restore();
   }
-  ctx.shadowBlur = 0;
   ctx.restore();
   // front particle streaks
   for (const p of scene.disk) {
@@ -494,12 +485,9 @@ function renderScene(
   for (const b of scene.bursts) {
     ctx.globalAlpha = (b.life / b.maxLife) * 0.92;
     ctx.fillStyle = theme.primary;
-    ctx.shadowColor = theme.primary;
-    ctx.shadowBlur = 4;
     ctx.beginPath();
     ctx.arc(b.x, b.y, 1.45, 0, Math.PI * 2);
     ctx.fill();
-    ctx.shadowBlur = 0;
   }
   ctx.globalAlpha = 1;
 
@@ -515,12 +503,9 @@ function renderScene(
     ctx.globalAlpha = 0.95;
     ctx.lineWidth = 1.8;
     ctx.lineCap = "round";
-    ctx.shadowColor = theme.primary;
-    ctx.shadowBlur = 6;
     ctx.beginPath();
     ctx.arc(CX, CY, 118, -Math.PI / 2, -Math.PI / 2 + p * Math.PI * 2);
     ctx.stroke();
-    ctx.shadowBlur = 0;
     ctx.lineCap = "butt";
     ctx.globalAlpha = 1;
     // completion flash
@@ -607,9 +592,26 @@ export function BlackHoleScan({
     let raf = 0;
     let last = performance.now();
     let hidden = document.hidden;
+    let isIntersecting = true;
+
+    let observer: IntersectionObserver | null = null;
+    if (typeof IntersectionObserver !== "undefined") {
+      observer = new IntersectionObserver(([entry]) => {
+        isIntersecting = entry.isIntersecting;
+        if (isIntersecting && !hidden) {
+          last = performance.now();
+          cancelAnimationFrame(raf);
+          raf = requestAnimationFrame(frame);
+        } else {
+          cancelAnimationFrame(raf);
+        }
+      });
+      observer.observe(canvas);
+    }
+
     const onVis = () => {
       hidden = document.hidden;
-      if (!hidden) {
+      if (!hidden && isIntersecting) {
         last = performance.now();
         raf = requestAnimationFrame(frame);
       } else {
@@ -627,7 +629,7 @@ export function BlackHoleScan({
     mq.addEventListener("change", onReducedChange);
 
     const frame = (now: number) => {
-      if (hidden) return;
+      if (hidden || !isIntersecting) return;
       const targetFps = isScanning ? 60 : 15;
       if (now - last < 1000 / targetFps - 1) {
         raf = requestAnimationFrame(frame);
@@ -642,6 +644,7 @@ export function BlackHoleScan({
     raf = requestAnimationFrame(frame);
     return () => {
       cancelAnimationFrame(raf);
+      if (observer) observer.disconnect();
       document.removeEventListener("visibilitychange", onVis);
       mq.removeEventListener("change", onReducedChange);
     };
