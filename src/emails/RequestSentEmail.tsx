@@ -25,6 +25,7 @@ export function RequestSentEmail({ d }: { d: EmailData }) {
         product={d.product}
         eyebrowText="Cancellation requested"
         accent={t.primary}
+        iconUrl={d.iconUrl}
       />
       <Text style={p}>
         {`We've contacted ${d.merchant} to cancel your subscription.`}

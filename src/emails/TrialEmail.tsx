@@ -23,9 +23,10 @@ export function TrialEmail({ d }: { d: EmailData }) {
         product={d.product}
         eyebrowText="Trial ending"
         accent={t.primary}
+        iconUrl={d.iconUrl}
       />
       <Text style={p}>
-        {`Your trial ends on ${d.trialStr}. After that you'll be charged ${d.priceStr}/${shortInterval(d.billingInterval)}.`}
+        {`${d.merchant} becomes ${d.priceStr}/${shortInterval(d.billingInterval)} on ${d.trialStr}. If you don't want it, cancel before then.`}
       </Text>
       <Text style={meta}>
         <span style={metaLabel}>Trial ends</span>
