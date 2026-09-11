@@ -1,4 +1,4 @@
-import { Button, Column, Row, Text } from "react-email";
+import type { ReactNode } from "react";
 import { EmailLayout } from "./emailLayout";
 import { emailTheme as t } from "./theme";
 
@@ -9,8 +9,6 @@ export type EmailData = {
   billingInterval: string;
   renewalStr: string;
   trialStr: string;
-  label: string;
-  urgent?: boolean;
   ctaUrl: string;
   cancelUrl?: string;
   manageUrl: string;
@@ -19,57 +17,35 @@ export type EmailData = {
   logoUrl: string;
 };
 
-export function eyebrow(color: string): React.CSSProperties {
-  return {
-    color,
-    fontFamily: t.fontSans,
-    fontSize: "11px",
-    fontWeight: "bold",
-    letterSpacing: "1.5px",
-    lineHeight: "16px",
-    margin: "0 0 4px",
-    textTransform: "uppercase",
-  };
-}
-
-export const h: React.CSSProperties = {
+export const title: React.CSSProperties = {
   color: t.foreground,
   fontFamily: t.fontHeading,
-  fontSize: "20px",
-  lineHeight: "28px",
-  margin: "0 0 8px",
+  fontSize: "22px",
+  fontWeight: "bold",
+  lineHeight: "30px",
+  margin: "0",
 };
 
 export const p: React.CSSProperties = {
   color: t.muted,
   fontFamily: t.fontSans,
-  fontSize: "14px",
-  lineHeight: "21px",
+  fontSize: "15px",
+  lineHeight: "24px",
   margin: "0 0 12px",
 };
 
-export const meta: React.CSSProperties = {
-  backgroundColor: t.metaBg,
-  border: `1px solid ${t.divider}`,
-  borderRadius: t.radiusInner,
-  color: t.foreground,
-  fontFamily: t.fontSans,
-  fontSize: "13px",
-  lineHeight: "22px",
-  margin: "14px 0",
-  padding: "10px 14px",
-};
-
-export const metaLabel: React.CSSProperties = {
+export const signoff: React.CSSProperties = {
   color: t.faint,
-  display: "inline-block",
-  minWidth: "88px",
+  fontFamily: t.fontSans,
+  fontSize: "14px",
+  lineHeight: "21px",
+  margin: "16px 0 0",
 };
 
 export function formatPrice(price: number, currency: string): string {
   const iso = currency?.toUpperCase() || "USD";
   try {
-    // No trailing ".00" on whole amounts — "NGN 7,700", not "NGN 7,700.00".
+    // No trailing ".00" on whole amounts: "NGN 7,700", not "NGN 7,700.00".
     return new Intl.NumberFormat("en-US", {
       style: "currency",
       currency: iso,
@@ -79,6 +55,17 @@ export function formatPrice(price: number, currency: string): string {
   } catch {
     return `${iso} ${price}`;
   }
+}
+
+// "monthly" to "month". Lets bodies read like speech: "another month of".
+export function intervalNoun(billingInterval: string): string {
+  const v = billingInterval.trim().toLowerCase();
+  if (v.startsWith("month")) return "month";
+  if (v.startsWith("year") || v.startsWith("annual")) return "year";
+  if (v.startsWith("week")) return "week";
+  if (v.startsWith("quarter")) return "quarter";
+  if (v.startsWith("day") || v.startsWith("daily")) return "day";
+  return billingInterval.trim() || "period";
 }
 
 export function shortInterval(billingInterval: string): string {
@@ -91,33 +78,60 @@ export function shortInterval(billingInterval: string): string {
   return billingInterval;
 }
 
-// Initial tile — visual anchor without external images (which need
-// absolute URLs and get blocked by default in most inboxes).
-export function MerchantMark({ name }: { name: string }) {
-  const initial = (name.trim().charAt(0) || "?").toUpperCase();
+// Names read better with the plan in brackets once, then bare after.
+export function namedPlan(d: EmailData): string {
+  return d.product && d.product !== d.merchant
+    ? `${d.merchant} (${d.product})`
+    : d.merchant;
+}
+
+function linkBase(color: string): React.CSSProperties {
+  return {
+    color,
+    fontWeight: "bold",
+    textDecoration: "underline",
+  };
+}
+
+// Inline links for quiet paths. Loud moments get MainButton instead.
+export function ActionLink({
+  href,
+  children,
+}: {
+  href: string;
+  children: ReactNode;
+}) {
   return (
-    <span
-      style={{
-        backgroundColor: t.primary,
-        borderRadius: "9px",
-        color: t.onPrimary,
-        display: "inline-block",
-        fontFamily: t.fontHeading,
-        fontSize: "16px",
-        fontWeight: "bold",
-        height: "36px",
-        lineHeight: "36px",
-        textAlign: "center",
-        width: "36px",
-      }}
-    >
-      {initial}
-    </span>
+    <a href={href} style={linkBase(t.primary)}>
+      {children}
+    </a>
   );
 }
-export function Cta({ href, children }: { href: string; children: string }) {
+
+export function QuietLink({
+  href,
+  children,
+}: {
+  href: string;
+  children: ReactNode;
+}) {
   return (
-    <Button
+    <a href={href} style={linkBase(t.muted)}>
+      {children}
+    </a>
+  );
+}
+
+// One primary tap per urgent mail. Receipts and calm mails stay link only.
+export function MainButton({
+  href,
+  children,
+}: {
+  href: string;
+  children: ReactNode;
+}) {
+  return (
+    <a
       href={href}
       style={{
         backgroundColor: t.primary,
@@ -126,84 +140,31 @@ export function Cta({ href, children }: { href: string; children: string }) {
         color: t.onPrimary,
         display: "block",
         fontFamily: t.fontSans,
-        fontSize: "14px",
+        fontSize: "15px",
         fontWeight: "bold",
-        margin: "8px 0 4px",
-        padding: "12px 20px",
+        margin: "16px 0 4px",
+        padding: "13px 20px",
         textAlign: "center",
         textDecoration: "none",
         width: "100%",
       }}
     >
       {children}
-    </Button>
+    </a>
   );
 }
 
-export function DirectCancel({ d }: { d: EmailData }) {
-  if (!d.cancelUrl)
-    return <Text style={p}>Open SubZero to view cancellation steps.</Text>;
+export function Strong({ children }: { children: ReactNode }) {
   return (
-    <Text style={p}>
-      Prefer to cancel directly?{" "}
-      <a
-        href={d.cancelUrl}
-        style={{ color: t.foreground, textDecoration: "underline" }}
-      >
-        Cancel with {d.merchant}
-      </a>
-    </Text>
+    <strong style={{ color: t.foreground, fontWeight: "bold" }}>
+      {children}
+    </strong>
   );
+}
+
+// One-line title without react-email's Text wrapper (avoids nested p).
+export function NarrativeTitle({ children }: { children: ReactNode }) {
+  return <p style={{ ...title, margin: "0 0 12px" }}>{children}</p>;
 }
 
 export { EmailLayout };
-
-// Merchant mark + eyebrow + name as one unit, so every template opens
-// with a visual anchor instead of a bare text stack.
-export function MailHeader({
-  merchant,
-  product,
-  eyebrowText,
-  accent,
-}: {
-  merchant: string;
-  product?: string;
-  eyebrowText: string;
-  accent: string;
-}) {
-  return (
-    <Row>
-      <Column style={{ verticalAlign: "top", width: "52px" }}>
-        <MerchantMark name={merchant} />
-      </Column>
-      <Column>
-        <Text style={eyebrow(accent)}>{eyebrowText}</Text>
-        <p
-          style={{
-            color: t.foreground,
-            fontFamily: t.fontHeading,
-            fontSize: "20px",
-            fontWeight: "bold",
-            lineHeight: "28px",
-            margin: "0",
-          }}
-        >
-          {merchant}
-        </p>
-        {product ? (
-          <Text
-            style={{
-              color: t.faint,
-              fontFamily: t.fontSans,
-              fontSize: "13px",
-              lineHeight: "18px",
-              margin: "2px 0 0",
-            }}
-          >
-            {product}
-          </Text>
-        ) : null}
-      </Column>
-    </Row>
-  );
-}

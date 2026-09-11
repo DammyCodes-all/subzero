@@ -12,9 +12,15 @@
 - **Auth:** Convex Auth
 - **AI models:** Groq `openai/gpt-oss-120b` primary, OpenRouter then OpenAI `gpt-4o-mini` fallback (`convex/ingestion/extract.ts`, `convex/research.ts`); no `OPENAI_API_KEY` set on the deployment
 - **Started:** 2026-08-28T08:01:06Z
-- **Last updated:** 2026-09-08T00:00:00Z
+- **Last updated:** 2026-09-11T00:00:00Z
 
 ## Log
+
+### 2026-09-11 - working tree
+Fixed silent total outbound failure: the AgentMail component's functions are isolated from app env, so every send died in the workpool with "AGENTMAIL_API_KEY is not set" while notifications were marked sent. Declared the vars via a pnpm patch (`patches/@agentmail+convex@0.1.0.patch`) and forwarded the key by reference in `convex/convex.config.ts`. Removed the `/dashboard/emails` demo page and preview fixtures after sending all 8 templates to the owner's inbox as a real-client check (logo via absolute Convex storage URL).
+
+### 2026-09-11 - working tree
+Designed the 8 subscription notification emails as narrative letters (`src/emails/`: `RenewalEmail` 7d/3d/24h, `TrialEmail`, `CancelledEmail` auto/manual, `ReminderEmail`, `RequestSentEmail`) with a shared voice (`shared.tsx`: `NarrativeTitle`, inline links, single `MainButton` only where a charge is imminent, no merchant icons, we-voice, no em dashes) and adaptable subject lines (`subjects.ts`). Preview-only at `/dashboard/emails` via fixtures mirroring live subs plus `renderEmail.ts` choke point — live dispatch in `convex/notifications.ts` still uses the old inline copy; wiring the new templates to real sends is pending.
 
 ### 2026-09-08 - working tree
 Closed three product gaps: lifecycle wiring (CTA clicks in `ActionCard`, `SubscriptionDetailView`, `HowToCancel` flip to `user_started` via `useCancelStarted`, guarded forward-only in `convex/actions.ts`; email send path walks `action_ready → user_started → cancellation_pending` server-side), difficulty reasons (observable-only chips from `difficultyReasons` in `src/lib/cancellation.ts`, rendered in `HowToCancel`), and first-scan results summary (`FirstScanSummary` with live counts + top cards, shown once per productive first scan from `useFirstScan`).

@@ -24,7 +24,15 @@ const app = defineApp({
 // NOTE: @convex-dev/static-hosting is installed but NOT registered yet —
 // Gmail OAuth lives in Next.js API routes, which a static export cannot
 // serve. Registration waits on migrating OAuth to Convex HTTP actions.
-app.use(agentmail);
+app.use(agentmail, {
+  // Forwards the app key into the component's isolated env. Without this,
+  // every send fails with "AGENTMAIL_API_KEY is not set" even though the
+  // key is set on the deployment (component reads it via process.env, see
+  // patches/@agentmail+convex@0.1.0.patch which declares the vars).
+  env: {
+    AGENTMAIL_API_KEY: app.env.AGENTMAIL_API_KEY,
+  },
+});
 app.use(firecrawl, {
   httpPrefix: "/firecrawl/",
   env: {
