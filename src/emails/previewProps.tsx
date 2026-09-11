@@ -4,6 +4,13 @@ import { ReminderEmail } from "./ReminderEmail";
 import { RenewalEmail, type RenewalStage } from "./RenewalEmail";
 import { RequestSentEmail } from "./RequestSentEmail";
 import { TrialEmail } from "./TrialEmail";
+import {
+  cancelledSubject,
+  reminderSubject,
+  renewalSubject,
+  requestSentSubject,
+  trialSubject,
+} from "./subjects";
 import type { EmailData } from "./shared";
 import { formatPrice } from "./shared";
 import { merchantFaviconUrl } from "@/lib/merchantFavicon";
@@ -94,32 +101,32 @@ export function emailVariants(): EmailVariant[] {
     };
   };
   return [
-    renewal("7d", `Renewal Alert: ${g.merchant} renews in 7 days`),
-    renewal("3d", `Renewal Alert: ${g.merchant} renews in 3 days`),
-    renewal("24h", `Renewal Alert: ${g.merchant} renews tomorrow!`),
+    renewal("7d", renewalSubject("7d", g)),
+    renewal("3d", renewalSubject("3d", g)),
+    renewal("24h", renewalSubject("24h", g)),
     {
       badge: "trial ending",
-      subject: `Trial ending: ${g.merchant} — ${g.trialStr}`,
+      subject: trialSubject(g),
       element: <TrialEmail d={g} />,
     },
     {
       badge: "cancelled • auto",
-      subject: `Cancelled: ${s.merchant}. You are all set`,
+      subject: cancelledSubject(s),
       element: <CancelledEmail d={s} origin="auto" />,
     },
     {
       badge: "cancelled • manual",
-      subject: `Cancelled: ${s.merchant}. You are all set`,
+      subject: cancelledSubject(s),
       element: <CancelledEmail d={s} origin="manual" />,
     },
     {
       badge: "action reminder",
-      subject: `Still need to cancel ${s.merchant}?`,
+      subject: reminderSubject(s),
       element: <ReminderEmail d={s} />,
     },
     {
       badge: "request sent",
-      subject: `Cancellation request sent: ${g.merchant}`,
+      subject: requestSentSubject(g),
       element: <RequestSentEmail d={g} />,
     },
   ];

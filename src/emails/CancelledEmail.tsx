@@ -3,9 +3,8 @@ import { emailTheme as t } from "./theme";
 import {
   Cta,
   EmailLayout,
+  Hero,
   MailHeader,
-  meta,
-  metaLabel,
   p,
   shortInterval,
   type EmailData,
@@ -27,14 +26,15 @@ export function CancelledEmail({
         accent={t.primary}
         iconUrl={d.iconUrl}
       />
+      <Hero
+        amount={`${d.priceStr}/${shortInterval(d.billingInterval)}`}
+        sub="Saved · never charged again"
+        tone="success"
+      />
       <Text style={p}>
         {origin === "manual"
-          ? `You marked this subscription cancelled. You won't be charged again.`
-          : `We spotted ${d.merchant}'s cancellation email and marked it cancelled. You won't be charged again.`}
-      </Text>
-      <Text style={meta}>
-        <span style={metaLabel}>Saved</span>
-        <strong>{`${d.priceStr}/${shortInterval(d.billingInterval)}`}</strong>
+          ? `You marked this subscription cancelled.`
+          : `We spotted ${d.merchant}'s cancellation email and marked it cancelled.`}
       </Text>
       <Text style={p}>
         If this looks wrong, open SubZero and restore it in one tap.
