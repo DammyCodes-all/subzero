@@ -87,7 +87,7 @@ export function IntakeSection() {
             role="tabpanel"
             className="mt-4 overflow-hidden rounded-2xl border border-border bg-card p-5 shadow-2xl shadow-black/40 md:p-7"
           >
-            <div className="min-h-[480px] sm:min-h-[460px]">
+            <div className="flex min-h-[480px] items-center justify-center sm:min-h-[460px]">
               {active === "gmail" && <GmailIntakeMock active />}
               {active === "forward" && <ForwardIntakeMock active />}
             </div>

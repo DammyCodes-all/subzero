@@ -18,15 +18,17 @@ import { CLICK_MS, ClickTarget, StageCursor, StageSwap } from "./StageCursor";
  * ForwardingCard (copy the address) → Gmail compose (send it) →
  * BlackHoleScan detection → the new ActionCard in the list.
  */
-type Stage = "email" | "compose" | "scanning" | "result";
+type Stage = "compose" | "scanning" | "result";
 
-const ORDER: Stage[] = ["email", "compose", "scanning", "result"];
+const ORDER: Stage[] = ["compose", "scanning", "result"];
 
+/* Click stage derives from CLICK_MS with extra dwell so the click lands
+ * and reads before the swap; scanning + result hold long enough to read.
+ * Total loop lands around ~10s, matching the Gmail mock pacing. */
 const HOLDS: Record<Stage, number> = {
-  email: CLICK_MS + 200,
-  compose: CLICK_MS + 200,
-  scanning: 1500,
-  result: 2500,
+  compose: CLICK_MS + 1200,
+  scanning: 3000,
+  result: 4500,
 };
 
 function sleep(ms: number, timers: number[]) {
@@ -59,9 +61,8 @@ export function ForwardIntakeMock({ active }: { active: boolean }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const inViewRef = useRef<HTMLDivElement>(null);
   const inView = useInView(inViewRef, { margin: "-64px" });
-  const forwardRef = useRef<HTMLSpanElement>(null);
   const sendRef = useRef<HTMLSpanElement>(null);
-  const [stage, setStage] = useState<Stage>("email");
+  const [stage, setStage] = useState<Stage>("compose");
   const [running, setRunning] = useState(false);
 
   useEffect(() => {
@@ -90,12 +91,11 @@ export function ForwardIntakeMock({ active }: { active: boolean }) {
   }, [active, inView, reduceMotion]);
 
   const settled = reduceMotion || !active;
-  const clicking =
-    running && !settled && (stage === "email" || stage === "compose");
+  const clicking = running && !settled && stage === "compose";
   const shown: Stage = settled ? "result" : stage;
 
   return (
-    <div ref={inViewRef}>
+    <div ref={inViewRef} className="w-full">
       <div
         ref={containerRef}
         aria-hidden="true"
@@ -103,28 +103,6 @@ export function ForwardIntakeMock({ active }: { active: boolean }) {
         className="relative mx-auto w-full max-w-xl"
       >
         <StageSwap stageKey={shown}>
-          {shown === "email" && (
-            <div>
-              <EmailCard />
-              <div className="mt-3 flex justify-end">
-                <ClickTarget clicking={running && stage === "email"}>
-                  <span
-                    ref={forwardRef}
-                    className="inline-flex items-center gap-1.5 rounded-lg bg-secondary px-3.5 py-2 text-sm font-semibold text-foreground"
-                  >
-                    <HugeiconsIcon
-                      icon={Forward01Icon as never}
-                      size={15}
-                      color="currentColor"
-                      className="text-primary"
-                    />
-                    Forward
-                  </span>
-                </ClickTarget>
-              </div>
-            </div>
-          )}
-
           {shown === "compose" && (
             /* Mocked Gmail compose popup: recipient chip, forwarded
              * metadata, quoted original, Send toolbar. */
@@ -223,10 +201,7 @@ export function ForwardIntakeMock({ active }: { active: boolean }) {
         </StageSwap>
 
         {clicking && (
-          <StageCursor
-            containerRef={containerRef}
-            targetRef={stage === "email" ? forwardRef : sendRef}
-          />
+          <StageCursor containerRef={containerRef} targetRef={sendRef} />
         )}
       </div>
     </div>

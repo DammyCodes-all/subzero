@@ -24,13 +24,37 @@ const MAX_SETTLE_FRAMES = 30; // ~0.5s safety cap at 60fps
 type Point = { x: number; y: number };
 
 function waitForSettle(el: HTMLElement, onSettled: () => void): () => void {
-  let timerId: number;
-  const rafId = requestAnimationFrame(() => {
-    timerId = window.setTimeout(onSettled, 60);
-  });
+  let cancelled = false;
+  let last: DOMRect | null = null;
+  let stableFrames = 0;
+  let framesChecked = 0;
+  let rafId: number;
+
+  function tick() {
+    if (cancelled) return;
+    const rect = el.getBoundingClientRect();
+    const stable =
+      last !== null &&
+      rect.x === last.x &&
+      rect.y === last.y &&
+      rect.width === last.width &&
+      rect.height === last.height;
+
+    stableFrames = stable ? stableFrames + 1 : 0;
+    last = rect;
+    framesChecked += 1;
+
+    if (stableFrames >= 2 || framesChecked >= MAX_SETTLE_FRAMES) {
+      onSettled();
+      return;
+    }
+    rafId = requestAnimationFrame(tick);
+  }
+
+  rafId = requestAnimationFrame(tick);
   return () => {
+    cancelled = true;
     cancelAnimationFrame(rafId);
-    clearTimeout(timerId);
   };
 }
 
@@ -147,6 +171,7 @@ export function StageSwap({
       <motion.div
         key={stageKey}
         layout
+        className="w-full"
         variants={{
           initial: { opacity: 0, y: 8 },
           enter: {

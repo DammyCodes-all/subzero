@@ -106,7 +106,7 @@ export function GmailIntakeMock({ active }: { active: boolean }) {
   const shown: Stage = settled ? "summary" : stage;
 
   return (
-    <div ref={inViewRef}>
+    <div ref={inViewRef} className="w-full">
       <div
         ref={containerRef}
         aria-hidden="true"
