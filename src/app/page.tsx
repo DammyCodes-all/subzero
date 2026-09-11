@@ -7,7 +7,6 @@ import { FinalCtaSection } from "@/components/marketing/landing/FinalCtaSection"
 import { IntakeSection } from "@/components/marketing/landing/IntakeSection";
 import { ProblemSection } from "@/components/marketing/landing/ProblemSection";
 import { RenewalSection } from "@/components/marketing/landing/RenewalSection";
-import { StatusSection } from "@/components/marketing/landing/StatusSection";
 import { MarketingLayout } from "@/components/marketing/MarketingLayout";
 
 export default function Home() {
@@ -21,7 +20,6 @@ export default function Home() {
       <CancelDetailSection />
       <CancelPathsSection />
       <EvidenceSection />
-      <StatusSection />
       <FinalCtaSection />
     </MarketingLayout>
   );
