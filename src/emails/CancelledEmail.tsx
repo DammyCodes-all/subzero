@@ -1,13 +1,13 @@
 import { Text } from "react-email";
-import { emailTheme as t } from "./theme";
 import {
-  Cta,
   EmailLayout,
-  MailHeader,
-  meta,
-  metaLabel,
+  NarrativeTitle,
+  QuietLink,
+  Strong,
+  intervalNoun,
+  namedPlan,
   p,
-  shortInterval,
+  signoff,
   type EmailData,
 } from "./shared";
 
@@ -18,27 +18,29 @@ export function CancelledEmail({
   d: EmailData;
   origin: "auto" | "manual";
 }) {
+  const plan = namedPlan(d);
+  const noun = intervalNoun(d.billingInterval);
   return (
-    <EmailLayout preview={`${d.merchant} cancelled`} manageUrl={d.manageUrl} logoUrl={d.logoUrl}>
-      <MailHeader
-        merchant={d.merchant}
-        product={d.product}
-        eyebrowText="Cancelled"
-        accent={t.primary}
-      />
+    <EmailLayout
+      preview={`${d.merchant} cancelled`}
+      manageUrl={d.manageUrl}
+      logoUrl={d.logoUrl}
+    >
+      <NarrativeTitle>
+        Your {d.merchant} subscription has been cancelled
+      </NarrativeTitle>
+      <Text style={p}>
+        {plan} is cancelled. You keep <Strong>{d.priceStr}</Strong> every{" "}
+        {noun} from here on. It will not charge you again.
+      </Text>
       <Text style={p}>
         {origin === "manual"
-          ? `You marked this subscription cancelled.`
-          : `We spotted ${d.merchant}'s cancellation email and marked it cancelled.`}
+          ? "You marked this cancelled in SubZero, so your list is up to date."
+          : `We saw ${d.merchant}'s confirmation email and updated your list.`}{" "}
+        If that doesn&apos;t look right,{" "}
+        <QuietLink href={d.ctaUrl}>restore it in SubZero</QuietLink>.
       </Text>
-      <Text style={meta}>
-        <span style={metaLabel}>Saved</span>
-        <strong>{`${d.priceStr}/${shortInterval(d.billingInterval)}`}</strong>
-      </Text>
-      <Text style={p}>
-        If this looks wrong, open SubZero and restore it in one tap.
-      </Text>
-      <Cta href={d.ctaUrl}>View subscription</Cta>
+      <Text style={signoff}>SubZero</Text>
     </EmailLayout>
   );
 }

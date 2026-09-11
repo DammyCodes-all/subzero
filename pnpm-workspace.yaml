@@ -2,6 +2,10 @@ allowBuilds:
   esbuild: true
   sharp: true
   unrs-resolver: true
+
 ignoredBuiltDependencies:
   - sharp
   - unrs-resolver
+
+patchedDependencies:
+  '@agentmail/convex@0.1.0': patches/@agentmail__convex@0.1.0.patch
