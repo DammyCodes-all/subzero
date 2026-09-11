@@ -22,6 +22,7 @@ export function ReminderEmail({ d }: { d: EmailData }) {
         product={d.product}
         eyebrowText="Still active"
         accent={t.danger}
+        iconUrl={d.iconUrl}
       />
       <Text style={p}>
         {`You started cancelling ${d.merchant} but didn't finish. It renews on ${d.renewalStr} for ${d.priceStr} — complete it before then.`}
@@ -29,6 +30,9 @@ export function ReminderEmail({ d }: { d: EmailData }) {
       <Text style={meta}>
         <span style={metaLabel}>Renews</span>
         <strong>{d.renewalStr}</strong>
+        <br />
+        <span style={metaLabel}>Next charge</span>
+        <strong>{d.priceStr}</strong>
       </Text>
       <Cta href={d.ctaUrl}>Finish cancelling</Cta>
     </EmailLayout>

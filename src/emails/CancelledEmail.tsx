@@ -25,6 +25,7 @@ export function CancelledEmail({
         product={d.product}
         eyebrowText="Cancelled"
         accent={t.primary}
+        iconUrl={d.iconUrl}
       />
       <Text style={p}>
         {origin === "manual"
