@@ -148,23 +148,116 @@ export function Cta({ href, children }: { href: string; children: string }) {
   );
 }
 
-export function DirectCancel({ d }: { d: EmailData }) {
-  if (!d.cancelUrl)
-    return <Text style={p}>Open SubZero to view cancellation steps.</Text>;
+export function GhostBtn({ href, children }: { href: string; children: string }) {
   return (
-    <Text style={p}>
-      Prefer to cancel directly?{" "}
-      <a
-        href={d.cancelUrl}
-        style={{ color: t.foreground, textDecoration: "underline" }}
+    <Button
+      href={href}
+      style={{
+        backgroundColor: "transparent",
+        border: `1px solid rgba(249,247,242,0.25)`,
+        borderRadius: t.radiusInner,
+        boxSizing: "border-box",
+        color: t.foreground,
+        display: "block",
+        fontFamily: t.fontSans,
+        fontSize: "14px",
+        fontWeight: "bold",
+        margin: "8px 0 0",
+        padding: "12px 20px",
+        textAlign: "center",
+        textDecoration: "none",
+        width: "100%",
+      }}
+    >
+      {children}
+    </Button>
+  );
+}
+
+// Decision block: the email's UI-card moment. Cancelling is a real
+// button (direct merchant URL, no login needed); keeping needs no
+// action, so review stays a quiet second row. No cancel URL on file →
+// single review button, never two buttons to the same place.
+export function DecisionButtons({
+  d,
+  primaryLabel,
+  micro,
+}: {
+  d: EmailData;
+  primaryLabel: string;
+  micro: string;
+}) {
+  return (
+    <div>
+      <Cta href={d.cancelUrl ?? d.ctaUrl}>
+        {d.cancelUrl ? primaryLabel : "Review subscription"}
+      </Cta>
+      {d.cancelUrl ? (
+        <GhostBtn href={d.ctaUrl}>Review in SubZero</GhostBtn>
+      ) : null}
+      <Text
+        style={{
+          color: t.faint,
+          fontFamily: t.fontSans,
+          fontSize: "12px",
+          lineHeight: "18px",
+          margin: "10px 0 0",
+          textAlign: "center",
+        }}
       >
-        Cancel with {d.merchant}
-      </a>
-    </Text>
+        {micro}
+      </Text>
+    </div>
   );
 }
 
 export { EmailLayout };
+
+export type HeroTone = "neutral" | "urgent" | "success";
+
+// Amount-first hero: the one number the email exists to communicate,
+// with a single state line beneath. Used wherever the body already
+// states the facts — one fact, stated once, instead of a lead
+// paragraph plus a box repeating it.
+export function Hero({
+  amount,
+  sub,
+  tone = "neutral",
+}: {
+  amount: string;
+  sub: string;
+  tone?: HeroTone;
+}) {
+  const subColor =
+    tone === "urgent" ? t.danger : tone === "success" ? t.primary : t.muted;
+  return (
+    <div style={{ margin: "14px 0 16px" }}>
+      <p
+        style={{
+          color: t.foreground,
+          fontFamily: t.fontHeading,
+          fontSize: "30px",
+          fontWeight: "bold",
+          lineHeight: "36px",
+          margin: "0",
+        }}
+      >
+        {amount}
+      </p>
+      <Text
+        style={{
+          color: subColor,
+          fontFamily: t.fontSans,
+          fontSize: "13px",
+          lineHeight: "18px",
+          margin: "4px 0 0",
+        }}
+      >
+        {sub}
+      </Text>
+    </div>
+  );
+}
 
 // Merchant mark + eyebrow + name as one unit, so every template opens
 // with a visual anchor instead of a bare text stack. Real merchant
