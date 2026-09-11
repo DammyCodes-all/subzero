@@ -1,7 +1,8 @@
 import type { ReactElement } from "react";
 import { CancelledEmail } from "./CancelledEmail";
 import { ReminderEmail } from "./ReminderEmail";
-import { RenewalEmail } from "./RenewalEmail";
+import { RenewalEmail, type RenewalStage } from "./RenewalEmail";
+import { RequestSentEmail } from "./RequestSentEmail";
 import { TrialEmail } from "./TrialEmail";
 import type { EmailData } from "./shared";
 import { formatPrice } from "./shared";
@@ -41,31 +42,35 @@ export type EmailVariant = {
   element: ReactElement;
 };
 
-// Same 7 variants + subjects as the old text templates, so dispatch
+// Same variants + subjects as the old text templates, so dispatch
 // can switch over without copy drift.
 export function emailVariants(): EmailVariant[] {
   const d = demoData();
-  const withLabel = (label: string, urgent = false): EmailData => ({
-    ...d,
-    label,
-    urgent,
-  });
+  const renewal = (
+    stage: RenewalStage,
+    subject: string,
+  ): EmailVariant => {
+    const label =
+      stage === "7d"
+        ? "renews in 7 days"
+        : stage === "3d"
+          ? "renews in 3 days"
+          : "renews tomorrow!";
+    return {
+      badge: `renewal • ${stage}`,
+      subject,
+      element: (
+        <RenewalEmail
+          d={{ ...d, label, urgent: stage === "24h" }}
+          stage={stage}
+        />
+      ),
+    };
+  };
   return [
-    {
-      badge: "renewal • 7d",
-      subject: `Renewal Alert: ${d.merchant} renews in 7 days`,
-      element: <RenewalEmail d={withLabel("renews in 7 days")} />,
-    },
-    {
-      badge: "renewal • 3d",
-      subject: `Renewal Alert: ${d.merchant} renews in 3 days`,
-      element: <RenewalEmail d={withLabel("renews in 3 days")} />,
-    },
-    {
-      badge: "renewal • 24h",
-      subject: `Renewal Alert: ${d.merchant} renews tomorrow!`,
-      element: <RenewalEmail d={withLabel("renews tomorrow!", true)} />,
-    },
+    renewal("7d", `Renewal Alert: ${d.merchant} renews in 7 days`),
+    renewal("3d", `Renewal Alert: ${d.merchant} renews in 3 days`),
+    renewal("24h", `Renewal Alert: ${d.merchant} renews tomorrow!`),
     {
       badge: "trial ending",
       subject: `Trial ending: ${d.merchant} — ${d.trialStr}`,
@@ -85,6 +90,11 @@ export function emailVariants(): EmailVariant[] {
       badge: "action reminder",
       subject: `Still need to cancel ${d.merchant}?`,
       element: <ReminderEmail d={d} />,
+    },
+    {
+      badge: "request sent",
+      subject: `Cancellation request sent: ${d.merchant}`,
+      element: <RequestSentEmail d={d} />,
     },
   ];
 }
