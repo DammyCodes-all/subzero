@@ -1,4 +1,4 @@
-export const GOOGLE_OAUTH_REDIRECT = "/auth?oauth=google";
+export const GOOGLE_OAUTH_REDIRECT = "/dashboard";
 export const GOOGLE_OAUTH_ATTEMPT_KEY = "subzero:google-oauth-attempt";
 
 export function markGoogleOAuthAttempt() {

@@ -3,18 +3,23 @@
 - **Project:** subzero
 - **Event:** Convex All Gas Hackathon
 - **What it does:** AI subscription protection assistant — finds subscriptions, warns before renewals, and researches verified cancellation routes with evidence.
-- **Live app:** not deployed
+- **Live app:** https://elated-oriole-157.convex.site
 - **Repo:** local only, not yet public
-- **Frontend:** Next.js locally; Convex static hosting deferred (Gmail OAuth lives in Next.js API routes, which a static export cannot serve)
+- **Frontend:** Next.js static export served from the Convex deployment via `@convex-dev/static-hosting` (registered); Gmail OAuth migrated to Convex HTTP actions (`GET /gmail/oauth/callback`) so no Next.js API routes remain
 - **Convex deployment:** https://aromatic-quail-684.convex.cloud
-- **Components:** `@firecrawl/firecrawl-convex 0.1.1` (research search/scrape), `@agentmail/convex 0.1.0` (durable outbound sends), `@convex-dev/static-hosting 0.2.1` (installed, not registered)
+- **Components:** `@firecrawl/firecrawl-convex 0.1.1` (research search/scrape), `@agentmail/convex 0.1.0` (durable outbound sends), `@convex-dev/static-hosting 0.2.1` (registered, serves the static export)
 - **Convex features:** schema, tables, indexes, auth, queries, mutations, actions, http, scheduler, crons, components
 - **Auth:** Convex Auth
 - **AI models:** Groq `openai/gpt-oss-120b` primary, OpenRouter then OpenAI `gpt-4o-mini` fallback (`convex/ingestion/extract.ts`, `convex/research.ts`); no `OPENAI_API_KEY` set on the deployment
 - **Started:** 2026-08-28T08:01:06Z
-- **Last updated:** 2026-09-11T00:00:00Z
+- **Last updated:** 2026-09-12T00:00:00Z
 
 ## Log
+
+### 2026-09-12 - working tree
+Shipped the live URL: registered `@convex-dev/static-hosting`, migrated Gmail OAuth to Convex (`gmailOAuth.getAuthUrl` action + `GET /gmail/oauth/callback` in `convex/http.ts`, state table `gmailOAuthStates`), switched to Next.js static export, moved subscription detail to `/dashboard/subscriptions?sub=` (dynamic `[id]` route removed), and pointed all email CTAs at the static-friendly link. Signed-in visitors to `/` now bounce to `/dashboard`.
+### 2026-09-12 - working tree
+Wired the narrative email templates to real sends (`convex/lib/emailTemplates.ts` mirrors `src/emails/` voice/subjects, HTML + text via `enqueueSend`), made missing mail keys fail loudly in prod instead of marking sent, fixed `subscriptions.upsert` and `seed` to schedule nudges + research like the internal path, removed manual receipt pasting (`ScanEmailDialog`, dead `Header`, `convex/ai.ts`), made the 404 auth-aware, and added vitest (`tests/`: dedup, difficulty, email templates, subjects — 10 passing) with `pnpm check`.
 
 ### 2026-09-11 - working tree
 Fixed silent total outbound failure: the AgentMail component's functions are isolated from app env, so every send died in the workpool with "AGENTMAIL_API_KEY is not set" while notifications were marked sent. Declared the vars via a pnpm patch (`patches/@agentmail+convex@0.1.0.patch`) and forwarded the key by reference in `convex/convex.config.ts`. Removed the `/dashboard/emails` demo page and preview fixtures after sending all 8 templates to the owner's inbox as a real-client check (logo via absolute Convex storage URL).

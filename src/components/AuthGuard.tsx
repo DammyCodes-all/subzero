@@ -10,7 +10,12 @@ export function AuthGuard({ children }: { children: ReactNode }) {
   const { isAuthenticated, isLoading } = useConvexAuth();
   const router = useRouter();
   useEffect(() => {
-    if (!isLoading && !isAuthenticated) router.replace("/auth");
+    if (isLoading || isAuthenticated) return;
+    // Preserve the query string so failure context (e.g. ?gmail_error=)
+    // survives the bounce instead of landing on a blank auth page.
+    const suffix =
+      typeof window !== "undefined" ? window.location.search : "";
+    router.replace(`/auth${suffix}`);
   }, [isAuthenticated, isLoading, router]);
 
   if (isLoading) return <FullLayoutLoadingSkeleton />;
