@@ -5,7 +5,7 @@ import {
   internalMutation,
   internalQuery,
 } from "./_generated/server";
-import { cancelledTemplate } from "./lib/emailTemplates";
+import { cancelledTemplate, renewalNudgeTemplate } from "./lib/emailTemplates";
 
 const DAY = 24 * 60 * 60 * 1000;
 
@@ -280,7 +280,7 @@ export const deliverNudge = internalAction({
     }
     const recipient = userEmail;
 
-    const { subject, text } = isConfirmation
+    const { subject, text, html } = isConfirmation
       ? cancelledTemplate(
           {
             merchant: sub.merchant,
@@ -292,70 +292,67 @@ export const deliverNudge = internalAction({
           },
           args.origin ?? "auto",
         )
-      : (() => {
-          const label =
-            notif.type === "7d"
-              ? "renews in 7 days"
-              : notif.type === "3d"
-                ? "renews in 3 days"
-                : "renews tomorrow!";
-          return {
-            subject: `⚡ Renewal Alert: ${sub.merchant} ${label}`,
-            text: `Hi there,
-
-Your ${sub.merchant} subscription (${sub.currency} ${sub.price}/${sub.billingInterval}) is scheduled to renew soon.
-
-Merchant: ${sub.merchant}
-Price: $${sub.price}
-Status: ${label}
-
-${sub.cancellationUrl ? `Direct cancellation link: ${sub.cancellationUrl}` : "Open SubZero to view cancellation steps."}
-
-Don't want to keep this? Open SubZero to cancel before you are charged:
-http://localhost:3000/subscriptions/${sub._id}
-
-Thanks,
-SubZero Protection Engine`,
-          };
-        })();
+      : renewalNudgeTemplate(
+          {
+            merchant: sub.merchant,
+            product: sub.product,
+            price: sub.price,
+            currency: sub.currency,
+            billingInterval: sub.billingInterval,
+            nextRenewalAt: sub.nextRenewalAt,
+            cancellationUrl: sub.cancellationUrl,
+            subscriptionId: sub._id,
+          },
+          notif.type as "7d" | "3d" | "24h",
+        );
     const body = text;
 
-    if (apiKey) {
-      // Durable send via the official AgentMail component. Enqueue-time
-      // failures mark the row failed; delivery itself retries in the
-      // component workpool and is observable via its outbound status.
-      try {
-        const inboxId =
-          (process.env.AGENTMAIL_INBOX as string | undefined) ??
-          "subzero-agent@agentmail.to";
-        await ctx.runMutation(internal.lib.agentmail.enqueueSend, {
-          inboxId,
-          to: recipient,
-          subject,
-          text: body,
-          labels: isConfirmation
-            ? ["cancellation-confirmed"]
-            : ["renewal-nudge"],
-        });
-        await ctx.runMutation(internal.notifications.markNotificationSent, {
-          notificationId: args.notificationId,
-          status: "sent",
-        });
-      } catch (err: unknown) {
-        const msg = err instanceof Error ? err.message : String(err);
+    const isProd = process.env.NODE_ENV === "production";
+    if (!apiKey) {
+      if (isProd) {
         await ctx.runMutation(internal.notifications.markNotificationSent, {
           notificationId: args.notificationId,
           status: "failed",
-          error: msg,
+          error: "AGENTMAIL_API_KEY is not set",
         });
+        return;
       }
-    } else {
       console.log(
         `[Mock AgentMail Outbound Nudge] Sent to ${recipient}:\nSubject: ${subject}\n\n${body}`,
       );
       await ctx.runMutation(internal.notifications.markNotificationSent, {
         notificationId: args.notificationId,
         status: "sent",
+      });
+      return;
+    }
+    // Durable send via the official AgentMail component. Enqueue-time
+    // failures mark the row failed; delivery itself retries in the
+    // component workpool and is observable via its outbound status.
+    try {
+      const inboxId =
+        (process.env.AGENTMAIL_INBOX as string | undefined) ??
+        "subzero-agent@agentmail.to";
+      await ctx.runMutation(internal.lib.agentmail.enqueueSend, {
+        inboxId,
+        to: recipient,
+        subject,
+        text: body,
+        html,
+        labels: isConfirmation
+          ? ["cancellation-confirmed"]
+          : ["renewal-nudge"],
+      });
+      await ctx.runMutation(internal.notifications.markNotificationSent, {
+        notificationId: args.notificationId,
+        status: "sent",
+      });
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      await ctx.runMutation(internal.notifications.markNotificationSent, {
+        notificationId: args.notificationId,
+        status: "failed",
+        error: msg,
       });
     }
   },
