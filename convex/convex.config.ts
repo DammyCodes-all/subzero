@@ -15,6 +15,7 @@ const app = defineApp({
     GOOGLE_CLIENT_ID: v.optional(v.string()),
     GOOGLE_CLIENT_SECRET: v.optional(v.string()),
     FIXTURE_GMAIL: v.optional(v.string()),
+    SITE_URL: v.optional(v.string()),
   },
 });
 
