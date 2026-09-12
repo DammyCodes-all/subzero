@@ -1,5 +1,6 @@
 import agentmail from "@agentmail/convex/convex.config";
 import firecrawl from "@firecrawl/firecrawl-convex/convex.config";
+import staticHosting from "@convex-dev/static-hosting/convex.config";
 import { defineApp } from "convex/server";
 import { v } from "convex/values";
 
@@ -16,6 +17,7 @@ const app = defineApp({
     GOOGLE_CLIENT_SECRET: v.optional(v.string()),
     FIXTURE_GMAIL: v.optional(v.string()),
     SITE_URL: v.optional(v.string()),
+    CONVEX_SITE_URL: v.optional(v.string()),
   },
 });
 
@@ -40,5 +42,6 @@ app.use(firecrawl, {
     FIRECRAWL_API_KEY: app.env.FIRECRAWL_API_KEY,
   },
 });
+app.use(staticHosting);
 
 export default app;
