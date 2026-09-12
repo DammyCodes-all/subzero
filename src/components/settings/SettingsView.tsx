@@ -84,30 +84,12 @@ export function SettingsView() {
   const deleteMyData = useMutation(api.userData.deleteMyData);
   const settings = useQuery(api.userSettings.getMine);
   const setNotifyOnCancel = useMutation(api.userSettings.setNotifyOnCancel);
-  const [cancelPrefSaving, setCancelPrefSaving] = useState(false);
-  const [cancelJustSaved, setCancelJustSaved] = useState(false);
-  const cancelPref = settings?.notifyOnCancel ?? true;
-
-  const handleCancelPref = async (enabled: boolean) => {
-    setCancelPrefSaving(true);
-    try {
-      await setNotifyOnCancel({ enabled });
-      setCancelJustSaved(true);
-      setTimeout(() => setCancelJustSaved(false), 2500);
-    } catch {
-      sileo.error({
-        title: "Could not save",
-        description: "Try again in a bit.",
-      });
-    } finally {
-      setCancelPrefSaving(false);
-    }
-  };
 
   const [prefs, setPrefs] = useState<NotificationPrefs>({
     enabled7d: true,
     enabled3d: true,
     enabled24h: true,
+    enabledOnCancel: true,
   });
   const [prefsBaseline, setPrefsBaseline] = useState<NotificationPrefs | null>(
     null,
@@ -123,6 +105,7 @@ export function SettingsView() {
         enabled7d: settings.notify7d,
         enabled3d: settings.notify3d,
         enabled24h: settings.notify24h,
+        enabledOnCancel: settings.notifyOnCancel,
       };
       setPrefs(server);
       setPrefsBaseline(server);
@@ -133,7 +116,8 @@ export function SettingsView() {
     prefsBaseline !== null &&
     (prefs.enabled7d !== prefsBaseline.enabled7d ||
       prefs.enabled3d !== prefsBaseline.enabled3d ||
-      prefs.enabled24h !== prefsBaseline.enabled24h);
+      prefs.enabled24h !== prefsBaseline.enabled24h ||
+      prefs.enabledOnCancel !== prefsBaseline.enabledOnCancel);
   const [savedPrefs, setSavedPrefs] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -160,6 +144,9 @@ export function SettingsView() {
         notify3d: prefs.enabled3d,
         notify24h: prefs.enabled24h,
       });
+      if (prefs.enabledOnCancel !== prefsBaseline?.enabledOnCancel) {
+        await setNotifyOnCancel({ enabled: prefs.enabledOnCancel });
+      }
       setPrefsBaseline(prefs);
       setSavedPrefs(true);
       setTimeout(() => setSavedPrefs(false), 2500);
@@ -284,31 +271,17 @@ export function SettingsView() {
             <div>
               <p className="flex items-center gap-2 text-sm font-medium text-foreground">
                 Cancellation confirmation
-                {cancelJustSaved && (
-                  <span className="inline-flex items-center gap-1 text-[11px] font-medium text-primary">
-                    <HugeiconsIcon
-                      icon={
-                        CheckmarkCircle01Icon as unknown as Parameters<
-                          typeof HugeiconsIcon
-                        >[0]["icon"]
-                      }
-                      size={12}
-                      color="currentColor"
-                    />
-                    Saved
-                  </span>
-                )}
               </p>
               <p className="mt-0.5 text-xs text-muted-foreground">
                 One email when SubZero marks a subscription cancelled, so a
-                wrong call never slips by. Saves instantly.
+                wrong call never slips by.
               </p>
             </div>
             <Switch
               size="sm"
-              checked={cancelPref}
-              disabled={settings === undefined || cancelPrefSaving}
-              onCheckedChange={handleCancelPref}
+              checked={prefs.enabledOnCancel}
+              disabled={settings === undefined || prefsSaving}
+              onCheckedChange={() => handleToggle("enabledOnCancel")}
               aria-label="Email me when a subscription is marked cancelled"
             />
           </div>

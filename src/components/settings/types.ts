@@ -4,6 +4,7 @@ export interface NotificationPrefs {
   enabled7d: boolean;
   enabled3d: boolean;
   enabled24h: boolean;
+  enabledOnCancel: boolean;
 }
 
 export interface NotificationRow {
