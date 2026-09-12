@@ -685,6 +685,80 @@ http.route({
   }),
 });
 
+// Directory index for the static export. Next.js emits `dashboard/index.html`
+// but pretty URLs (`/dashboard`) match no exact asset, so without this the
+// catch-all below serves the landing page and every full load (refresh,
+// OAuth return, email deep link) flashes it first. These exact routes win
+// over the prefix catch-all and serve the right file for each app page.
+const APP_PAGE_ASSETS: Record<string, string> = {
+  "/auth": "/auth/index.html",
+  "/dashboard": "/dashboard/index.html",
+  "/dashboard/subscriptions": "/dashboard/subscriptions/index.html",
+  "/dashboard/connections": "/dashboard/connections/index.html",
+  "/dashboard/settings": "/dashboard/settings/index.html",
+  "/privacy": "/privacy/index.html",
+  "/terms": "/terms/index.html",
+};
+
+async function serveAppAsset(ctx: any, assetPath: string) {
+  const headers = {
+    "Content-Type": "text/html; charset=utf-8",
+    "Cache-Control": "no-store",
+  };
+  const asset = await ctx.runQuery(
+    components.staticHosting.lib.resolveAssetForHttp,
+    { path: assetPath, spaFallback: false },
+  );
+  if (!asset) {
+    return new Response("Not Found", {
+      status: 404,
+      headers: { "Content-Type": "text/plain" },
+    });
+  }
+  if (asset.appStorageId) {
+    const blob = await ctx.storage.get(asset.appStorageId);
+    if (!blob) {
+      return new Response("Not Found", {
+        status: 404,
+        headers: { "Content-Type": "text/plain" },
+      });
+    }
+    return new Response(blob, {
+      status: 200,
+      headers: { ...headers, ...(asset.etag ? { ETag: asset.etag } : {}) },
+    });
+  }
+  if (asset.storageUrl) {
+    const res = await fetch(asset.storageUrl);
+    if (!res.ok) {
+      return new Response("Not Found", {
+        status: 404,
+        headers: { "Content-Type": "text/plain" },
+      });
+    }
+    return new Response(await res.blob(), {
+      status: 200,
+      headers: { ...headers, ...(asset.etag ? { ETag: asset.etag } : {}) },
+    });
+  }
+  return new Response("Not Found", {
+    status: 404,
+    headers: { "Content-Type": "text/plain" },
+  });
+}
+
+for (const [routePath, assetPath] of Object.entries(APP_PAGE_ASSETS)) {
+  for (const variant of [routePath, `${routePath}/`]) {
+    http.route({
+      path: variant,
+      method: "GET",
+      handler: httpAction(async (ctx) =>
+        serveAppAsset(ctx, assetPath),
+      ),
+    });
+  }
+}
+
 registerStaticRoutes(http, components.staticHosting);
 
 export default http;
