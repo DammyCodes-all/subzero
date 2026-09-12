@@ -8,7 +8,9 @@
     "start": "next start",
     "lint": "biome check .",
     "format": "biome format .",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "check": "tsc --noEmit && biome check . && vitest run"
   },
   "dependencies": {
     "@agentmail/convex": "^0.1.0",
@@ -47,6 +49,7 @@
     "@types/react-dom": "^19",
     "shadcn": "^4.13.1",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vitest": "^5.0.0"
   }
 }
