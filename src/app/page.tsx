@@ -8,10 +8,12 @@ import { IntakeSection } from "@/components/marketing/landing/IntakeSection";
 import { ProblemSection } from "@/components/marketing/landing/ProblemSection";
 import { RenewalSection } from "@/components/marketing/landing/RenewalSection";
 import { MarketingLayout } from "@/components/marketing/MarketingLayout";
+import { MarketingHomeRedirect } from "@/components/marketing/MarketingHomeRedirect";
 
 export default function Home() {
   return (
     <MarketingLayout>
+      <MarketingHomeRedirect />
       <HeroSection />
       <ProblemSection />
       <AttentionSection />
