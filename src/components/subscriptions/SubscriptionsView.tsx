@@ -145,9 +145,19 @@ function SubscriptionsContent() {
     return true;
   });
 
+  // Soonest bill first: active trial end wins, else next renewal.
+  // Anything without a date (cancelled, unknown) sinks to the bottom.
+  const billingKey = (sub: (typeof filteredSubs)[number]) => {
+    if (sub.trialEndsAt && sub.trialEndsAt > now) return sub.trialEndsAt;
+    return sub.nextRenewalAt ?? Number.POSITIVE_INFINITY;
+  };
+  const sortedSubs = [...filteredSubs].sort(
+    (a, b) => billingKey(a) - billingKey(b),
+  );
+
   // Calculate pagination slice
-  const totalPages = Math.ceil(filteredSubs.length / itemsPerPage);
-  const paginatedSubs = filteredSubs.slice(
+  const totalPages = Math.ceil(sortedSubs.length / itemsPerPage);
+  const paginatedSubs = sortedSubs.slice(
     (currentPage - 1) * itemsPerPage,
     currentPage * itemsPerPage,
   );
