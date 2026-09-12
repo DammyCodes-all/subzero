@@ -1,6 +1,7 @@
 import { httpRouter } from "convex/server";
+import { registerStaticRoutes } from "@convex-dev/static-hosting";
 import { Webhook } from "svix";
-import { internal } from "./_generated/api";
+import { components, internal } from "./_generated/api";
 import { env, httpAction } from "./_generated/server";
 import { auth } from "./auth";
 import type { Id } from "./_generated/dataModel";
@@ -419,6 +420,150 @@ http.route({
   }),
 });
 
+// Gmail OAuth callback for the static-hosted app. The start step is the
+// authenticated `gmailOAuth.getAuthUrl` action (state binds the user, so the
+// callback needs no JWT). Google redirects here, we exchange, store, and
+// bounce back to the frontend dashboard on SITE_URL.
+http.route({
+  path: "/gmail/oauth/callback",
+  method: "GET",
+  handler: httpAction(async (ctx, req) => {
+    const url = new URL(req.url);
+    const siteUrl = (
+      env.SITE_URL ??
+      process.env.SITE_URL ??
+      env.CONVEX_SITE_URL ??
+      process.env.CONVEX_SITE_URL ??
+      url.origin
+    ).replace(/\/$/, "");
+    const convexSite =
+      (env.CONVEX_SITE_URL ?? process.env.CONVEX_SITE_URL ?? url.origin).replace(
+        /\/$/,
+        "",
+      );
+    const redirect = (params: string) =>
+      new Response(null, {
+        status: 302,
+        headers: { Location: `${siteUrl}/dashboard${params}` },
+      });
+    const fail = (msg: string) =>
+      redirect(`?gmail_error=${encodeURIComponent(msg)}`);
+
+    const error = url.searchParams.get("error");
+    if (error === "access_denied") {
+      return redirect("?gmail_cancelled=1");
+    }
+    if (error) {
+      return fail("Google couldn't finish the connection. Try again in a bit.");
+    }
+    const code = url.searchParams.get("code");
+    const state = url.searchParams.get("state");
+    if (!code) return fail("Google didn't send us back properly. Try connecting again.");
+    if (!state) return fail("That attempt expired before finishing. Try connecting again.");
+
+    const consumed: { userId: string } | null = await ctx.runMutation(
+      internal.gmailOAuth.consumeState,
+      { state },
+    );
+    if (!consumed) {
+      return fail("That attempt expired before finishing. Try connecting again.");
+    }
+
+    const clientId = env.GOOGLE_CLIENT_ID ?? process.env.GOOGLE_CLIENT_ID ?? process.env.AUTH_GOOGLE_ID;
+    const clientSecret =
+      env.GOOGLE_CLIENT_SECRET ?? process.env.GOOGLE_CLIENT_SECRET ?? process.env.AUTH_GOOGLE_SECRET;
+    if (!clientId || !clientSecret) {
+      console.error("gmail oauth misconfigured: missing google credentials");
+      return fail("Something is off on our side. Try again in a bit.");
+    }
+    const redirectUri = `${convexSite}/gmail/oauth/callback`;
+
+    let tokenRes: Response | null = null;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 10000);
+      try {
+        tokenRes = await fetch("https://oauth2.googleapis.com/token", {
+          method: "POST",
+          headers: { "Content-Type": "application/x-www-form-urlencoded" },
+          body: new URLSearchParams({
+            code,
+            client_id: clientId,
+            client_secret: clientSecret,
+            redirect_uri: redirectUri,
+            grant_type: "authorization_code",
+          }).toString(),
+          signal: controller.signal,
+        });
+        clearTimeout(timeout);
+        break;
+      } catch {
+        clearTimeout(timeout);
+        if (attempt < 2) await new Promise((r) => setTimeout(r, 800 * (attempt + 1)));
+        else return fail("Google took too long to answer. Check your connection and try again.");
+      }
+    }
+    if (!tokenRes || !tokenRes.ok) {
+      try {
+        const t = await tokenRes?.text();
+        console.error(
+          "gmail token exchange failed",
+          tokenRes?.status,
+          (t ?? "").slice(0, 300),
+        );
+      } catch {}
+      return fail("Google couldn't finish the connection. Try again in a bit.");
+    }
+    const tokens = (await tokenRes.json()) as {
+      access_token: string;
+      refresh_token?: string;
+      scope?: string;
+    };
+    let email = "";
+    let picture = "";
+    if (tokens.access_token) {
+      try {
+        const controller = new AbortController();
+        const t = setTimeout(() => controller.abort(), 8000);
+        const uiRes = await fetch("https://www.googleapis.com/oauth2/v2/userinfo", {
+          headers: { Authorization: `Bearer ${tokens.access_token}` },
+          signal: controller.signal,
+        });
+        clearTimeout(t);
+        if (uiRes.ok) {
+          const ui = (await uiRes.json()) as { email?: string; picture?: string };
+          email = ui.email || "";
+          picture = ui.picture || "";
+        }
+      } catch {}
+    }
+    if (!tokens.refresh_token) {
+      return fail(
+        "Google didn't include ongoing access. Remove SubZero in your Google Account, then connect again and accept the consent screen.",
+      );
+    }
+    if (!email) return fail("We couldn't read your Gmail address. Try again.");
+    try {
+      await ctx.runMutation(internal.gmail.storeGmailToken, {
+        userId: consumed.userId,
+        accountEmail: email.toLowerCase(),
+        refreshToken: tokens.refresh_token,
+        pictureUrl: picture || undefined,
+      });
+    } catch (e: unknown) {
+      const raw = e instanceof Error ? e.message : String(e);
+      if (raw.includes("already connected to another account")) {
+        return fail(
+          `That Gmail (${email}) is already connected to a different SubZero account. Sign in to that account to use it, or disconnect it there first.`,
+        );
+      }
+      console.error("gmail storeGmailToken failed", raw.slice(0, 300));
+      return fail("We couldn't save that connection. Try again in a bit.");
+    }
+    return redirect("?gmail_connected=1");
+  }),
+});
+
 // Legacy route — kept for configs that POST to /api/agentmail-webhook.
 // Now delegates to the same unified ingestion pipeline (Groq gpt-oss-120b + mock)
 // so both /agentmail/inbound and /api/agentmail-webhook share provider, dedup, and evidence logic.
@@ -539,5 +684,7 @@ http.route({
     }
   }),
 });
+
+registerStaticRoutes(http, components.staticHosting);
 
 export default http;
