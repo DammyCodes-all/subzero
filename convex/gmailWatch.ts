@@ -212,7 +212,11 @@ export const ingestIncremental = internalAction({
           console.warn("history 404 starting backfill", args.connId, String(e).slice(0, 200));
           return await finish(await fallbackListIngest(ctx, args.userId, conn, accessToken));
         }
-        throw e;
+        // Transient Gmail error (rate limit, 5xx): don't throw and skip the
+        // tick silently — record it and keep the cursor so the next cron
+        // retries from the same place.
+        console.error("history transient, keeping cursor", args.connId, String(e).slice(0, 200));
+        return await finish({ scanned: 0, created: 0, merged: 0, skipped: 0, unparsed: 0, duplicate: 0, cancelled: 0, failed: 0, reason: "transient" });
       }
     } else {
       // No historyId yet — fallbackListIngest already seeds historyId via profile

@@ -24,13 +24,17 @@ function b64UrlDecode(s: string): string {
 }
 
 export function buildGmailQuery(days = 90): string {
-  // Narrow: subscription receipts in inbox only — exclude sent forwards to avoid duplicate evidence
-  return `subject:(receipt OR invoice OR trial OR renewal OR subscription) in:inbox newer_than:${days}d -unsubscribe`;
+  // Narrow: subscription receipts in inbox only — exclude sent forwards to avoid duplicate evidence.
+  // Matches on SUBJECT only, so keep the term list broad (merchants say
+  // "membership", "billing", "payment" more often than "subscription").
+  // Never add `-unsubscribe`: real receipts carry unsubscribe footers and
+  // Gmail matches that flag against the whole message, killing recall.
+  return `subject:(receipt OR invoice OR trial OR renewal OR subscription OR membership OR billing OR payment OR charged OR billed) in:inbox newer_than:${days}d`;
 }
 
 export function buildBroadInboxQuery(days = 7): string {
   // Broad fallback after history gap: all inbox mail, let processOneEmail KEYWORDS filter in code
-  return `in:inbox newer_than:${days}d -unsubscribe`;
+  return `in:inbox newer_than:${days}d`;
 }
 
 function sleep(ms: number): Promise<void> {
@@ -200,9 +204,11 @@ export async function getHistory(
   do {
     const url = new URL("https://gmail.googleapis.com/gmail/v1/users/me/history");
     url.searchParams.set("startHistoryId", startHistoryId);
-    // messageAdded covers new mail; labelsAdded covers mail moved into INBOX later (filter/auto-archive)
+    // messageAdded covers new mail; labelAdded covers mail moved into INBOX later (filter/auto-archive).
+    // NOTE: the request enum is singular `labelAdded` — the response field is
+    // plural `labelsAdded`. Sending `labelsAdded` here 400s every poll.
     url.searchParams.append("historyTypes", "messageAdded");
-    url.searchParams.append("historyTypes", "labelsAdded");
+    url.searchParams.append("historyTypes", "labelAdded");
     url.searchParams.set("labelId", "INBOX");
     if (pageToken) url.searchParams.set("pageToken", pageToken);
     const res = await gmailFetchWithRetry(url.toString(), accessToken);
