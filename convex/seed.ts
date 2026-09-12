@@ -1,3 +1,4 @@
+import { internal } from "./_generated/api";
 import { mutation } from "./_generated/server";
 import { dedupKey } from "./lib/dedup";
 import { getDifficulty } from "./lib/difficulty";
@@ -147,7 +148,19 @@ export const seed = mutation({
         cancellationUrl: m.cancellationUrl,
         billingProvider: m.billingProvider,
         dedupKey: key,
+        researchStatus: "pending",
       });
+
+      await ctx.scheduler.runAfter(
+        0,
+        internal.notifications.scheduleNudgesForSubscription,
+        { subscriptionId: id },
+      );
+      await ctx.scheduler.runAfter(
+        0,
+        internal.research.researchCancellationRoute,
+        { subscriptionId: id },
+      );
 
       for (const ev of m.evidence ?? []) {
         await ctx.db.insert("evidence", {

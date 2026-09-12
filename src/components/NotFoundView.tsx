@@ -2,11 +2,13 @@
 
 import Link from "next/link";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { Search01Icon, ArrowLeft02Icon } from "@hugeicons/core-free-icons";
+import { Search01Icon, ArrowLeft02Icon, Home01Icon } from "@hugeicons/core-free-icons";
+import { useConvexAuth } from "convex/react";
 import { Button } from "@/components/ui/button";
 import { LinkPendingDot, PendingWrap } from "@/components/ui/LinkPending";
 
 export function NotFoundView() {
+  const { isAuthenticated } = useConvexAuth();
   return (
     <div className="flex min-h-screen w-full flex-col items-center justify-center bg-background p-6 text-center text-foreground">
       {/* Decorative zero background tag */}
@@ -33,18 +35,32 @@ export function NotFoundView() {
 
       {/* Primary navigation CTA */}
       <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
-        <Link href="/dashboard" className="inline-flex">
-          <Button size="sm" className="h-9 gap-2 rounded-lg bg-primary px-4 text-xs font-semibold text-primary-foreground hover:bg-primary/90">
+        <Link href="/" className="inline-flex">
+          <Button size="sm" variant={isAuthenticated ? "outline" : "default"} className="h-9 gap-2 rounded-lg px-4 text-xs font-semibold">
             <HugeiconsIcon
-              icon={ArrowLeft02Icon as unknown as Parameters<typeof HugeiconsIcon>[0]["icon"]}
+              icon={Home01Icon as unknown as Parameters<typeof HugeiconsIcon>[0]["icon"]}
               size={16}
               strokeWidth={1.8}
               color="currentColor"
             />
-            <PendingWrap>Back to Dashboard</PendingWrap>
+            <PendingWrap>Go home</PendingWrap>
             <LinkPendingDot />
           </Button>
         </Link>
+        {isAuthenticated && (
+          <Link href="/dashboard" className="inline-flex">
+            <Button size="sm" className="h-9 gap-2 rounded-lg bg-primary px-4 text-xs font-semibold text-primary-foreground hover:bg-primary/90">
+              <HugeiconsIcon
+                icon={ArrowLeft02Icon as unknown as Parameters<typeof HugeiconsIcon>[0]["icon"]}
+                size={16}
+                strokeWidth={1.8}
+                color="currentColor"
+              />
+              <PendingWrap>Back to Dashboard</PendingWrap>
+              <LinkPendingDot />
+            </Button>
+          </Link>
+        )}
       </div>
     </div>
   );

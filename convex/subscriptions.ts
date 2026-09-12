@@ -115,10 +115,15 @@ export const upsert = mutation({
         cancellationDifficulty: difficulty,
         billingProvider: args.billingProvider ?? existing.billingProvider,
       });
+      await ctx.scheduler.runAfter(
+        0,
+        internal.notifications.scheduleNudgesForSubscription,
+        { subscriptionId: existing._id },
+      );
       return existing._id;
     }
 
-    return await ctx.db.insert("subscriptions", {
+    const subId = await ctx.db.insert("subscriptions", {
       userId,
       merchant: args.merchant,
       product,
@@ -133,7 +138,17 @@ export const upsert = mutation({
       cancellationDifficulty: difficulty,
       billingProvider: args.billingProvider,
       dedupKey: key,
+      researchStatus: "pending",
     });
+    await ctx.scheduler.runAfter(
+      0,
+      internal.notifications.scheduleNudgesForSubscription,
+      { subscriptionId: subId },
+    );
+    await ctx.scheduler.runAfter(0, internal.research.researchCancellationRoute, {
+      subscriptionId: subId,
+    });
+    return subId;
   },
 });
 
