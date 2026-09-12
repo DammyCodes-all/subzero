@@ -27,9 +27,13 @@ describe("renewalNudgeTemplate", () => {
   it("links to the real subscription, never localhost when SITE_URL is set", () => {
     process.env.SITE_URL = "https://subzero.example.com";
     const { text, html } = renewalNudgeTemplate(sub, "7d");
-    expect(text).toContain("https://subzero.example.com/subscriptions/test123");
+    expect(text).toContain(
+      "https://subzero.example.com/dashboard/subscriptions?sub=test123",
+    );
     expect(text).not.toContain("localhost");
-    expect(html).toContain("https://subzero.example.com/subscriptions/test123");
+    expect(html).toContain(
+      "https://subzero.example.com/dashboard/subscriptions?sub=test123",
+    );
     delete process.env.SITE_URL;
   });
 });
