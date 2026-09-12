@@ -9,7 +9,8 @@ import {
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useMutation, useQuery } from "convex/react";
 import Link from "next/link";
-import { useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { Suspense, useState } from "react";
 import { sileo } from "sileo";
 import { ActionCard } from "@/components/ActionCard";
 import {
@@ -24,13 +25,26 @@ import { Button } from "@/components/ui/button";
 import { LinkPendingDot, PendingWrap } from "@/components/ui/LinkPending";
 import { formatPrice, formatRenewalDate, frictionLabel } from "@/lib/format";
 import { merchantFaviconUrl } from "@/lib/merchantFavicon";
+import { SubscriptionDetailView } from "@/components/subscriptions/SubscriptionDetailView";
 import { api } from "../../../convex/_generated/api";
 import type { Doc, Id } from "../../../convex/_generated/dataModel";
 
 type FilterTab = "all" | "active" | "trials" | "urgent" | "cancelled";
 
 export function SubscriptionsView() {
-  const all = useQuery(api.subscriptions.list);
+  return (
+    <Suspense fallback={<SubscriptionsSkeleton />}>
+      <SubscriptionsContent />
+    </Suspense>
+  );
+}
+
+function SubscriptionsContent() {
+  const searchParams = useSearchParams();
+  const focusedId = searchParams.get("sub");
+  // All hooks stay unconditional (Rules of Hooks): the list query is skipped
+  // in detail mode, and the detail branch returns only after every hook ran.
+  const all = useQuery(api.subscriptions.list, focusedId ? "skip" : {});
   const [filter, setFilter] = useState<FilterTab>("all");
   const [viewMode, setViewMode] = useState<"grid" | "table">(() => {
     if (typeof window === "undefined") return "grid";
@@ -76,6 +90,26 @@ export function SubscriptionsView() {
       setRestoringId(null);
     }
   };
+
+  // Detail branch runs after every hook (see note above). Malformed ids fall
+  // through to the not-found UI instead of crashing query validation.
+  if (focusedId) {
+    const validId =
+      /^[a-z0-9]+$/i.test(focusedId)
+        ? (focusedId as Id<"subscriptions">)
+        : undefined;
+    return (
+      <div className="space-y-4">
+        <Link
+          href="/dashboard/subscriptions"
+          className="inline-flex items-center gap-1 font-mono text-xs text-muted-foreground transition-colors hover:text-foreground"
+        >
+          ← Back to all subscriptions
+        </Link>
+        <SubscriptionDetailView subscriptionId={validId} />
+      </div>
+    );
+  }
 
   if (all === undefined) {
     return <SubscriptionsSkeleton />;
@@ -133,7 +167,7 @@ export function SubscriptionsView() {
   const gridCards = paginatedSubs.map((sub) =>
     sub.status === "cancelled" || sub.hidden === true ? (
       <div key={sub._id} className="space-y-2">
-        <Link href={`/subscriptions/${sub._id}`} className="group block">
+        <Link href={`/dashboard/subscriptions?sub=${sub._id}`} className="group block">
           <ActionCard sub={sub} />
         </Link>
         <Button
@@ -149,7 +183,7 @@ export function SubscriptionsView() {
     ) : (
       <Link
         key={sub._id}
-        href={`/subscriptions/${sub._id}`}
+        href={`/dashboard/subscriptions?sub=${sub._id}`}
         className="group block"
       >
         <ActionCard sub={sub} />
@@ -307,7 +341,7 @@ export function SubscriptionsView() {
                       >
                         <td className="px-4 py-3 font-medium text-foreground">
                           <Link
-                            href={`/subscriptions/${sub._id}`}
+                            href={`/dashboard/subscriptions?sub=${sub._id}`}
                             className="inline-flex items-center gap-2.5 hover:underline"
                           >
                             <MerchantAvatar
@@ -362,7 +396,7 @@ export function SubscriptionsView() {
                             </Button>
                           ) : (
                             <Link
-                              href={`/subscriptions/${sub._id}`}
+                              href={`/dashboard/subscriptions?sub=${sub._id}`}
                               className="inline-flex items-center"
                             >
                               <Button

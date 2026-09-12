@@ -23,6 +23,12 @@ crons.interval(
 );
 
 crons.interval(
+  "cleanup expired gmail oauth states",
+  { hours: 24 },
+  internal.gmailOAuth.cleanupExpiredStates,
+);
+
+crons.interval(
   "gmail incremental poll",
   { minutes: 15 },
   internal.gmailWatch.pollAllUsersIncremental,
