@@ -434,7 +434,17 @@ export const sendCancellationEmail = action({
     await flipToStarted(ctx, args.subscriptionId);
 
     const apiKey = process.env.AGENTMAIL_API_KEY;
-    if (apiKey && recipient) {
+    const isProd = process.env.NODE_ENV === "production";
+    if (!apiKey) {
+      if (isProd) {
+        throw new Error(
+          "AGENTMAIL_API_KEY is not set — cannot send cancellation email",
+        );
+      }
+      console.log(
+        `[Mock AgentMail] Sent to ${recipient} (${args.merchant}):\n${args.body}${sourceHint}`,
+      );
+    } else {
       // Durable send via the official AgentMail component: enqueue from
       // here, its workpool delivers with bounded retries. Enqueue-time
       // failures still throw so the action is not marked pending.
@@ -453,10 +463,6 @@ export const sendCancellationEmail = action({
         console.error("AgentMail enqueue failed:", err);
         throw new Error("Failed to send via AgentMail");
       }
-    } else if (recipient) {
-      console.log(
-        `[Mock AgentMail] Sent to ${recipient} (${args.merchant}):\n${args.body}${sourceHint}`,
-      );
     }
 
     await ctx.runMutation(internal.agentmail.markCancellationSent, {
