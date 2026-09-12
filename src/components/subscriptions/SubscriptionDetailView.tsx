@@ -25,7 +25,11 @@ import { merchantFaviconUrl } from "@/lib/merchantFavicon";
 import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
 
-export function SubscriptionDetailView() {
+export function SubscriptionDetailView({
+  subscriptionId,
+}: {
+  subscriptionId?: Id<"subscriptions">;
+}) {
   const [isModalOpen, setIsModalOpen] = useState(false);
 
   useEffect(() => {
@@ -35,16 +39,31 @@ export function SubscriptionDetailView() {
   }, []);
 
   const params = useParams<{ id: string }>();
-  const id = params.id as Id<"subscriptions">;
+  const id = (subscriptionId ?? params?.id) as Id<"subscriptions"> | undefined;
   const trackStarted = useCancelStarted();
 
-  const sub = useQuery(api.subscriptions.get, { id });
-  const evidence = useQuery(api.evidence.getBySubscription, {
-    subscriptionId: id,
-  });
-  const action = useQuery(api.cancellationActions.getBySubscription, {
-    subscriptionId: id,
-  });
+  const sub = useQuery(api.subscriptions.get, id ? { id } : "skip");
+  const evidence = useQuery(
+    api.evidence.getBySubscription,
+    id ? { subscriptionId: id } : "skip",
+  );
+  const action = useQuery(
+    api.cancellationActions.getBySubscription,
+    id ? { subscriptionId: id } : "skip",
+  );
+
+  if (!id) {
+    return (
+      <div className="mx-auto w-full max-w-[680px]">
+        <div className="mt-8 rounded-lg border border-dashed p-10 text-center">
+          <p className="text-sm font-medium">Subscription not found</p>
+          <p className="mt-1 text-sm text-muted-foreground">
+            It may have been removed or you don&apos;t have access.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   if (sub === undefined || evidence === undefined || action === undefined) {
     return (

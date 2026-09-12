@@ -293,7 +293,7 @@ export function DashboardView() {
               </div>
 
               <Link
-                href={`/subscriptions/${hero._id}`}
+                href={`/dashboard/subscriptions?sub=${hero._id}`}
                 className="group block rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
               >
                 <ActionCard sub={hero} quiet={!hasUrgent} />
@@ -310,7 +310,7 @@ export function DashboardView() {
                 {rest.map((sub: Doc<"subscriptions">) => (
                   <Link
                     key={sub._id}
-                    href={`/subscriptions/${sub._id}`}
+                    href={`/dashboard/subscriptions?sub=${sub._id}`}
                     className="relative block focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
                   >
                     <span className="relative block">
