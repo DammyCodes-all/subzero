@@ -110,7 +110,7 @@ export function renewalNudgeTemplate(
   const plan = namedPlan(input.merchant, input.product);
   const ctaUrl =
     input.dashboardUrl ??
-    `${siteUrl()}/subscriptions/${input.subscriptionId ?? ""}`;
+    `${siteUrl()}/dashboard/subscriptions?sub=${input.subscriptionId ?? ""}`;
   const manageUrl = `${siteUrl()}/dashboard/settings`;
   const subject = renewalSubject(type, {
     merchant: input.merchant,
@@ -196,7 +196,7 @@ export function trialEndingTemplate(input: TemplateInput) {
   const trialStr = formatDate(input.trialEndsAt);
   const dash =
     input.dashboardUrl ??
-    `${siteUrl()}/subscriptions/${input.subscriptionId ?? ""}`;
+    `${siteUrl()}/dashboard/subscriptions?sub=${input.subscriptionId ?? ""}`;
   const text = `Hi there,
 
 Your ${input.merchant} trial ends on ${trialStr}. After that you'll be charged ${priceStr}/${input.billingInterval}.
@@ -222,7 +222,7 @@ export function cancelledTemplate(
   const plan = namedPlan(input.merchant, input.product);
   const ctaUrl =
     input.dashboardUrl ??
-    `${siteUrl()}/subscriptions/${input.subscriptionId ?? ""}`;
+    `${siteUrl()}/dashboard/subscriptions?sub=${input.subscriptionId ?? ""}`;
   const manageUrl = `${siteUrl()}/dashboard/settings`;
   const title = `Your ${input.merchant} subscription has been cancelled`;
   const first =
@@ -245,7 +245,7 @@ export function actionReminderTemplate(input: TemplateInput) {
   const priceStr = formatPrice(input.price, input.currency);
   const dash =
     input.dashboardUrl ??
-    `${siteUrl()}/subscriptions/${input.subscriptionId ?? ""}`;
+    `${siteUrl()}/dashboard/subscriptions?sub=${input.subscriptionId ?? ""}`;
   const text = `Reminder — you started cancelling ${input.merchant} (${priceStr}) but it's still active.
 
 Renews: ${formatDate(input.nextRenewalAt)}

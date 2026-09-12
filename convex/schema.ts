@@ -233,4 +233,12 @@ export default defineSchema({
     notify3d: v.optional(v.boolean()),
     notify24h: v.optional(v.boolean()),
   }).index("by_user", ["userId"]),
+
+  gmailOAuthStates: defineTable({
+    state: v.string(),
+    userId: v.string(),
+    createdAt: v.number(),
+  })
+    .index("by_state", ["state"])
+    .index("by_user", ["userId"]),
 });
