@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "if [ -n \"$VITE_CONVEX_URL\" ]; then export NEXT_PUBLIC_CONVEX_URL=\"$VITE_CONVEX_URL\"; fi; if [ -n \"$VITE_CONVEX_SITE_URL\" ]; then export NEXT_PUBLIC_CONVEX_SITE_URL=\"$VITE_CONVEX_SITE_URL\"; fi; next build",
     "start": "next start",
     "lint": "biome check .",
     "format": "biome format .",
