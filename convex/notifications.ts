@@ -166,8 +166,8 @@ export const getNotificationDetails = internalQuery({
 /**
  * Tell the user a subscription was marked cancelled (auto-detected or manual).
  * Inserts a "confirmed" notification and delivers it immediately. Skips hidden
- * subs and skips re-notifying within 30 days so duplicate confirmation emails
- * or repeated taps stay quiet.
+ * subs. Auto-detected cancels dedup for 30 days so repeated Gmail forward
+ * loops stay quiet; manual taps always mail (user explicitly asked).
  */
 export const notifyCancelled = internalMutation({
   args: {
@@ -186,13 +186,16 @@ export const notifyCancelled = internalMutation({
         .first();
       if (setting && setting.notifyOnCancel === false) return;
     }
-    const recent = await ctx.db
-      .query("notifications")
-      .withIndex("by_subscription_and_type", (q) =>
-        q.eq("subscriptionId", args.subscriptionId).eq("type", "confirmed"),
-      )
-      .collect();
-    if (recent.some((n) => n.scheduledAt > Date.now() - 30 * DAY)) return;
+    // Auto dedups for 30d; manual always sends (user explicitly tapped).
+    if (args.origin === "auto") {
+      const recent = await ctx.db
+        .query("notifications")
+        .withIndex("by_subscription_and_type", (q) =>
+          q.eq("subscriptionId", args.subscriptionId).eq("type", "confirmed"),
+        )
+        .collect();
+      if (recent.some((n) => n.scheduledAt > Date.now() - 30 * DAY)) return;
+    }
     const notificationId = await ctx.db.insert("notifications", {
       userId: sub.userId,
       subscriptionId: args.subscriptionId,

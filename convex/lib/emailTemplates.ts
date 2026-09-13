@@ -37,12 +37,13 @@ function siteUrl(): string {
 
 function intervalNoun(billingInterval: string): string {
   const v = (billingInterval || "").trim().toLowerCase();
+  if (!v || v === "unknown" || v === "period") return "period";
   if (v.startsWith("month")) return "month";
   if (v.startsWith("year") || v.startsWith("annual")) return "year";
   if (v.startsWith("week")) return "week";
   if (v.startsWith("quarter")) return "quarter";
   if (v.startsWith("day") || v.startsWith("daily")) return "day";
-  return billingInterval.trim() || "period";
+  return "period";
 }
 
 function namedPlan(merchant: string, product?: string): string {
@@ -60,15 +61,28 @@ function esc(s: string): string {
 }
 
 function shell(title: string, bodyHtml: string, manageUrl: string): string {
-  return `<div style="font-family:Inter,Arial,sans-serif;max-width:560px;margin:0 auto;padding:24px 12px"><h1 style="font-size:22px;line-height:30px;margin:0 0 12px">${esc(title)}</h1>${bodyHtml}<p style="color:#888;font-size:12px;border-top:1px solid #eee;padding-top:16px;margin-top:24px">You get this because you track this subscription in SubZero. <a href="${esc(manageUrl)}">Manage notifications</a></p></div>`;
+  const logoUrl = `${siteUrl()}/email-logo.png`;
+  return `<div style="background-color:#0b1310;margin:0;padding:0;width:100%"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#0b1310;font-family:Inter,Arial,Helvetica,sans-serif;width:100%"><tr><td align="center" style="padding:24px 12px"><table role="presentation" width="560" align="center" cellpadding="0" cellspacing="0" style="margin:0 auto;max-width:560px;width:100%"><tr><td style="padding:20px;text-align:left"><div style="margin-bottom:20px"><img src="${esc(logoUrl)}" alt="SubZero" width="120" height="30" style="display:block" /></div><h1 style="color:#f9f7f2;font-family:'Space Grotesk',Inter,Arial,Helvetica,sans-serif;font-size:22px;font-weight:bold;line-height:30px;margin:0 0 12px">${esc(title)}</h1>${bodyHtml}<p style="border-top:1px solid rgba(249,247,242,0.12);color:rgba(249,247,242,0.4);font-family:Inter,Arial,Helvetica,sans-serif;font-size:12px;line-height:18px;margin:24px 0 0;padding-top:16px">You get this because you track this subscription in SubZero. <a href="${esc(manageUrl)}" style="color:rgba(249,247,242,0.6);text-decoration:underline">Manage notifications</a></p></td></tr></table></td></tr></table></div>`;
 }
 
 function pHtml(text: string): string {
-  return `<p style="color:#444;font-size:15px;line-height:24px;margin:0 0 12px">${text}</p>`;
+  return `<p style="color:rgba(249,247,242,0.6);font-family:Inter,Arial,Helvetica,sans-serif;font-size:15px;line-height:24px;margin:0 0 12px">${text}</p>`;
+}
+
+function strongHtml(s: string): string {
+  return `<strong style="color:#f9f7f2;font-weight:bold">${esc(s)}</strong>`;
+}
+
+function linkPrimary(href: string, label: string): string {
+  return `<a href="${esc(href)}" style="color:#e6ff2b;font-weight:bold;text-decoration:underline">${esc(label)}</a>`;
+}
+
+function linkMuted(href: string, label: string): string {
+  return `<a href="${esc(href)}" style="color:rgba(249,247,242,0.6);font-weight:bold;text-decoration:underline">${esc(label)}</a>`;
 }
 
 function buttonHtml(href: string, label: string): string {
-  return `<a href="${esc(href)}" style="display:block;background:#0A1420;color:#fff;text-align:center;font-weight:bold;font-size:15px;padding:13px 20px;border-radius:8px;text-decoration:none;margin:16px 0 4px">${esc(label)}</a>`;
+  return `<a href="${esc(href)}" style="display:block;background-color:#e6ff2b;border-radius:8px;box-sizing:border-box;color:#0b1310;font-family:Inter,Arial,Helvetica,sans-serif;font-size:15px;font-weight:bold;margin:16px 0 4px;padding:13px 20px;text-align:center;text-decoration:none;width:100%">${esc(label)}</a>`;
 }
 
 export type TemplateInput = {
@@ -133,15 +147,15 @@ export function renewalNudgeTemplate(
       `\n\nSubZero`;
     bodyHtml =
       pHtml(
-        `Your ${esc(plan)} renews ${esc(renewalStr)}. It will be <strong>${esc(priceStr)}</strong> for another ${esc(noun)}.`,
+        `Your ${esc(plan)} renews ${esc(renewalStr)}. It will be ${strongHtml(priceStr)} for another ${esc(noun)}.`,
       ) +
       pHtml(
         `Still using it? Ignore this. We're flagging it now because there's still plenty of time to cancel before the charge.`,
       ) +
       pHtml(
         input.cancellationUrl
-          ? `<a href="${esc(input.cancellationUrl)}">Cancel ${esc(input.merchant)}</a> directly. Or <a href="${esc(ctaUrl)}">review it in SubZero</a>.`
-          : `<a href="${esc(ctaUrl)}">Review it in SubZero</a> to see the cancellation steps before ${esc(renewalStr)}.`,
+          ? `${linkPrimary(input.cancellationUrl, `Cancel ${input.merchant}`)} directly. Or ${linkMuted(ctaUrl, "review it in SubZero")}.`
+          : `${linkPrimary(ctaUrl, "Review it in SubZero")} to see the cancellation steps before ${esc(renewalStr)}.`,
       );
   } else if (type === "3d") {
     title = `${input.merchant} charges you ${priceStr} in 3 days`;
@@ -160,7 +174,7 @@ export function renewalNudgeTemplate(
       pHtml(`Haven't opened it lately? Cancel now. Refunds after the charge are a pain.`) +
       buttonHtml(target, `Cancel ${input.merchant}`) +
       (input.cancellationUrl
-        ? pHtml(`Or <a href="${esc(ctaUrl)}">review it in SubZero</a> first.`)
+        ? pHtml(`Or ${linkMuted(ctaUrl, "review it in SubZero")} first.`)
         : "");
   } else {
     title = `You will be charged ${priceStr} tomorrow`;
@@ -174,7 +188,7 @@ export function renewalNudgeTemplate(
       `\n\nSubZero`;
     bodyHtml =
       pHtml(
-        `Your ${esc(plan)} renews tomorrow. That means ${esc(input.merchant)} will bill you <strong>${esc(priceStr)}</strong> for another ${esc(noun)}.`,
+        `Your ${esc(plan)} renews tomorrow. That means ${esc(input.merchant)} will bill you ${strongHtml(priceStr)} for another ${esc(noun)}.`,
       ) +
       pHtml(
         `If you still use it, do nothing and it will just continue. If you no longer need it, cancel today so this charge never happens. Once it goes through, refunds are hard to get.`,
@@ -182,7 +196,7 @@ export function renewalNudgeTemplate(
       buttonHtml(target, `Cancel ${input.merchant}`) +
       (input.cancellationUrl
         ? pHtml(
-            `It takes about a minute. Or <a href="${esc(ctaUrl)}">review it in SubZero</a> first.`,
+            `It takes about a minute. Or ${linkMuted(ctaUrl, "review it in SubZero")} first.`,
           )
         : "");
   }
@@ -193,23 +207,32 @@ export function renewalNudgeTemplate(
 export function trialEndingTemplate(input: TemplateInput) {
   const subject = `Trial ending: ${input.merchant} — ${formatDate(input.trialEndsAt)}`;
   const priceStr = formatPrice(input.price, input.currency);
+  const noun = intervalNoun(input.billingInterval);
   const trialStr = formatDate(input.trialEndsAt);
-  const dash =
+  const plan = namedPlan(input.merchant, input.product);
+  const ctaUrl =
     input.dashboardUrl ??
     `${siteUrl()}/dashboard/subscriptions?sub=${input.subscriptionId ?? ""}`;
-  const text = `Hi there,
-
-Your ${input.merchant} trial ends on ${trialStr}. After that you'll be charged ${priceStr}/${input.billingInterval}.
-
-Trial ends: ${trialStr}
-Then: ${priceStr}/${input.billingInterval}
-
-Want to keep it? No action needed.
-Want to cancel before charge?
-${dash}
-
-— SubZero`;
-  return { subject, text };
+  const manageUrl = `${siteUrl()}/dashboard/settings`;
+  const target = input.cancellationUrl ?? ctaUrl;
+  const title = `Your ${input.merchant} free trial ends soon`;
+  const text =
+    `${title}\n\n` +
+    `You started ${plan} as a free trial. On ${trialStr} the trial ends and it automatically turns into a paid plan at ${priceStr} every ${noun}. That will be your first real charge.\n\n` +
+    `If you want to keep it, do nothing and it will convert on its own. If you only signed up to try it, cancel before ${trialStr} so you are never charged. It takes about a minute.\n\n` +
+    `Cancel here: ${target}` +
+    (input.cancellationUrl ? `\nOr review it in SubZero: ${ctaUrl}` : "") +
+    `\n\nSubZero`;
+  const bodyHtml =
+    pHtml(
+      `You started ${esc(plan)} as a free trial. On ${esc(trialStr)} the trial ends and it automatically turns into a paid plan at ${strongHtml(priceStr)} every ${esc(noun)}. That will be your first real charge.`,
+    ) +
+    pHtml(
+      `If you want to keep it, do nothing and it will convert on its own. If you only signed up to try it, cancel before ${esc(trialStr)} so you are never charged. It takes about a minute.`,
+    ) +
+    buttonHtml(target, `Cancel the ${input.merchant} trial`) +
+    (input.cancellationUrl ? pHtml(`Or ${linkMuted(ctaUrl, "review it in SubZero")}.`) : "");
+  return { subject, text, html: shell(title, bodyHtml, manageUrl) };
 }
 
 export function cancelledTemplate(
@@ -235,22 +258,31 @@ export function cancelledTemplate(
     `${first} If that doesn't look right, restore it in SubZero: ${ctaUrl}\n\nSubZero`;
   const bodyHtml =
     pHtml(
-      `${esc(plan)} is cancelled. You keep <strong>${esc(priceStr)}</strong> every ${esc(noun)} from here on. It will not charge you again.`,
-    ) + pHtml(`${esc(first)} If that doesn't look right, <a href="${esc(ctaUrl)}">restore it in SubZero</a>.`);
+      `${esc(plan)} is cancelled. You keep ${strongHtml(priceStr)} every ${esc(noun)} from here on. It will not charge you again.`,
+    ) + pHtml(`${esc(first)} If that doesn't look right, ${linkMuted(ctaUrl, "restore it in SubZero")}.`) + `<p style="color:rgba(249,247,242,0.4);font-family:Inter,Arial,Helvetica,sans-serif;font-size:14px;line-height:21px;margin:16px 0 0">SubZero</p>`;
   return { subject, text, html: shell(title, bodyHtml, manageUrl) };
 }
 
 export function actionReminderTemplate(input: TemplateInput) {
   const subject = `Still need to cancel ${input.merchant}?`;
   const priceStr = formatPrice(input.price, input.currency);
-  const dash =
+  const plan = namedPlan(input.merchant, input.product);
+  const renewalStr = formatDate(input.nextRenewalAt);
+  const ctaUrl =
     input.dashboardUrl ??
     `${siteUrl()}/dashboard/subscriptions?sub=${input.subscriptionId ?? ""}`;
-  const text = `Reminder — you started cancelling ${input.merchant} (${priceStr}) but it's still active.
-
-Renews: ${formatDate(input.nextRenewalAt)}
-Finish here: ${dash}
-
-— SubZero`;
-  return { subject, text };
+  const manageUrl = `${siteUrl()}/dashboard/settings`;
+  const title = `You didn't finish cancelling ${input.merchant}`;
+  const text =
+    `${title}\n\n` +
+    `You started cancelling ${plan} but it is still on. Left alone it renews ${renewalStr} for ${priceStr}.\n\n` +
+    `Finish it now while you are thinking about it.\n\n` +
+    `Finish here: ${ctaUrl}\n\nSubZero`;
+  const bodyHtml =
+    pHtml(
+      `You started cancelling ${esc(plan)} but it is still on. Left alone it renews ${strongHtml(renewalStr)} for ${strongHtml(priceStr)}.`,
+    ) +
+    pHtml(`Finish it now while you are thinking about it.`) +
+    buttonHtml(ctaUrl, `Finish cancelling`);
+  return { subject, text, html: shell(title, bodyHtml, manageUrl) };
 }

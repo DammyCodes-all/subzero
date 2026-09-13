@@ -6,16 +6,19 @@
 - **Live app:** https://elated-oriole-157.convex.site
 - **Repo:** local only, not yet public
 - **Frontend:** Next.js static export served from the Convex deployment via `@convex-dev/static-hosting` (registered); Gmail OAuth migrated to Convex HTTP actions (`GET /gmail/oauth/callback`) so no Next.js API routes remain
-- **Convex deployment:** https://aromatic-quail-684.convex.cloud
+- **Convex deployment:** https://elated-oriole-157.convex.site (site) / https://elated-oriole-157.convex.cloud (api) — prod env `SITE_URL` set to live site so all outbound mail links point there
+- **Dev deployment:** https://aromatic-quail-684.convex.cloud
 - **Components:** `@firecrawl/firecrawl-convex 0.1.1` (research search/scrape), `@agentmail/convex 0.1.0` (durable outbound sends), `@convex-dev/static-hosting 0.2.1` (registered, serves the static export)
 - **Convex features:** schema, tables, indexes, auth, queries, mutations, actions, http, scheduler, crons, components
 - **Auth:** Convex Auth
 - **AI models:** Groq `openai/gpt-oss-120b` primary, OpenRouter then OpenAI `gpt-4o-mini` fallback (`convex/ingestion/extract.ts`, `convex/research.ts`); no `OPENAI_API_KEY` set on the deployment
 - **Started:** 2026-08-28T08:01:06Z
-- **Last updated:** 2026-09-12T00:00:00Z
+- **Last updated:** 2026-09-13T00:00:00Z
 
 ## Log
 
+### 2026-09-13 - working tree
+Fixed live Gmail auto-sync (poll was 400ing on `labelsAdded` vs `labelAdded` single `labelAdded` + `-unsubscribe` killed recall, so history cursor never advanced; fixed `convex/lib/gmail.ts:26` queries + transient keeps cursor), sorted subscriptions by next bill (`src/components/subscriptions/SubscriptionsView.tsx`), fixed `every unknown` (`convex/lib/emailTemplates.ts:38` `unknown→period`), aligned all 4 outbound templates to the dark `EmailLayout` design (shared `shell()` with `#0b1310`, logo, lime button `convex/lib/emailTemplates.ts:63`, plus `trialEndingTemplate`/`actionReminderTemplate` now HTML), set prod `SITE_URL` to live site `https://elated-oriole-157.convex.site` (`convex/convex.config.ts`, `.env.example`, mail links), and made manual `markCancelled` always mail (`convex/notifications.ts:189` auto dedups 30d, manual bypass).
 ### 2026-09-12 - working tree
 Shipped the live URL: registered `@convex-dev/static-hosting`, migrated Gmail OAuth to Convex (`gmailOAuth.getAuthUrl` action + `GET /gmail/oauth/callback` in `convex/http.ts`, state table `gmailOAuthStates`), switched to Next.js static export, moved subscription detail to `/dashboard/subscriptions?sub=` (dynamic `[id]` route removed), and pointed all email CTAs at the static-friendly link. Signed-in visitors to `/` now bounce to `/dashboard`.
 ### 2026-09-12 - working tree
