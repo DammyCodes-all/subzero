@@ -13,10 +13,12 @@
 - **Auth:** Convex Auth
 - **AI models:** Groq `openai/gpt-oss-120b` primary, OpenRouter then OpenAI `gpt-4o-mini` fallback (`convex/ingestion/extract.ts`, `convex/research.ts`); no `OPENAI_API_KEY` set on the deployment
 - **Started:** 2026-08-28T08:01:06Z
-- **Last updated:** 2026-09-12T00:00:00Z
+- **Last updated:** 2026-09-13T00:00:00Z
 
 ## Log
 
+### 2026-09-13 - working tree
+Fixed live Gmail auto-sync (poll was 400ing on `labelsAdded` vs `labelAdded` single `labelAdded` + `-unsubscribe` killed recall, so history cursor never advanced; fixed `convex/lib/gmail.ts:26` queries + transient keeps cursor), sorted subscriptions by next bill (`src/components/subscriptions/SubscriptionsView.tsx`), fixed `every unknown` (`convex/lib/emailTemplates.ts:38` `unknown→period`), aligned all 4 outbound templates to the dark `EmailLayout` design (shared `shell()` with `#0b1310`, logo, lime button `convex/lib/emailTemplates.ts:63`, plus `trialEndingTemplate`/`actionReminderTemplate` now HTML), set prod `SITE_URL` to live site `https://elated-oriole-157.convex.site` (`convex/convex.config.ts`, `.env.example`, mail links), and made manual `markCancelled` always mail (`convex/notifications.ts:189` auto dedups 30d, manual bypass).
 ### 2026-09-12 - working tree
 Shipped the live URL: registered `@convex-dev/static-hosting`, migrated Gmail OAuth to Convex (`gmailOAuth.getAuthUrl` action + `GET /gmail/oauth/callback` in `convex/http.ts`, state table `gmailOAuthStates`), switched to Next.js static export, moved subscription detail to `/dashboard/subscriptions?sub=` (dynamic `[id]` route removed), and pointed all email CTAs at the static-friendly link. Signed-in visitors to `/` now bounce to `/dashboard`.
 ### 2026-09-12 - working tree
