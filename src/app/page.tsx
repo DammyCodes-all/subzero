@@ -2,7 +2,6 @@ import { HeroSection } from "@/components/marketing/HeroSection";
 import { AttentionSection } from "@/components/marketing/landing/AttentionSection";
 import { CancelDetailSection } from "@/components/marketing/landing/CancelDetailSection";
 import { CancelPathsSection } from "@/components/marketing/landing/CancelPathsSection";
-import { EvidenceSection } from "@/components/marketing/landing/EvidenceSection";
 import { FinalCtaSection } from "@/components/marketing/landing/FinalCtaSection";
 import { IntakeSection } from "@/components/marketing/landing/IntakeSection";
 import { ProblemSection } from "@/components/marketing/landing/ProblemSection";
@@ -21,7 +20,6 @@ export default function Home() {
       <RenewalSection />
       <CancelDetailSection />
       <CancelPathsSection />
-      <EvidenceSection />
       <FinalCtaSection />
     </MarketingLayout>
   );

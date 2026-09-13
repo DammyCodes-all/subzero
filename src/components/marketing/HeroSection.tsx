@@ -49,14 +49,14 @@ export function HeroSection() {
         </div>
       </div>
 
-      <div className="relative mx-auto -mt-2 w-full md:-mt-4">
-        <div className="perspective-[1600px]">
+      <div className="relative mx-auto w-full md:-mt-4">
+        <div className="lg:perspective-[1600px]">
           <div
             className={cn(
-              "relative overflow-hidden rounded-xl bg-card transform-gpu will-change-transform transition-transform delay-150 duration-[1400ms] ease-out motion-reduce:transition-none motion-reduce:transform-none",
+              "relative overflow-hidden rounded-xl bg-card transform-gpu will-change-transform transition-all delay-150 duration-[1400ms] ease-out motion-reduce:transition-none motion-reduce:transform-none",
               mounted
-                ? "[transform:rotateX(14deg)] md:[transform:rotateX(38deg)]"
-                : "[transform:rotateX(0deg)]",
+                ? "translate-x-0 [transform:rotateX(0deg)] lg:[transform:rotateX(38deg)]"
+                : "translate-x-12 [transform:rotateX(0deg)] lg:translate-x-0 lg:[transform:rotateX(0deg)]",
             )}
           >
             <Image
@@ -69,7 +69,7 @@ export function HeroSection() {
             />
             <div
               aria-hidden="true"
-              className="pointer-events-none absolute inset-0 shadow-[inset_0_0_100px_50px_var(--background)]"
+              className="pointer-events-none absolute inset-0 shadow-[inset_0_0_36px_12px_var(--background)] md:shadow-[inset_0_0_100px_50px_var(--background)]"
             />
           </div>
         </div>
