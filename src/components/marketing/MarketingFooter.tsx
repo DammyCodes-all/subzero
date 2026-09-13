@@ -5,7 +5,6 @@ import { FooterYear } from "@/components/marketing/FooterYear";
 const PRODUCT_LINKS = [
   { label: "Features", href: "/#features" },
   { label: "How it works", href: "/#how-it-works" },
-  { label: "Pricing", href: "/#pricing" },
 ];
 
 const COMPANY_LINKS = [
