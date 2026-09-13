@@ -24,9 +24,7 @@ const app = defineApp({
 // Official sponsor components. AgentMail handles durable outbound sends
 // (enqueue + bounded retries + reactive delivery status); Firecrawl handles
 // search/scrape for cancellation research. Secrets stay in deployment env.
-// NOTE: @convex-dev/static-hosting is installed but NOT registered yet —
-// Gmail OAuth lives in Next.js API routes, which a static export cannot
-// serve. Registration waits on migrating OAuth to Convex HTTP actions.
+// Static hosting is registered — Gmail OAuth migrated to Convex HTTP.
 app.use(agentmail, {
   // Forwards the app key into the component's isolated env. Without this,
   // every send fails with "AGENTMAIL_API_KEY is not set" even though the

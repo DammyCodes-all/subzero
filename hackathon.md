@@ -6,7 +6,8 @@
 - **Live app:** https://elated-oriole-157.convex.site
 - **Repo:** local only, not yet public
 - **Frontend:** Next.js static export served from the Convex deployment via `@convex-dev/static-hosting` (registered); Gmail OAuth migrated to Convex HTTP actions (`GET /gmail/oauth/callback`) so no Next.js API routes remain
-- **Convex deployment:** https://aromatic-quail-684.convex.cloud
+- **Convex deployment:** https://elated-oriole-157.convex.site (site) / https://elated-oriole-157.convex.cloud (api) — prod env `SITE_URL` set to live site so all outbound mail links point there
+- **Dev deployment:** https://aromatic-quail-684.convex.cloud
 - **Components:** `@firecrawl/firecrawl-convex 0.1.1` (research search/scrape), `@agentmail/convex 0.1.0` (durable outbound sends), `@convex-dev/static-hosting 0.2.1` (registered, serves the static export)
 - **Convex features:** schema, tables, indexes, auth, queries, mutations, actions, http, scheduler, crons, components
 - **Auth:** Convex Auth
