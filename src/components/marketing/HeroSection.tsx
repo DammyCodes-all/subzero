@@ -4,6 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { DarkGradientBg } from "@/components/ui/elegant-dark-pattern";
 import { cn } from "@/lib/utils";
 
 export function HeroSection() {
@@ -14,10 +15,13 @@ export function HeroSection() {
   }, []);
 
   return (
-    <section className="overflow-hidden px-4 pt-16 pb-0 text-center md:px-8 md:pt-24">
+    <section className="relative overflow-hidden bg-background px-4 pt-16 pb-0 text-center md:px-8 md:pt-24">
+      <div aria-hidden className="absolute inset-0 md:hidden">
+        <DarkGradientBg className="absolute inset-0" />
+      </div>
       <div
         className={cn(
-          "transition-all duration-700 ease-out motion-reduce:transition-none",
+          "relative z-10 transition-all duration-700 ease-out motion-reduce:transition-none",
           mounted ? "translate-y-0 opacity-100" : "translate-y-6 opacity-0",
         )}
       >
@@ -49,7 +53,7 @@ export function HeroSection() {
         </div>
       </div>
 
-      <div className="relative mx-auto w-full md:-mt-4">
+      <div className="relative z-10 mx-auto mt-10 w-full md:-mt-4">
         <div className="lg:perspective-[1600px]">
           <div
             className={cn(
