@@ -13,10 +13,26 @@
 - **Auth:** Convex Auth
 - **AI models:** Groq `openai/gpt-oss-120b` primary, OpenRouter then OpenAI `gpt-4o-mini` fallback (`convex/ingestion/extract.ts`, `convex/research.ts`); no `OPENAI_API_KEY` set on the deployment
 - **Started:** 2026-08-28T08:01:06Z
-- **Last updated:** 2026-09-13T00:00:00Z
+- **Last updated:** 2026-09-14T17:33:47Z
 
 ## Log
 
+### 2026-09-14 - f5025a7
+Delete-my-account now confirms through an animated dialog (`src/components/settings/DeleteAccountDialog.tsx`: Base UI AlertDialog with a motion spring panel and blur backdrop, focus trap, Escape and backdrop close) instead of the inline expanding block. SettingsView only opens it and passes the confirm handler.
+### 2026-09-14 - 36bff4a
+Shared nav routes (`src/components/layout/navigation.ts`) for the sidebar and mobile bottom bar, covered by `tests/navigation.test.ts` (suite now 16 passing across 5 files). Also in this commit: fresh receipts resurface legacy hidden rows (`convex/ingestion/persist.ts` merge branch clears `hidden`), since Remove is a hard delete now and anything still hidden predates tombstones.
+### 2026-09-14 - 9c46cfb
+Full account deletion backend: `userData.deleteMyAccount` wipes app data plus auth accounts, sessions with refresh tokens, and the user row; both wipe paths share one helper that now also clears `userSettings`, scan runs and failures, and OAuth states. Client signs out and lands on `/`. Dashboard shows the onboarding panel with no stats row when there is nothing to summarize.
+### 2026-09-14 - f92b58c
+Remove is now permanent delete: `actions.deleteSubscription` hard-deletes the row plus evidence, drafts, and notifications, and writes a `deletedSubscriptions` tombstone (`convex/schema.ts`) so rescans suppress the same receipt instead of resurrecting it. Genuine changes still surface under a new dedup key. Cancelled and hidden rows sink below live ones in the subscriptions sort (`src/components/subscriptions/SubscriptionsView.tsx`). Convex features: mutations, scheduled functions.
+### 2026-09-14 - ce47d82
+Fixed forwarding misfire: self-mail detection strips email addresses before checking (`convex/lib/selfMail.ts`), so the quoted forwarding address in a forwarded receipt no longer counts as a SubZero marker. This was the prod `skipped: self mail` cause; user verified forwarding works end to end on prod after deploy with per-deployment webhook secrets.
+### 2026-09-14 - 0e43fc9
+First Gmail scan drains fast: new `convex/gmailBackfillDrain.ts` self-chains (~20s per hop) instead of waiting on the 15m cron, with `MANUAL_PER_RUN=50` and `BACKFILL_PER_TICK=25`. Convex features: scheduled functions, actions.
+### 2026-09-14 - d64a8b9
+Removed the forced `/` to `/dashboard` bounce for signed-in users (`MarketingHomeRedirect` deleted); the header already offers a dashboard link.
+### 2026-09-13 - efba8af
+Marketing refactor: `CancelPathsSection` uses shared `ROUTES` for cancellation paths with motion effects.
 ### 2026-09-13 - working tree
 Fixed live Gmail auto-sync (poll was 400ing on `labelsAdded` vs `labelAdded` single `labelAdded` + `-unsubscribe` killed recall, so history cursor never advanced; fixed `convex/lib/gmail.ts:26` queries + transient keeps cursor), sorted subscriptions by next bill (`src/components/subscriptions/SubscriptionsView.tsx`), fixed `every unknown` (`convex/lib/emailTemplates.ts:38` `unknown→period`), aligned all 4 outbound templates to the dark `EmailLayout` design (shared `shell()` with `#0b1310`, logo, lime button `convex/lib/emailTemplates.ts:63`, plus `trialEndingTemplate`/`actionReminderTemplate` now HTML), set prod `SITE_URL` to live site `https://elated-oriole-157.convex.site` (`convex/convex.config.ts`, `.env.example`, mail links), and made manual `markCancelled` always mail (`convex/notifications.ts:189` auto dedups 30d, manual bypass).
 ### 2026-09-12 - working tree
