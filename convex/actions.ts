@@ -167,7 +167,10 @@ export const setMuted = mutation({
   },
 });
 
-/** Soft-hide a subscription so it stays out of lists and scans. */
+/** Soft-hide a subscription so it stays out of lists and scans.
+ * @deprecated Legacy path — Remove now hard-deletes via deleteSubscription,
+ * so nothing in the UI sets hidden anymore. Kept so pre-existing hidden
+ * rows stay restorable through unhideSubscription. */
 export const hideSubscription = mutation({
   args: { id: v.id("subscriptions") },
   returns: v.null(),
@@ -187,6 +190,47 @@ export const unhideSubscription = mutation({
     await ownedSub(ctx, args.id);
     await ctx.db.patch(args.id, { hidden: false });
     await rescheduleNudges(ctx, args.id);
+    return null;
+  },
+});
+
+/** Permanently delete a subscription and everything attached to it.
+///
+/// Unlike hideSubscription (soft-hide, restorable), this removes the row
+/// plus evidence, drafts, and notifications, and writes a tombstone so the
+/// next Gmail rescan or forward does not resurrect the same receipt. */
+export const deleteSubscription = mutation({
+  args: { id: v.id("subscriptions") },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const sub = await ownedSub(ctx, args.id);
+    const ev = await ctx.db
+      .query("evidence")
+      .withIndex("by_subscription", (q) => q.eq("subscriptionId", args.id))
+      .collect();
+    for (const e of ev) await ctx.db.delete(e._id);
+    const acts = await ctx.db
+      .query("cancellationActions")
+      .withIndex("by_subscription", (q) => q.eq("subscriptionId", args.id))
+      .collect();
+    for (const a of acts) await ctx.db.delete(a._id);
+    await clearPendingNudges(ctx, args.id);
+    const notifs = await ctx.db
+      .query("notifications")
+      .withIndex("by_subscription_and_type", (q) =>
+        q.eq("subscriptionId", args.id),
+      )
+      .collect();
+    for (const n of notifs) await ctx.db.delete(n._id);
+    // No try/catch: if the tombstone insert fails the whole mutation rolls
+    // back, so we never delete without the rescan guard in place.
+    await ctx.db.insert("deletedSubscriptions", {
+      userId: sub.userId,
+      dedupKey: sub.dedupKey,
+      merchant: sub.merchant,
+      deletedAt: Date.now(),
+    });
+    await ctx.db.delete(args.id);
     return null;
   },
 });

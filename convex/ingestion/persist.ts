@@ -53,6 +53,7 @@ export const persistExtracted = internalMutation({
     evidenceId: v.union(v.id("evidence"), v.null()),
     isNew: v.boolean(),
     isDuplicate: v.boolean(),
+    suppressed: v.optional(v.boolean()),
   }),
   handler: async (ctx, args) => {
     // Atomic idempotency: check svixId (AgentMail) and messageId (Gmail)
@@ -154,6 +155,22 @@ export const persistExtracted = internalMutation({
           price: ex.price,
           currency: ex.currency,
         });
+        // Respect user deletes: a tombstoned receipt stays gone.
+        const tombstoned = await ctx.db
+          .query("deletedSubscriptions")
+          .withIndex("by_user_and_dedup", (q) =>
+            q.eq("userId", args.userId).eq("dedupKey", key),
+          )
+          .first();
+        if (tombstoned) {
+          return {
+            subscriptionId: null,
+            evidenceId: null,
+            isNew: false,
+            isDuplicate: false,
+            suppressed: true,
+          };
+        }
         const id = await ctx.db.insert("subscriptions", {
           userId: args.userId,
           merchant,
@@ -274,6 +291,43 @@ export const persistExtracted = internalMutation({
     }
 
     const difficulty = getDifficulty("unknown", 0);
+
+    // Respect user deletes: a tombstoned receipt stays gone. A genuine
+    // change (price/product/provider) yields a new dedupKey and surfaces.
+    // Check both the provider-qualified key and the bare fallback key:
+    // provider enrichment varies across scans, so a delete recorded under
+    // one form must suppress the other.
+    if (!existing) {
+      const keys = [key];
+      if (ex.billingProvider) {
+        keys.push(
+          dedupKey({
+            merchant,
+            product,
+            billingProvider: undefined,
+            price,
+            currency,
+          }),
+        );
+      }
+      for (const k of keys) {
+        const tombstoned = await ctx.db
+          .query("deletedSubscriptions")
+          .withIndex("by_user_and_dedup", (q) =>
+            q.eq("userId", args.userId).eq("dedupKey", k),
+          )
+          .first();
+        if (tombstoned) {
+          return {
+            subscriptionId: null,
+            evidenceId: null,
+            isNew: false,
+            isDuplicate: false,
+            suppressed: true,
+          };
+        }
+      }
+    }
 
     let subscriptionId: string;
     let isNew = true;

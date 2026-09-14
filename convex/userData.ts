@@ -113,6 +113,15 @@ export const deleteMyData = mutation({
       }
     }
 
+    // Deletion tombstones (per-subscription delete memory).
+    for (const uid of candidates) {
+      const tombs = await ctx.db
+        .query("deletedSubscriptions")
+        .withIndex("by_user_and_dedup", (q) => q.eq("userId", uid))
+        .collect();
+      for (const t of tombs) await ctx.db.delete(t._id);
+    }
+
     // Full removal: delete the user's connection rows outright so past
     // Gmail inboxes leave no email traces behind. Watch shutdown is
     // scheduled first with the captured token (the action tolerates the

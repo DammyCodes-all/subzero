@@ -241,4 +241,17 @@ export default defineSchema({
   })
     .index("by_state", ["state"])
     .index("by_user", ["userId"]),
+
+  // Tombstones for user-deleted subscriptions. A hard delete removes the
+  // row plus evidence/drafts/notifications, which also erases the dedup
+  // memory — without this table the next Gmail rescan would resurrect the
+  // same receipt. persistExtracted refuses to recreate a tombstoned
+  // dedupKey (a price/product change yields a new key, so genuine new
+  // subscriptions still surface).
+  deletedSubscriptions: defineTable({
+    userId: v.string(),
+    dedupKey: v.string(),
+    merchant: v.string(),
+    deletedAt: v.number(),
+  }).index("by_user_and_dedup", ["userId", "dedupKey"]),
 });

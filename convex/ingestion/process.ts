@@ -210,7 +210,15 @@ export const processForwardedEmail = internalAction({
         evidenceId: Id<"evidence"> | null;
         isNew: boolean;
         isDuplicate: boolean;
+        suppressed?: boolean;
       };
+
+      if (result.suppressed) {
+        await markAttempt("skipped", {
+          reason: `suppressed: deleted by user`,
+        });
+        return { subscriptionId: null, evidenceId: null, status: "skipped" };
+      }
 
       if (result.isDuplicate) {
         await markAttempt("duplicate", {

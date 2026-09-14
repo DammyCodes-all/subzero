@@ -42,7 +42,7 @@ export function SubscriptionManageCard({ sub }: { sub: ManageSub }) {
   const setMuted = useMutation(api.actions.setMuted);
   const markCancelled = useMutation(api.actions.markCancelled);
   const markActive = useMutation(api.actions.markActive);
-  const hideSubscription = useMutation(api.actions.hideSubscription);
+  const deleteSubscription = useMutation(api.actions.deleteSubscription);
 
   const [busy, setBusy] = useState<null | "mute" | "cancel" | "remove">(null);
   const [confirming, setConfirming] = useState<null | "cancel" | "remove">(
@@ -190,8 +190,9 @@ export function SubscriptionManageCard({ sub }: { sub: ManageSub }) {
                 Remove from SubZero
               </p>
               <p className="mt-0.5 text-xs text-muted-foreground">
-                Hides this entry and its receipts and history. Your inbox is
-                untouched. You can restore it from the Cancelled tab.
+                Permanently deletes this entry, its receipts, and its
+                history. Your inbox is untouched. It will not come back on
+                rescan. This cannot be undone.
               </p>
             </div>
           </div>
@@ -203,10 +204,10 @@ export function SubscriptionManageCard({ sub }: { sub: ManageSub }) {
                 disabled={busy !== null}
                 onClick={() =>
                   run("remove", async () => {
-                    await hideSubscription({ id: sub._id });
+                    await deleteSubscription({ id: sub._id });
                     sileo.success({
-                      title: "Removed",
-                      description: `${sub.merchant} is out of your list.`,
+                      title: "Deleted",
+                      description: `${sub.merchant} is permanently gone.`,
                     });
                     router.push("/dashboard/subscriptions");
                   })

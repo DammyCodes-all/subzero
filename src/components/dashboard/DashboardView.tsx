@@ -258,12 +258,16 @@ export function DashboardView() {
             </div>
           ) : null}
 
-          <SummaryHeader
-            paceItems={paceItems as Doc<"subscriptions">[]}
-            attentionCount={urgentSubs.length}
-            activeCount={activeCount}
-            trialCount={trialCount}
-          />
+          {hero && (
+            <SummaryHeader
+              paceItems={paceItems as Doc<"subscriptions">[]}
+              attentionCount={urgentSubs.length}
+              activeCount={activeCount}
+              trialCount={trialCount}
+            />
+          )}
+
+          {!hero && <NoSubscriptionsState />}
 
           {hero && (
             <section className="space-y-4">

@@ -61,6 +61,8 @@ export async function processOneEmail(
     },
   );
   if (result.isDuplicate) return { status: "duplicate" };
+  if ((result as { suppressed?: boolean }).suppressed)
+    return { status: "skipped" };
   if (result.isNew && result.subscriptionId && !extracted.isConfirmation) {
     await ctx.scheduler.runAfter(
       0,
