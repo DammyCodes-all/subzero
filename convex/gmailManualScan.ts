@@ -21,9 +21,11 @@ import { processOneEmail } from "./lib/processEmail";
 
 const COOLDOWN_MS = 10 * 60 * 1000;
 
-// Manual scan budget: 25 emails inline per run per connection. Anything
-// beyond that chains into the resumable backfill so the cron finishes it.
-const MANUAL_PER_RUN = 25;
+// Manual scan budget: 50 emails inline per run per connection (matches the
+// backfill lifetime cap, so a typical first scan finishes in one action).
+// Anything beyond that chains into the fast-drain backfill worker (~20s
+// between batches) so the first sync lands in ~1min, not via the 15m cron.
+const MANUAL_PER_RUN = 50;
 
 export const scanGmail = action({
   args: { connectionId: v.optional(v.id("connections")) },
@@ -138,7 +140,7 @@ export const scanGmail = action({
       const q = buildGmailQuery(90);
       let pageToken: string | undefined;
       let pages = 0;
-      const maxPages = 6;
+      const maxPages = 8;
       let connCompleted = false;
       let runProcessed = 0;
       let stoppedEarly = false;
@@ -202,8 +204,9 @@ export const scanGmail = action({
       if (connCompleted && conn?._id) {
         completedAnyConn = true;
         // Hit the per-run cap with pages left: chain the rest into the
-        // resumable backfill instead of silently stopping. An already-active
-        // backfill is left alone — the cron keeps working through it.
+        // fast-drain backfill worker (~20s batches) instead of trickling
+        // via the 15-minute poll cron. An already-active backfill is left
+        // alone — its drain chain (or the cron) keeps working through it.
         if (stoppedEarly && pageToken && !conn.gmailBackfillSeededAt) {
           chainedAny = true;
           try {
@@ -213,6 +216,11 @@ export const scanGmail = action({
               pageToken,
               processed: runProcessed,
             });
+            await ctx.scheduler.runAfter(
+              0,
+              internal.gmailBackfillDrain.drainBackfill as any,
+              { connId: conn._id },
+            );
           } catch {}
         } else if (stoppedEarly && conn.gmailBackfillSeededAt) {
           // A backfill was already running — background work continues.

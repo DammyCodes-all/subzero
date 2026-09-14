@@ -57,11 +57,14 @@ export const clearBackfill = internalMutation({
 });
 
 // Deep-backfill bounds: 90-day window, max 50 emails per connection per
-// backfill lifetime, max 10 per tick (after live mail). Each email costs
-// ~1 AI extraction, hence the per-tick budget.
+// backfill lifetime, max 25 per tick (after live mail). Each email costs
+// ~1 AI extraction, hence the per-tick budget. First scans drain fast via
+// the self-chaining drainBackfill worker (~20s between batches) instead of
+// waiting on the 15-minute poll cron.
 const BACKFILL_WINDOW_DAYS = 90;
 const BACKFILL_TOTAL_CAP = 50;
-export const BACKFILL_PER_TICK = 10;
+export const BACKFILL_PER_TICK = 25;
+export const DRAIN_DELAY_MS = 20 * 1000;
 
 function backfillQueryFor(phase: string): string {
   return phase === "broad"

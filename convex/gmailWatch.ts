@@ -298,6 +298,13 @@ async function fallbackListIngest(
     BACKFILL_PER_TICK,
     c,
   );
+  // Hand the remainder to the fast-drain worker (~20s batches) so first
+  // syncs finish in ~1min; the drain no-ops if the inline batch cleared it.
+  try {
+    await ctx.scheduler.runAfter(0, internal.gmailBackfillDrain.drainBackfill, {
+      connId: conn._id,
+    });
+  } catch {}
   return { ...c, historyId, reason: "backfill_started" };
 }
 
