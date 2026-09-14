@@ -1,5 +1,6 @@
 "use client";
 
+import { useAuthActions } from "@convex-dev/auth/react";
 import {
   CheckmarkCircle01Icon,
   Clock01Icon,
@@ -10,7 +11,6 @@ import {
   Shield01Icon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { useAuthActions } from "@convex-dev/auth/react";
 import { useMutation, useQuery } from "convex/react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -19,6 +19,7 @@ import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/material-design-3-switch";
 import { formatRenewalDate } from "@/lib/format";
 import { api } from "../../../convex/_generated/api";
+import { DeleteAccountDialog } from "./DeleteAccountDialog";
 import type { NotificationPrefs } from "./types";
 
 // ---------------------------------------------------------------------------
@@ -135,7 +136,7 @@ export function SettingsView() {
     connectionsRemoved: number;
   }>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
-  const [confirmingAccountDelete, setConfirmingAccountDelete] = useState(false);
+  const [accountDialogOpen, setAccountDialogOpen] = useState(false);
   const [deletingAccount, setDeletingAccount] = useState(false);
   const [accountError, setAccountError] = useState<string | null>(null);
 
@@ -597,8 +598,8 @@ export function SettingsView() {
                 </p>
                 <p className="mt-0.5 text-xs text-muted-foreground">
                   Subscriptions, receipt excerpts, cancellation drafts,
-                  notification history, and scan history. Connected inboxes
-                  are removed too, leaving no email traces behind.
+                  notification history, and scan history. Connected inboxes are
+                  removed too, leaving no email traces behind.
                 </p>
               </div>
               <Button
@@ -623,76 +624,46 @@ export function SettingsView() {
         </div>
 
         <div className="rounded-xl border border-destructive/30 bg-card p-5">
-          {confirmingAccountDelete ? (
-            <div className="space-y-4">
-              <div>
-                <p className="text-sm font-medium text-foreground">
-                  Delete your account? This cannot be undone.
-                </p>
-                <p className="mt-0.5 text-xs text-muted-foreground">
-                  Everything above goes too, plus your login — you will be
-                  signed out and will need to sign up again to come back.
-                </p>
-              </div>
-              {accountError && (
-                <p className="text-xs text-destructive">{accountError}</p>
-              )}
-              <div className="flex items-center gap-3">
-                <Button
-                  variant="destructive"
-                  size="sm"
-                  onClick={handleDeleteAccount}
-                  disabled={deletingAccount}
-                  className="h-8 text-xs font-semibold"
-                >
-                  {deletingAccount ? "Deleting..." : "Yes, delete my account"}
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    setConfirmingAccountDelete(false);
-                    setAccountError(null);
-                  }}
-                  disabled={deletingAccount}
-                  className="h-8 text-xs font-medium"
-                >
-                  Keep my account
-                </Button>
-              </div>
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-sm font-medium text-foreground">
+                Permanently delete my account
+              </p>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                Removes all of your data and your login. You will be signed out
+                immediately.
+              </p>
             </div>
-          ) : (
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <p className="text-sm font-medium text-foreground">
-                  Permanently delete my account
-                </p>
-                <p className="mt-0.5 text-xs text-muted-foreground">
-                  Removes all of your data and your login. You will be signed
-                  out immediately.
-                </p>
-              </div>
-              <Button
-                variant="destructive"
-                size="sm"
-                onClick={() => setConfirmingAccountDelete(true)}
-                className="h-8 gap-1.5 shrink-0 text-xs font-semibold"
-              >
-                <HugeiconsIcon
-                  icon={
-                    Delete02Icon as unknown as Parameters<
-                      typeof HugeiconsIcon
-                    >[0]["icon"]
-                  }
-                  size={14}
-                  color="currentColor"
-                />
-                Delete my account
-              </Button>
-            </div>
-          )}
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={() => setAccountDialogOpen(true)}
+              className="h-8 gap-1.5 shrink-0 text-xs font-semibold"
+            >
+              <HugeiconsIcon
+                icon={
+                  Delete02Icon as unknown as Parameters<
+                    typeof HugeiconsIcon
+                  >[0]["icon"]
+                }
+                size={14}
+                color="currentColor"
+              />
+              Delete my account
+            </Button>
+          </div>
         </div>
       </section>
+      <DeleteAccountDialog
+        open={accountDialogOpen}
+        onOpenChange={(open) => {
+          setAccountDialogOpen(open);
+          if (!open) setAccountError(null);
+        }}
+        onConfirm={handleDeleteAccount}
+        confirming={deletingAccount}
+        error={accountError}
+      />
     </div>
   );
 }
