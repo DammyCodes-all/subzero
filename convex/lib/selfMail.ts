@@ -15,6 +15,11 @@ export function isSelfEmail(args: {
   if (subject.startsWith("trial ending:")) return true;
   if (subject.startsWith("cancelled:")) return true;
   if (subject.startsWith("still need to cancel")) return true;
-  if (body.includes("subzero")) return true;
+  // Strip email addresses first: forwarded mail legitimately quotes the
+  // forwarding address (subzero-agent@agentmail.to) in its headers/body,
+  // which must not count as a SubZero marker. Nudge prose ("SubZero
+  // found…") survives stripping, so forwarded-back nudges are still caught.
+  const bodySansAddrs = body.replace(/\S+@\S+/g, " ");
+  if (bodySansAddrs.includes("subzero")) return true;
   return false;
 }
