@@ -11,7 +11,7 @@ import {
   SubzeroWithWordmark,
 } from "@/components/brand/SubzeroLogo";
 import { cn } from "@/lib/utils";
-import { NAV_ITEMS } from "./navigation";
+import { isNavActive, NAV_ITEMS } from "./navigation";
 import { SidebarTooltip } from "./SidebarTooltip";
 import type { NavItem, SidebarProps } from "./types";
 
@@ -94,11 +94,7 @@ function NavLink({
 export function Sidebar({ collapsed, onToggle }: SidebarProps) {
   const pathname = usePathname();
 
-  const isActive = (item: NavItem) => {
-    if (item.exact) return pathname === item.href;
-    if (pathname.startsWith(item.href)) return true;
-    return item.aliases?.some((a) => pathname.startsWith(a)) ?? false;
-  };
+  const isActive = (item: NavItem) => isNavActive(pathname, item);
 
   return (
     <aside

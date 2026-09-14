@@ -335,6 +335,10 @@ export const persistExtracted = internalMutation({
       isNew = false;
       // Patch renewal/trial if newer, keep other fields
       const patch: Record<string, unknown> = {};
+      // Fresh receipt activity resurfaces legacy hidden rows: Remove is now
+      // a hard delete, so anything still flagged hidden predates tombstones
+      // and new evidence means the subscription is live again.
+      if (existing.hidden === true) patch.hidden = false;
       if (
         ex.nextRenewalAt &&
         (!existing.nextRenewalAt || ex.nextRenewalAt > existing.nextRenewalAt)

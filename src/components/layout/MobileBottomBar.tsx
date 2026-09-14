@@ -4,16 +4,13 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
-import { NAV_ITEMS } from "./navigation";
+import { isNavActive, NAV_ITEMS } from "./navigation";
 
 export function MobileBottomBar() {
   const pathname = usePathname();
 
-  const isActive = (item: (typeof NAV_ITEMS)[number]) => {
-    if (item.exact) return pathname === item.href;
-    if (pathname.startsWith(item.href)) return true;
-    return item.aliases?.some((a) => pathname.startsWith(a)) ?? false;
-  };
+  const isActive = (item: (typeof NAV_ITEMS)[number]) =>
+    isNavActive(pathname, item);
 
   return (
     <nav
