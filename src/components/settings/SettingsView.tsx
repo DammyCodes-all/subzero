@@ -10,7 +10,9 @@ import {
   Shield01Icon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
+import { useAuthActions } from "@convex-dev/auth/react";
 import { useMutation, useQuery } from "convex/react";
+import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { sileo } from "sileo";
 import { Button } from "@/components/ui/button";
@@ -79,9 +81,12 @@ function exportToCsv(
 // ---------------------------------------------------------------------------
 
 export function SettingsView() {
+  const router = useRouter();
+  const { signOut } = useAuthActions();
   const notifications = useQuery(api.userNotifications.getMyNotifications);
   const subscriptions = useQuery(api.subscriptions.list);
   const deleteMyData = useMutation(api.userData.deleteMyData);
+  const deleteMyAccount = useMutation(api.userData.deleteMyAccount);
   const settings = useQuery(api.userSettings.getMine);
   const setNotifyOnCancel = useMutation(api.userSettings.setNotifyOnCancel);
 
@@ -130,6 +135,9 @@ export function SettingsView() {
     connectionsRemoved: number;
   }>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [confirmingAccountDelete, setConfirmingAccountDelete] = useState(false);
+  const [deletingAccount, setDeletingAccount] = useState(false);
+  const [accountError, setAccountError] = useState<string | null>(null);
 
   const handleToggle = (key: keyof NotificationPrefs) => {
     setPrefs((p) => ({ ...p, [key]: !p[key] }));
@@ -178,6 +186,24 @@ export function SettingsView() {
       setDeleting(false);
     }
   };
+
+  const handleDeleteAccount = async () => {
+    setDeletingAccount(true);
+    setAccountError(null);
+    try {
+      await deleteMyAccount({});
+      await signOut();
+      router.push("/");
+    } catch (e) {
+      setAccountError(
+        e instanceof Error
+          ? e.message
+          : "Something went wrong. Try again in a bit.",
+      );
+      setDeletingAccount(false);
+    }
+  };
+
   const handleExportSubs = () => {
     if (!subscriptions?.length) return;
     const rows = subscriptions.map((s) => ({
@@ -500,9 +526,7 @@ export function SettingsView() {
               color="currentColor"
             />
           </div>
-          <h2 className="font-heading text-base font-semibold">
-            Delete My Data
-          </h2>
+          <h2 className="font-heading text-base font-semibold">Danger Zone</h2>
         </div>
 
         <div className="rounded-xl border border-destructive/30 bg-card p-5">
@@ -593,6 +617,77 @@ export function SettingsView() {
                   color="currentColor"
                 />
                 Delete my data
+              </Button>
+            </div>
+          )}
+        </div>
+
+        <div className="rounded-xl border border-destructive/30 bg-card p-5">
+          {confirmingAccountDelete ? (
+            <div className="space-y-4">
+              <div>
+                <p className="text-sm font-medium text-foreground">
+                  Delete your account? This cannot be undone.
+                </p>
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  Everything above goes too, plus your login — you will be
+                  signed out and will need to sign up again to come back.
+                </p>
+              </div>
+              {accountError && (
+                <p className="text-xs text-destructive">{accountError}</p>
+              )}
+              <div className="flex items-center gap-3">
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onClick={handleDeleteAccount}
+                  disabled={deletingAccount}
+                  className="h-8 text-xs font-semibold"
+                >
+                  {deletingAccount ? "Deleting..." : "Yes, delete my account"}
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setConfirmingAccountDelete(false);
+                    setAccountError(null);
+                  }}
+                  disabled={deletingAccount}
+                  className="h-8 text-xs font-medium"
+                >
+                  Keep my account
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="text-sm font-medium text-foreground">
+                  Permanently delete my account
+                </p>
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  Removes all of your data and your login. You will be signed
+                  out immediately.
+                </p>
+              </div>
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={() => setConfirmingAccountDelete(true)}
+                className="h-8 gap-1.5 shrink-0 text-xs font-semibold"
+              >
+                <HugeiconsIcon
+                  icon={
+                    Delete02Icon as unknown as Parameters<
+                      typeof HugeiconsIcon
+                    >[0]["icon"]
+                  }
+                  size={14}
+                  color="currentColor"
+                />
+                Delete my account
               </Button>
             </div>
           )}

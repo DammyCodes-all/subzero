@@ -263,6 +263,15 @@ export function SettingsSkeleton() {
             <Line className="h-8 w-32 shrink-0" />
           </div>
         </div>
+        <div className="rounded-xl border border-destructive/30 bg-card p-5">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex-1">
+              <Line className="h-4 w-48 max-w-full" />
+              <Line className="mt-1 h-3 w-72 max-w-full" />
+            </div>
+            <Line className="h-8 w-36 shrink-0" />
+          </div>
+        </div>
       </section>
     </div>
   );
