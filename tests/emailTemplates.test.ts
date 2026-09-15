@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
+  actionReminderTemplate,
   cancelledTemplate,
   renewalNudgeTemplate,
+  trialEndingTemplate,
 } from "../convex/lib/emailTemplates";
 
 const sub = {
@@ -43,5 +45,26 @@ describe("cancelledTemplate", () => {
     const { subject, text } = cancelledTemplate(sub, "manual");
     expect(subject).toContain("cancelled");
     expect(text).toContain("54.99");
+  });
+});
+
+describe("trialEndingTemplate", () => {
+  it("warns before the trial date and links the sub", () => {
+    const { subject, text } = trialEndingTemplate({
+      ...sub,
+      trialEndsAt: Date.parse("2026-09-18"),
+    });
+    expect(subject).toContain("Trial ending");
+    expect(text).toContain("trial ends");
+    expect(text).toContain("sub=test123");
+  });
+});
+
+describe("actionReminderTemplate", () => {
+  it("nudges a stuck cancel once with a finish link", () => {
+    const { subject, text } = actionReminderTemplate(sub);
+    expect(subject).toContain("Still need to cancel");
+    expect(text).toContain("still on");
+    expect(text).toContain("sub=test123");
   });
 });
