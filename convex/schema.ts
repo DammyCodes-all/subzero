@@ -81,6 +81,7 @@ export default defineSchema({
     dedupKey: v.string(),
     muted: v.optional(v.boolean()),
     hidden: v.optional(v.boolean()),
+    startedAt: v.optional(v.number()),
     researchStatus: v.optional(
       v.union(v.literal("pending"), v.literal("done"), v.literal("failed")),
     ),
@@ -91,6 +92,7 @@ export default defineSchema({
     .index("by_user_and_renewal", ["userId", "nextRenewalAt"])
     .index("by_merchant", ["merchant"])
     .index("by_renewal", ["nextRenewalAt"])
+    .index("by_trial", ["trialEndsAt"])
     .index("by_researchStatus", ["researchStatus"]),
 
   evidence: defineTable({
@@ -141,6 +143,10 @@ export default defineSchema({
       v.literal("7d"),
       v.literal("3d"),
       v.literal("24h"),
+      v.literal("trial_7d"),
+      v.literal("trial_3d"),
+      v.literal("trial_24h"),
+      v.literal("reminder"),
       v.literal("confirmed"),
     ),
     status: v.union(
