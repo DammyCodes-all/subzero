@@ -50,6 +50,10 @@ function leadLabel(type: string) {
   if (type === "7d") return "7 days before renewal";
   if (type === "3d") return "3 days before renewal";
   if (type === "24h") return "24 hours before renewal";
+  if (type === "trial_7d") return "7 days before trial ends";
+  if (type === "trial_3d") return "3 days before trial ends";
+  if (type === "trial_24h") return "24 hours before trial ends";
+  if (type === "reminder") return "Cancel reminder";
   if (type === "confirmed") return "Cancellation confirmed";
   return type;
 }
