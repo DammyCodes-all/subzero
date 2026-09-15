@@ -27,9 +27,10 @@ function formatDate(ms?: number): string {
 
 function siteUrl(): string {
   try {
-    const fromEnv = (
+    const env = (
       globalThis as unknown as { process?: { env?: Record<string, string> } }
-    )?.process?.env?.SITE_URL as string | undefined;
+    )?.process?.env;
+    const fromEnv = env?.SITE_URL || env?.CONVEX_SITE_URL;
     if (fromEnv) return fromEnv.replace(/\/$/, "");
   } catch {}
   return "http://localhost:3000";
