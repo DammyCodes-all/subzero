@@ -119,10 +119,11 @@ export function GmailIntakeMock({ active }: { active: boolean }) {
              * connected): mailbox art, heading, copy, full-width CTA. */
             <div className="mx-auto max-w-sm px-2 py-4 text-center">
               <Image
-                src="/mail-mockup.png"
+                src="/mail-mockup.webp"
                 alt=""
                 width={768}
                 height={512}
+                sizes="260px"
                 className="mx-auto h-auto w-full max-w-[260px]"
               />
               <p className="mt-4 font-heading text-xl font-semibold tracking-tight">

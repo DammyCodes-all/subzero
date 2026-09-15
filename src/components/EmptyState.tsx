@@ -67,11 +67,12 @@ export function NoSubscriptionsState() {
   return (
     <div className="mx-auto max-w-2xl px-6 py-2 text-center sm:py-4">
       <Image
-        src="/mail-mockup.png"
+        src="/mail-mockup.webp"
         alt="Mailbox syncing Gmail"
         width={768}
         height={512}
         priority
+        sizes="(max-width: 768px) 100vw, 400px"
         className="mx-auto h-auto max-h-[30vh] w-auto max-w-full"
       />
       <h3 className="mt-4 font-heading text-xl font-semibold tracking-tight sm:text-2xl">
@@ -140,11 +141,12 @@ function AuthenticatedEmptyState() {
   return (
     <div className="mx-auto max-w-2xl px-6 py-2 text-center sm:py-4">
       <Image
-        src="/mail-mockup.png"
+        src="/mail-mockup.webp"
         alt="Mailbox syncing Gmail"
         width={768}
         height={512}
         priority
+        sizes="(max-width: 768px) 100vw, 400px"
         className="mx-auto h-auto max-h-[30vh] w-auto max-w-full"
       />
       <h3 className="mt-4 font-heading text-xl font-semibold tracking-tight sm:text-2xl">
