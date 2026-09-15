@@ -17,6 +17,8 @@ The SubZero Dashboard is an **AI-powered Subscription Protection & Anti-Burn Hub
 
 ## 📊 2. Key Metrics & Statistics (KPI Header Row)
 
+Current direction is lean: monthly pace, needs attention count, active incl trials. The table below is the full vision — annual projection, money saved, and health score are parked as future, not now.
+
 The top of the dashboard should feature a high-impact **Protection & Financial Summary Bar** to provide immediate value upon page load:
 
 | Metric | Calculation / Source | Purpose / Impact |
