@@ -8,6 +8,7 @@ import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
 import { sileo } from "sileo";
 import { ConnectGmailButton } from "@/components/ConnectGmailButton";
+import { ManualAddDialog } from "@/components/subscriptions/ManualAddDialog";
 import { Button } from "@/components/ui/button";
 import {
   GOOGLE_OAUTH_REDIRECT,
@@ -102,6 +103,7 @@ function AuthenticatedEmptyState() {
   const getOrCreateInbox = useMutation(api.agentmail.getOrCreateInbox);
   const [scanning, setScanning] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [manualOpen, setManualOpen] = useState(false);
   const inFlightRef = useRef(false);
 
   useEffect(() => {
@@ -224,12 +226,21 @@ function AuthenticatedEmptyState() {
           </div>
         )}
 
+        <button
+          type="button"
+          onClick={() => setManualOpen(true)}
+          className="mt-3 text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground"
+        >
+          Or paste a receipt by hand
+        </button>
+
         {scanning && (
           <p className="mt-3 text-xs text-muted-foreground text-center">
             Scanning Gmail for subscription mails…
           </p>
         )}
       </div>
+      <ManualAddDialog open={manualOpen} onClose={() => setManualOpen(false)} />
     </div>
   );
 }
