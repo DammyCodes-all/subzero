@@ -3,11 +3,18 @@ import { internal } from "./_generated/api";
 
 const crons = cronJobs();
 
-// Daily sweep for renewal lead-time nudges
+// Daily sweep for renewal + trial lead-time nudges
 crons.interval(
   "daily renewal nudge sweep",
   { hours: 24 },
   internal.notifications.sweepUpcomingNudges,
+);
+
+// Daily sweep for stuck cancel reminders (once-only per sub)
+crons.interval(
+  "daily stuck cancel reminder sweep",
+  { hours: 24 },
+  internal.notifications.sweepStaleReminders,
 );
 
 crons.interval(
