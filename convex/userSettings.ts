@@ -76,13 +76,23 @@ export const setLeadTimes = mutation({
       "7d": args.notify7d,
       "3d": args.notify3d,
       "24h": args.notify24h,
+      trial_7d: args.notify7d,
+      trial_3d: args.notify3d,
+      trial_24h: args.notify24h,
     } as const;
     const subs = await ctx.db
       .query("subscriptions")
       .withIndex("by_user", (q) => q.eq("userId", userId))
       .collect();
     for (const s of subs) {
-      for (const t of ["7d", "3d", "24h"] as const) {
+      for (const t of [
+        "7d",
+        "3d",
+        "24h",
+        "trial_7d",
+        "trial_3d",
+        "trial_24h",
+      ] as const) {
         if (enabled[t]) continue;
         const pending = await ctx.db
           .query("notifications")
