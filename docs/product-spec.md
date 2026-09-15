@@ -120,7 +120,7 @@ Same system, different CTA because the situation is different.
 ## Status doesn’t stop at “here’s how”
 
 ```
-active → action ready → user started → pending → cancelled
+active → action_ready → user_started → cancellation_pending → cancelled
                                          ↘ failed
 ```
 
@@ -146,12 +146,14 @@ We ask for the least Gmail access we can, don’t copy your whole inbox, and kee
 
 Not a finance dashboard. No budgets, net worth, or giant charts. It answers one question: what needs your attention?
 
+Top stays lean by choice: monthly pace, needs attention count, active incl trials. No annual projection, money-saved total, or health score — those are future, not now.
+
 Top: Needs attention — Adobe $54.99 in 2 days (red), Canva $15 in 6 days (yellow).
 Below: All subscriptions — flat list.
 
 ## Nudges
 
-Through AgentMail, roughly 7 days, 3 days, 24 hours, then after. “Renews tomorrow” when it matters, “Cancelled” when it’s done. Users will be able to tune this later.
+Through AgentMail, roughly 7 days, 3 days, 24 hours for renewals and the same 7d/3d/24h for trial endings, plus one stuck-cancel reminder and then after. “Renews tomorrow” when it matters, “Cancelled” when it’s done. Users will be able to tune this later.
 
 ## What we are not building
 
