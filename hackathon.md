@@ -13,9 +13,12 @@
 - **Auth:** Convex Auth
 - **AI models:** Groq `openai/gpt-oss-120b` primary, OpenRouter then OpenAI `gpt-4o-mini` fallback (`convex/ingestion/extract.ts`, `convex/research.ts`); no `OPENAI_API_KEY` set on the deployment
 - **Started:** 2026-08-28T08:01:06Z
-- **Last updated:** 2026-09-14T17:33:47Z
+- **Last updated:** 2026-09-15T12:00:00Z
 
 ## Log
+
+### 2026-09-15 - working tree
+Manual paste is back as full AI flow (`convex/manual.ts previewPaste` + `ManualAddDialog.tsx`: paste, Extract, editable preview, Save via `subscriptions.upsert` + `evidence.add manual`; entry in Subscriptions header and empty state). Trial warnings now send full 7d/3d/24h before `trialEndsAt` (`trial_7d/trial_3d/trial_24h` in `convex/schema.ts`, `convex/notifications.ts`) reusing lead-time prefs; stuck `user_started` gets one `reminder` after 3d via daily sweep (`sweepStaleReminders`, `startedAt` in schema, once-only dedup). Lifecycle uses `cancellation_pending` in code (`docs/product-spec.md` fixed) and research infra failures now set `subscriptions.status=failed` with retry path resetting to active. Dashboard stays lean by choice (monthly pace, attention, active incl trials; annual/saved/health parked in spec). Manage card gains Refresh research (`SubscriptionResearchRefresh.tsx`: 10-min cooldown, old steps kept; skipped on cancelled/hidden). An Edit-details row shipped then got cut per feedback, with its mutation removed too. Tests 18 passing across 5 files.
 
 ### 2026-09-14 - f5025a7
 Delete-my-account now confirms through an animated dialog (`src/components/settings/DeleteAccountDialog.tsx`: Base UI AlertDialog with a motion spring panel and blur backdrop, focus trap, Escape and backdrop close) instead of the inline expanding block. SettingsView only opens it and passes the confirm handler.
