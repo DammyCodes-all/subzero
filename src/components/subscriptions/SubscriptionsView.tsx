@@ -21,11 +21,12 @@ import {
 import { MerchantAvatar } from "@/components/MerchantAvatar";
 import { SubscriptionsSkeleton } from "@/components/Skeleton";
 import { SubscriptionRow } from "@/components/SubscriptionRow";
+import { ManualAddDialog } from "@/components/subscriptions/ManualAddDialog";
+import { SubscriptionDetailView } from "@/components/subscriptions/SubscriptionDetailView";
 import { Button } from "@/components/ui/button";
 import { LinkPendingDot, PendingWrap } from "@/components/ui/LinkPending";
 import { formatPrice, formatRenewalDate, frictionLabel } from "@/lib/format";
 import { merchantFaviconUrl } from "@/lib/merchantFavicon";
-import { SubscriptionDetailView } from "@/components/subscriptions/SubscriptionDetailView";
 import { api } from "../../../convex/_generated/api";
 import type { Doc, Id } from "../../../convex/_generated/dataModel";
 
@@ -61,6 +62,7 @@ function SubscriptionsContent() {
 
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 8;
+  const [manualOpen, setManualOpen] = useState(false);
   const markActive = useMutation(api.actions.markActive);
   const unhideSubscription = useMutation(api.actions.unhideSubscription);
   const [restoringId, setRestoringId] = useState<string | null>(null);
@@ -94,10 +96,9 @@ function SubscriptionsContent() {
   // Detail branch runs after every hook (see note above). Malformed ids fall
   // through to the not-found UI instead of crashing query validation.
   if (focusedId) {
-    const validId =
-      /^[a-z0-9]+$/i.test(focusedId)
-        ? (focusedId as Id<"subscriptions">)
-        : undefined;
+    const validId = /^[a-z0-9]+$/i.test(focusedId)
+      ? (focusedId as Id<"subscriptions">)
+      : undefined;
     return (
       <div className="space-y-4">
         <Link
@@ -182,7 +183,10 @@ function SubscriptionsContent() {
   const gridCards = paginatedSubs.map((sub) =>
     sub.status === "cancelled" || sub.hidden === true ? (
       <div key={sub._id} className="space-y-2">
-        <Link href={`/dashboard/subscriptions?sub=${sub._id}`} className="group block">
+        <Link
+          href={`/dashboard/subscriptions?sub=${sub._id}`}
+          className="group block"
+        >
           <ActionCard sub={sub} />
         </Link>
         <Button
@@ -220,49 +224,60 @@ function SubscriptionsContent() {
         </div>
 
         {/* View Mode Toggle — desktop only; mobile always shows cards */}
-        <div className="hidden items-center gap-1 self-start rounded-lg border border-border bg-card p-1 sm:flex sm:self-auto">
-          <button
-            type="button"
-            onClick={() => handleViewModeChange("grid")}
-            aria-label="Grid view"
-            className={`flex h-7 w-7 items-center justify-center rounded-md transition-colors ${
-              viewMode === "grid"
-                ? "bg-secondary text-foreground"
-                : "text-muted-foreground hover:text-foreground"
-            }`}
+        <div className="flex items-center gap-2 self-start sm:self-auto">
+          <Button
+            size="sm"
+            onClick={() => setManualOpen(true)}
+            className="h-8 text-xs font-semibold"
           >
-            <HugeiconsIcon
-              icon={
-                LayoutGridIcon as unknown as Parameters<
-                  typeof HugeiconsIcon
-                >[0]["icon"]
-              }
-              size={16}
-              color="currentColor"
-            />
-          </button>
-          <button
-            type="button"
-            onClick={() => handleViewModeChange("table")}
-            aria-label="Table view"
-            className={`flex h-7 w-7 items-center justify-center rounded-md transition-colors ${
-              viewMode === "table"
-                ? "bg-secondary text-foreground"
-                : "text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            <HugeiconsIcon
-              icon={
-                LayoutListIcon as unknown as Parameters<
-                  typeof HugeiconsIcon
-                >[0]["icon"]
-              }
-              size={16}
-              color="currentColor"
-            />
-          </button>
+            Add from receipt
+          </Button>
+          <div className="hidden items-center gap-1 rounded-lg border border-border bg-card p-1 sm:flex">
+            <button
+              type="button"
+              onClick={() => handleViewModeChange("grid")}
+              aria-label="Grid view"
+              className={`flex h-7 w-7 items-center justify-center rounded-md transition-colors ${
+                viewMode === "grid"
+                  ? "bg-secondary text-foreground"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              <HugeiconsIcon
+                icon={
+                  LayoutGridIcon as unknown as Parameters<
+                    typeof HugeiconsIcon
+                  >[0]["icon"]
+                }
+                size={16}
+                color="currentColor"
+              />
+            </button>
+            <button
+              type="button"
+              onClick={() => handleViewModeChange("table")}
+              aria-label="Table view"
+              className={`flex h-7 w-7 items-center justify-center rounded-md transition-colors ${
+                viewMode === "table"
+                  ? "bg-secondary text-foreground"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              <HugeiconsIcon
+                icon={
+                  LayoutListIcon as unknown as Parameters<
+                    typeof HugeiconsIcon
+                  >[0]["icon"]
+                }
+                size={16}
+                color="currentColor"
+              />
+            </button>
+          </div>
         </div>
       </div>
+
+      <ManualAddDialog open={manualOpen} onClose={() => setManualOpen(false)} />
 
       {/* Filter Tabs & Search Bar */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -337,101 +352,103 @@ function SubscriptionsContent() {
                 <div className="-mx-px overflow-x-auto">
                   <table className="w-full min-w-[620px] text-left text-xs">
                     <thead className="border-b border-border bg-secondary/40 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-                    <tr>
-                      <th className="px-4 py-3">Merchant</th>
-                      <th className="px-4 py-3">Price</th>
-                      <th className="px-4 py-3">Renewal Date</th>
-                      <th className="hidden px-4 py-3 md:table-cell">
-                        Friction
-                      </th>
-                      <th className="px-4 py-3">Status</th>
-                      <th className="px-4 py-3 text-right">Action</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-border/40">
-                    {paginatedSubs.map((sub) => (
-                      <tr
-                        key={sub._id}
-                        className="group transition-colors hover:bg-secondary/20"
-                      >
-                        <td className="px-4 py-3 font-medium text-foreground">
-                          <Link
-                            href={`/dashboard/subscriptions?sub=${sub._id}`}
-                            className="inline-flex items-center gap-2.5 hover:underline"
-                          >
-                            <MerchantAvatar
-                              merchant={sub.merchant}
-                              faviconUrl={merchantFaviconUrl(sub)}
-                              size={24}
-                            />
-                            <PendingWrap className="inline-flex items-center gap-1">
-                              {sub.merchant}
-                            </PendingWrap>
-                            <LinkPendingDot />
-                          </Link>
-                        </td>
-                        <td className="whitespace-nowrap px-4 py-3 font-numeric text-foreground">
-                          {formatPrice(
-                            sub.price,
-                            sub.currency,
-                            sub.billingInterval,
-                          )}
-                        </td>
-                        <td className="whitespace-nowrap px-4 py-3 text-muted-foreground">
-                          {formatRenewalDate(sub.nextRenewalAt)}
-                        </td>
-                        <td className="hidden whitespace-nowrap px-4 py-3 text-muted-foreground md:table-cell">
-                          {sub.cancellationDifficulty
-                            ? frictionLabel(sub.cancellationDifficulty)
-                            : "—"}
-                        </td>
-                        <td className="px-4 py-3">
-                          <span
-                            className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium capitalize ${
-                              sub.status === "cancelled" || sub.hidden === true
-                                ? "bg-slate-500/10 text-slate-400"
-                                : "bg-emerald-500/10 text-emerald-400"
-                            }`}
-                          >
-                            {sub.hidden === true ? "Hidden" : sub.status}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3 text-right">
-                          {sub.status === "cancelled" || sub.hidden === true ? (
-                            <Button
-                              variant="ghost"
-                              size="xs"
-                              disabled={restoringId === sub._id}
-                              onClick={() => handleRestore(sub)}
-                              className="h-7 text-xs"
-                            >
-                              {restoringId === sub._id
-                                ? "Restoring..."
-                                : "Restore"}
-                            </Button>
-                          ) : (
+                      <tr>
+                        <th className="px-4 py-3">Merchant</th>
+                        <th className="px-4 py-3">Price</th>
+                        <th className="px-4 py-3">Renewal Date</th>
+                        <th className="hidden px-4 py-3 md:table-cell">
+                          Friction
+                        </th>
+                        <th className="px-4 py-3">Status</th>
+                        <th className="px-4 py-3 text-right">Action</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border/40">
+                      {paginatedSubs.map((sub) => (
+                        <tr
+                          key={sub._id}
+                          className="group transition-colors hover:bg-secondary/20"
+                        >
+                          <td className="px-4 py-3 font-medium text-foreground">
                             <Link
                               href={`/dashboard/subscriptions?sub=${sub._id}`}
-                              className="inline-flex items-center"
+                              className="inline-flex items-center gap-2.5 hover:underline"
                             >
+                              <MerchantAvatar
+                                merchant={sub.merchant}
+                                faviconUrl={merchantFaviconUrl(sub)}
+                                size={24}
+                              />
+                              <PendingWrap className="inline-flex items-center gap-1">
+                                {sub.merchant}
+                              </PendingWrap>
+                              <LinkPendingDot />
+                            </Link>
+                          </td>
+                          <td className="whitespace-nowrap px-4 py-3 font-numeric text-foreground">
+                            {formatPrice(
+                              sub.price,
+                              sub.currency,
+                              sub.billingInterval,
+                            )}
+                          </td>
+                          <td className="whitespace-nowrap px-4 py-3 text-muted-foreground">
+                            {formatRenewalDate(sub.nextRenewalAt)}
+                          </td>
+                          <td className="hidden whitespace-nowrap px-4 py-3 text-muted-foreground md:table-cell">
+                            {sub.cancellationDifficulty
+                              ? frictionLabel(sub.cancellationDifficulty)
+                              : "—"}
+                          </td>
+                          <td className="px-4 py-3">
+                            <span
+                              className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium capitalize ${
+                                sub.status === "cancelled" ||
+                                sub.hidden === true
+                                  ? "bg-slate-500/10 text-slate-400"
+                                  : "bg-emerald-500/10 text-emerald-400"
+                              }`}
+                            >
+                              {sub.hidden === true ? "Hidden" : sub.status}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-right">
+                            {sub.status === "cancelled" ||
+                            sub.hidden === true ? (
                               <Button
                                 variant="ghost"
                                 size="xs"
-                                className="h-7 gap-1 text-xs"
+                                disabled={restoringId === sub._id}
+                                onClick={() => handleRestore(sub)}
+                                className="h-7 text-xs"
                               >
-                                <PendingWrap className="inline-flex items-center gap-1">
-                                  Inspect
-                                </PendingWrap>
-                                <LinkPendingDot />
+                                {restoringId === sub._id
+                                  ? "Restoring..."
+                                  : "Restore"}
                               </Button>
-                            </Link>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                            ) : (
+                              <Link
+                                href={`/dashboard/subscriptions?sub=${sub._id}`}
+                                className="inline-flex items-center"
+                              >
+                                <Button
+                                  variant="ghost"
+                                  size="xs"
+                                  className="h-7 gap-1 text-xs"
+                                >
+                                  <PendingWrap className="inline-flex items-center gap-1">
+                                    Inspect
+                                  </PendingWrap>
+                                  <LinkPendingDot />
+                                </Button>
+                              </Link>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             </>
           )}
