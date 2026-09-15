@@ -5,7 +5,12 @@ import {
   internalMutation,
   internalQuery,
 } from "./_generated/server";
-import { cancelledTemplate, renewalNudgeTemplate } from "./lib/emailTemplates";
+import {
+  actionReminderTemplate,
+  cancelledTemplate,
+  renewalNudgeTemplate,
+  trialEndingTemplate,
+} from "./lib/emailTemplates";
 
 const DAY = 24 * 60 * 60 * 1000;
 
@@ -41,60 +46,90 @@ export const scheduleNudgesForSubscription = internalMutation({
   args: { subscriptionId: v.id("subscriptions") },
   handler: async (ctx, args) => {
     const sub = await ctx.db.get(args.subscriptionId);
-    if (!sub || !sub.nextRenewalAt || sub.status === "cancelled") return;
+    if (!sub || sub.status === "cancelled") return;
     if (sub.muted || sub.hidden) return;
 
     const now = Date.now();
-    const renewalAt = sub.nextRenewalAt;
+    const userId = sub.userId;
+    const subscriptionId = args.subscriptionId;
 
     const prefs = await ctx.runQuery(internal.notifications.leadTimePrefs, {
-      userId: sub.userId,
+      userId,
     });
 
-    // Define milestones: 7d, 3d, 24h (skipping any the user turned off)
-    const allMilestones: Array<{ type: "7d" | "3d" | "24h"; time: number }> = [
-      { type: "7d", time: renewalAt - 7 * DAY },
-      { type: "3d", time: renewalAt - 3 * DAY },
-      { type: "24h", time: renewalAt - 1 * DAY },
-    ];
-    const milestones = allMilestones.filter((m) =>
-      m.type === "7d"
-        ? prefs.notify7d
-        : m.type === "3d"
-          ? prefs.notify3d
-          : prefs.notify24h,
-    );
+    async function scheduleOne(
+      type: "7d" | "3d" | "24h" | "trial_7d" | "trial_3d" | "trial_24h",
+      time: number,
+    ) {
+      if (time <= now) return;
+      const existing = await ctx.db
+        .query("notifications")
+        .withIndex("by_subscription_and_type", (q) =>
+          q.eq("subscriptionId", subscriptionId).eq("type", type),
+        )
+        .first();
+      if (existing) return;
+      const notificationId = await ctx.db.insert("notifications", {
+        userId,
+        subscriptionId,
+        scheduledAt: time,
+        type,
+        status: "pending",
+      });
+      const delay = Math.max(0, time - now);
+      await ctx.scheduler.runAfter(delay, internal.notifications.deliverNudge, {
+        notificationId,
+      });
+    }
 
-    for (const m of milestones) {
-      // Only schedule if the milestone is in the future
-      if (m.time > now) {
-        // Check if already scheduled
-        const existing = await ctx.db
-          .query("notifications")
-          .withIndex("by_subscription_and_type", (q) =>
-            q.eq("subscriptionId", args.subscriptionId).eq("type", m.type),
-          )
-          .first();
+    // Renewal milestones: 7d, 3d, 24h (skipping any the user turned off).
+    // When the trial ends the same day the paid plan starts, the trial
+    // copy already covers the charge — skip renewal rows so the user
+    // doesn't get two mails for one event.
+    const sameDay =
+      sub.nextRenewalAt !== undefined &&
+      sub.trialEndsAt !== undefined &&
+      Math.abs(sub.nextRenewalAt - sub.trialEndsAt) < DAY;
+    if (sub.nextRenewalAt && !sameDay) {
+      const renewalAt = sub.nextRenewalAt;
+      const allMilestones: Array<{ type: "7d" | "3d" | "24h"; time: number }> =
+        [
+          { type: "7d", time: renewalAt - 7 * DAY },
+          { type: "3d", time: renewalAt - 3 * DAY },
+          { type: "24h", time: renewalAt - 1 * DAY },
+        ];
+      for (const m of allMilestones) {
+        const allowed =
+          m.type === "7d"
+            ? prefs.notify7d
+            : m.type === "3d"
+              ? prefs.notify3d
+              : prefs.notify24h;
+        if (!allowed) continue;
+        await scheduleOne(m.type, m.time);
+      }
+    }
 
-        if (!existing) {
-          const notificationId = await ctx.db.insert("notifications", {
-            userId: sub.userId,
-            subscriptionId: args.subscriptionId,
-            scheduledAt: m.time,
-            type: m.type,
-            status: "pending",
-          });
-
-          // Schedule delivery at the milestone timestamp
-          const delay = Math.max(0, m.time - now);
-          await ctx.scheduler.runAfter(
-            delay,
-            internal.notifications.deliverNudge,
-            {
-              notificationId,
-            },
-          );
-        }
+    // Trial milestones: same 7d/3d/24h pattern before trialEndsAt.
+    // Reuses the same lead-time prefs. Skips past milestones.
+    if (sub.trialEndsAt) {
+      const trialAt = sub.trialEndsAt;
+      const trialMilestones: Array<{
+        type: "trial_7d" | "trial_3d" | "trial_24h";
+        time: number;
+        allowed: boolean;
+      }> = [
+        { type: "trial_7d", time: trialAt - 7 * DAY, allowed: prefs.notify7d },
+        { type: "trial_3d", time: trialAt - 3 * DAY, allowed: prefs.notify3d },
+        {
+          type: "trial_24h",
+          time: trialAt - 1 * DAY,
+          allowed: prefs.notify24h,
+        },
+      ];
+      for (const m of trialMilestones) {
+        if (!m.allowed) continue;
+        await scheduleOne(m.type, m.time);
       }
     }
   },
@@ -242,27 +277,42 @@ export const deliverNudge = internalAction({
 
     const { notif, sub, userEmail } = details;
     const isConfirmation = notif.type === "confirmed";
+    const isTrial =
+      notif.type === "trial_7d" ||
+      notif.type === "trial_3d" ||
+      notif.type === "trial_24h";
+    const isReminder = notif.type === "reminder";
 
     if (notif.status !== "pending" || sub.hidden) return;
     // Cancellation confirmations go out even for cancelled or muted subs.
     // That is the point: the user must hear when tracking stops.
-    // Renewal nudges still stop at cancelled or muted.
+    // Renewal, trial, and reminder nudges still stop at cancelled or muted.
     if (!isConfirmation && (sub.status === "cancelled" || sub.muted)) return;
+    // Reminder only makes sense while still stuck in user_started.
+    if (isReminder && sub.status !== "user_started") {
+      await ctx.runMutation(internal.notifications.markNotificationSent, {
+        notificationId: args.notificationId,
+        status: "failed",
+        error: "No longer stuck — status changed",
+      });
+      return;
+    }
 
     // Honor lead-time prefs at delivery too: the user may have turned
     // a warning off after it was scheduled. Record it plainly so the
     // history shows what happened instead of a stuck Pending row.
-    if (!isConfirmation) {
+    // Trial warnings reuse the same 7d/3d/24h prefs. Reminder has no pref.
+    if (!isConfirmation && !isReminder) {
       const prefs = await ctx.runQuery(internal.notifications.leadTimePrefs, {
         userId: sub.userId,
       });
-      const allowed =
-        notif.type === "7d"
+      const base =
+        notif.type === "7d" || notif.type === "trial_7d"
           ? prefs.notify7d
-          : notif.type === "3d"
+          : notif.type === "3d" || notif.type === "trial_3d"
             ? prefs.notify3d
             : prefs.notify24h;
-      if (!allowed) {
+      if (!base) {
         await ctx.runMutation(internal.notifications.markNotificationSent, {
           notificationId: args.notificationId,
           status: "failed",
@@ -295,19 +345,40 @@ export const deliverNudge = internalAction({
           },
           args.origin ?? "auto",
         )
-      : renewalNudgeTemplate(
-          {
+      : isTrial
+        ? trialEndingTemplate({
             merchant: sub.merchant,
             product: sub.product,
             price: sub.price,
             currency: sub.currency,
             billingInterval: sub.billingInterval,
-            nextRenewalAt: sub.nextRenewalAt,
+            trialEndsAt: sub.trialEndsAt,
             cancellationUrl: sub.cancellationUrl,
             subscriptionId: sub._id,
-          },
-          notif.type as "7d" | "3d" | "24h",
-        );
+          })
+        : isReminder
+          ? actionReminderTemplate({
+              merchant: sub.merchant,
+              product: sub.product,
+              price: sub.price,
+              currency: sub.currency,
+              billingInterval: sub.billingInterval,
+              nextRenewalAt: sub.nextRenewalAt,
+              subscriptionId: sub._id,
+            })
+          : renewalNudgeTemplate(
+              {
+                merchant: sub.merchant,
+                product: sub.product,
+                price: sub.price,
+                currency: sub.currency,
+                billingInterval: sub.billingInterval,
+                nextRenewalAt: sub.nextRenewalAt,
+                cancellationUrl: sub.cancellationUrl,
+                subscriptionId: sub._id,
+              },
+              notif.type as "7d" | "3d" | "24h",
+            );
     const body = text;
 
     const isProd = process.env.NODE_ENV === "production";
@@ -344,7 +415,11 @@ export const deliverNudge = internalAction({
         html,
         labels: isConfirmation
           ? ["cancellation-confirmed"]
-          : ["renewal-nudge"],
+          : isTrial
+            ? ["trial-ending"]
+            : isReminder
+              ? ["action-reminder"]
+              : ["renewal-nudge"],
       });
       await ctx.runMutation(internal.notifications.markNotificationSent, {
         notificationId: args.notificationId,
@@ -375,5 +450,98 @@ export const sweepUpcomingNudges = internalAction({
         },
       );
     }
+    const trialSubs = await ctx.runQuery(
+      internal.subscriptions.getTrialsUpcomingForSweep,
+    );
+    for (const sub of trialSubs) {
+      await ctx.runMutation(
+        internal.notifications.scheduleNudgesForSubscription,
+        {
+          subscriptionId: sub._id,
+        },
+      );
+    }
+  },
+});
+
+export const getStaleStartedInternal = internalQuery({
+  args: {},
+  handler: async (ctx) => {
+    const now = Date.now();
+    const threeDaysAgo = now - 3 * DAY;
+    const rows = await ctx.db.query("subscriptions").collect();
+    return rows
+      .filter(
+        (s) =>
+          s.status === "user_started" &&
+          !s.muted &&
+          !s.hidden &&
+          (s.startedAt ?? s._creationTime) < threeDaysAgo,
+      )
+      .map((s) => ({ _id: s._id }));
+  },
+});
+
+export const sweepStaleReminders = internalAction({
+  args: {},
+  handler: async (ctx) => {
+    const stale: Array<{ _id: string }> = await ctx.runQuery(
+      internal.notifications.getStaleStartedInternal,
+    );
+    for (const s of stale) {
+      const subId = s._id as never;
+      const existing = await ctx.runQuery(
+        internal.notifications.hasReminderInternal,
+        { subscriptionId: subId as never },
+      );
+      if (existing) continue;
+      const sub = await ctx.runQuery(internal.subscriptions.getInternal, {
+        id: subId as never,
+      });
+      if (!sub || sub.status !== "user_started" || sub.muted || sub.hidden)
+        continue;
+      await ctx.runMutation(internal.notifications.scheduleReminderInternal, {
+        subscriptionId: subId as never,
+      });
+    }
+  },
+});
+
+export const hasReminderInternal = internalQuery({
+  args: { subscriptionId: v.id("subscriptions") },
+  handler: async (ctx, args) => {
+    const row = await ctx.db
+      .query("notifications")
+      .withIndex("by_subscription_and_type", (q) =>
+        q.eq("subscriptionId", args.subscriptionId).eq("type", "reminder"),
+      )
+      .first();
+    return !!row;
+  },
+});
+
+export const scheduleReminderInternal = internalMutation({
+  args: { subscriptionId: v.id("subscriptions") },
+  handler: async (ctx, args) => {
+    const sub = await ctx.db.get(args.subscriptionId);
+    if (!sub || sub.status !== "user_started" || sub.muted || sub.hidden)
+      return;
+    const existing = await ctx.db
+      .query("notifications")
+      .withIndex("by_subscription_and_type", (q) =>
+        q.eq("subscriptionId", args.subscriptionId).eq("type", "reminder"),
+      )
+      .first();
+    if (existing) return;
+    const notificationId = await ctx.db.insert("notifications", {
+      userId: sub.userId,
+      subscriptionId: args.subscriptionId,
+      scheduledAt: Date.now(),
+      type: "reminder",
+      status: "pending",
+    });
+    await ctx.scheduler.runAfter(0, internal.notifications.deliverNudge, {
+      notificationId,
+    });
   },
 });
