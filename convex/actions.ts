@@ -91,7 +91,16 @@ async function ownedSub(ctx: MutationCtx, id: Id<"subscriptions">) {
   return sub;
 }
 
-const NUDGE_TYPES = ["7d", "3d", "24h", "confirmed"] as const;
+const NUDGE_TYPES = [
+  "7d",
+  "3d",
+  "24h",
+  "trial_7d",
+  "trial_3d",
+  "trial_24h",
+  "reminder",
+  "confirmed",
+] as const;
 
 /** Drop pending (unsent) notifications so silenced subs leave no stale rows. */
 async function clearPendingNudges(
@@ -129,7 +138,7 @@ export const markCancelled = mutation({
   returns: v.null(),
   handler: async (ctx, args) => {
     await ownedSub(ctx, args.id);
-    await ctx.db.patch(args.id, { status: "cancelled" });
+    await ctx.db.patch(args.id, { status: "cancelled", startedAt: undefined });
     await clearPendingNudges(ctx, args.id);
     await ctx.scheduler.runAfter(0, internal.notifications.notifyCancelled, {
       subscriptionId: args.id,
@@ -145,7 +154,7 @@ export const markActive = mutation({
   returns: v.null(),
   handler: async (ctx, args) => {
     await ownedSub(ctx, args.id);
-    await ctx.db.patch(args.id, { status: "active" });
+    await ctx.db.patch(args.id, { status: "active", startedAt: undefined });
     await rescheduleNudges(ctx, args.id);
     return null;
   },
@@ -240,7 +249,7 @@ export const deleteSubscription = mutation({
 export async function flipToStarted(ctx: any, id: Id<"subscriptions">) {
   const sub = await ctx.db.get(id);
   if (sub && (sub.status === "active" || sub.status === "action_ready")) {
-    await ctx.db.patch(id, { status: "user_started" });
+    await ctx.db.patch(id, { status: "user_started", startedAt: Date.now() });
   }
 }
 
