@@ -87,8 +87,12 @@ export const upsert = mutation({
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new Error("Not authenticated");
     const userId = identity.tokenIdentifier;
+    const merchant = args.merchant.trim();
+    if (!merchant) throw new Error("Merchant is required");
+    if (!Number.isFinite(args.price) || args.price <= 0 || args.price > 100000)
+      throw new Error("Enter a valid price");
     const product = cleanProductName(args.product);
-    const key = dedupKey({ ...args, product });
+    const key = dedupKey({ ...args, merchant, product });
     const existing = await ctx.db
       .query("subscriptions")
       .withIndex("by_user_and_dedup", (q) =>
@@ -123,9 +127,19 @@ export const upsert = mutation({
       return existing._id;
     }
 
+    // Manual re-add is explicit: clear any tombstone for this key so the
+    // entry stays and future scans don't suppress it as deleted.
+    const tomb = await ctx.db
+      .query("deletedSubscriptions")
+      .withIndex("by_user_and_dedup", (q) =>
+        q.eq("userId", userId).eq("dedupKey", key),
+      )
+      .first();
+    if (tomb) await ctx.db.delete(tomb._id);
+
     const subId = await ctx.db.insert("subscriptions", {
       userId,
-      merchant: args.merchant,
+      merchant,
       product,
       price: args.price,
       currency: args.currency,
@@ -145,9 +159,13 @@ export const upsert = mutation({
       internal.notifications.scheduleNudgesForSubscription,
       { subscriptionId: subId },
     );
-    await ctx.scheduler.runAfter(0, internal.research.researchCancellationRoute, {
-      subscriptionId: subId,
-    });
+    await ctx.scheduler.runAfter(
+      0,
+      internal.research.researchCancellationRoute,
+      {
+        subscriptionId: subId,
+      },
+    );
     return subId;
   },
 });
@@ -320,6 +338,23 @@ export const getUpcomingForSweep = internalQuery({
   },
 });
 
+export const getTrialsUpcomingForSweep = internalQuery({
+  args: {},
+  handler: async (ctx) => {
+    const now = Date.now();
+    const nextWeek = now + 7 * 24 * 60 * 60 * 1000;
+    const rows = await ctx.db
+      .query("subscriptions")
+      .withIndex("by_trial", (q) =>
+        q.gte("trialEndsAt", now).lte("trialEndsAt", nextWeek),
+      )
+      .collect();
+    return rows.filter(
+      (s) => s.status !== "cancelled" && !s.muted && !s.hidden,
+    );
+  },
+});
+
 export const getFailedForRetry = internalQuery({
   args: {},
   handler: async (ctx) => {
@@ -343,10 +378,14 @@ export const getFailedForRetry = internalQuery({
 export const markResearchPending = internalMutation({
   args: { id: v.id("subscriptions") },
   handler: async (ctx, args) => {
-    await ctx.db.patch(args.id, {
+    const sub = await ctx.db.get(args.id);
+    if (!sub) return;
+    const patch: Record<string, unknown> = {
       researchStatus: "pending",
       researchedAt: Date.now(),
-    });
+    };
+    if (sub.status === "failed") patch.status = "active";
+    await ctx.db.patch(args.id, patch as never);
   },
 });
 
@@ -431,13 +470,18 @@ export const saveResearchResult = internalMutation({
       (finalMethod === "manual" || finalMethod === "contact_support") &&
       finalInstructions.length > 0;
     const isVerified = hasVerifiedRoute || manualVerified;
+    const researchFailed = args.researchStatus === "failed";
 
     const patch: Record<string, unknown> = {
       cancellationMethod: finalMethod,
       cancellationDifficulty: difficulty,
       researchStatus: args.researchStatus ?? "done",
       researchedAt: Date.now(),
-      status: isVerified ? "action_ready" : "active",
+      status: researchFailed
+        ? "failed"
+        : isVerified
+          ? "action_ready"
+          : "active",
     };
     // Explicit delete on unknown: Convex patch with undefined removes optional field
     if (finalMethod === "unknown") {
@@ -506,5 +550,44 @@ export const saveResearchResult = internalMutation({
         });
       }
     }
+  },
+});
+
+async function ownedSubForWrite(ctx: any, id: any) {
+  const userId = await getAuthUserId(ctx);
+  if (!userId) throw new Error("Not authenticated");
+  const sub = await ctx.db.get(id);
+  if (
+    !sub ||
+    (sub.userId !== userId && !String(sub.userId).includes(String(userId)))
+  )
+    throw new Error("Not found");
+  return { sub, userId };
+}
+
+export const requestResearchRetry = mutation({
+  args: { id: v.id("subscriptions") },
+  handler: async (ctx, args) => {
+    const { sub } = await ownedSubForWrite(ctx, args.id);
+    if (sub.status === "cancelled" || sub.hidden)
+      throw new Error("Nothing left to check here");
+    const now = Date.now();
+    const last = sub.researchedAt ?? 0;
+    if (now - last < 10 * 60 * 1000)
+      throw new Error("Wait a few minutes before checking again");
+    const patch: Record<string, unknown> = {
+      researchStatus: "pending",
+      researchedAt: now,
+    };
+    if (sub.status === "failed") patch.status = "active";
+    await ctx.db.patch(args.id, patch as never);
+    await ctx.scheduler.runAfter(
+      0,
+      internal.research.researchCancellationRoute,
+      {
+        subscriptionId: args.id,
+      },
+    );
+    return args.id;
   },
 });
