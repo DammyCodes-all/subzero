@@ -8,34 +8,23 @@ import {
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useMutation } from "convex/react";
 import { useRouter } from "next/navigation";
-import { type ComponentProps, useState } from "react";
+import { useState } from "react";
 import { sileo } from "sileo";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/material-design-3-switch";
 import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
+import { ManageRowIcon } from "./ManageRowIcon";
+import { SubscriptionResearchRefresh } from "./SubscriptionResearchRefresh";
 
 type ManageSub = {
   _id: Id<"subscriptions">;
   merchant: string;
   status: string;
   muted?: boolean;
+  researchStatus?: string;
+  researchedAt?: number;
 };
-
-type Icon = ComponentProps<typeof HugeiconsIcon>["icon"];
-
-function RowIcon({ icon }: { icon: Icon }) {
-  return (
-    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-      <HugeiconsIcon
-        icon={icon}
-        size={18}
-        strokeWidth={1.8}
-        color="currentColor"
-      />
-    </div>
-  );
-}
 
 export function SubscriptionManageCard({ sub }: { sub: ManageSub }) {
   const router = useRouter();
@@ -76,10 +65,13 @@ export function SubscriptionManageCard({ sub }: { sub: ManageSub }) {
       </h2>
 
       <div className="rounded-xl border border-border bg-card divide-y divide-border/40">
+        {/* Research refresh */}
+        <SubscriptionResearchRefresh sub={sub} />
+
         {/* Mute */}
         <div className="flex items-center justify-between gap-4 px-5 py-4">
           <div className="flex items-start gap-3">
-            <RowIcon icon={Notification01Icon} />
+            <ManageRowIcon icon={Notification01Icon} />
             <div>
               <p className="text-sm font-medium text-foreground">
                 Mute notifications
@@ -113,7 +105,7 @@ export function SubscriptionManageCard({ sub }: { sub: ManageSub }) {
         {/* Cancel / restore */}
         <div className="flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-start gap-3">
-            <RowIcon icon={CheckmarkCircle01Icon} />
+            <ManageRowIcon icon={CheckmarkCircle01Icon} />
             <div className="min-w-0">
               <p className="text-sm font-medium text-foreground">
                 {isCancelled ? "Restore to active" : "Mark as cancelled"}
@@ -190,9 +182,9 @@ export function SubscriptionManageCard({ sub }: { sub: ManageSub }) {
                 Remove from SubZero
               </p>
               <p className="mt-0.5 text-xs text-muted-foreground">
-                Permanently deletes this entry, its receipts, and its
-                history. Your inbox is untouched. It will not come back on
-                rescan. This cannot be undone.
+                Permanently deletes this entry, its receipts, and its history.
+                Your inbox is untouched. It will not come back on rescan. This
+                cannot be undone.
               </p>
             </div>
           </div>
