@@ -99,17 +99,7 @@ function SubscriptionsContent() {
     const validId = /^[a-z0-9]+$/i.test(focusedId)
       ? (focusedId as Id<"subscriptions">)
       : undefined;
-    return (
-      <div className="space-y-4">
-        <Link
-          href="/dashboard/subscriptions"
-          className="inline-flex items-center gap-1 font-mono text-xs text-muted-foreground transition-colors hover:text-foreground"
-        >
-          ← Back to all subscriptions
-        </Link>
-        <SubscriptionDetailView subscriptionId={validId} />
-      </div>
-    );
+    return <SubscriptionDetailView subscriptionId={validId} />;
   }
 
   if (all === undefined) {
