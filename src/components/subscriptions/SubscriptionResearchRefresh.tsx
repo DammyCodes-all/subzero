@@ -1,6 +1,6 @@
 "use client";
 
-import { RefreshIcon, Search01Icon } from "@hugeicons/core-free-icons";
+import { RefreshIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useMutation } from "convex/react";
 import { useEffect, useState } from "react";
@@ -8,7 +8,6 @@ import { sileo } from "sileo";
 import { Button } from "@/components/ui/button";
 import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
-import { ManageRowIcon } from "./ManageRowIcon";
 
 type ResearchSub = {
   _id: Id<"subscriptions">;
@@ -85,34 +84,31 @@ export function SubscriptionResearchRefresh({ sub }: { sub: ResearchSub }) {
   }
 
   return (
-    <div className="flex items-center justify-between gap-4 px-5 py-4">
-      <div className="flex items-start gap-3">
-        <ManageRowIcon icon={Search01Icon} />
-        <div>
-          <p className="text-sm font-medium text-foreground">Refresh steps</p>
-          <p className="mt-0.5 text-xs text-muted-foreground">
-            {isPending
-              ? isStalePending
-                ? "Taking longer than usual — you can retry shortly."
-                : `Checking ${sub.merchant} help center… auto-updates in a bit.`
-              : sub.researchStatus === "failed"
-                ? "That check came up empty. Try it again."
-                : inCooldown
-                  ? lastChecked
-                    ? `Last checked ${lastChecked}. Research just ran — try again in ${cooldownLabel}.`
-                    : `Research just ran — try again in ${cooldownLabel}.`
-                  : lastChecked
-                    ? `Last checked ${lastChecked}. Looks off? Pull fresh steps. The old ones stay.`
-                    : "Looks off? Pull fresh steps. The old ones stay."}
-          </p>
-        </div>
+    <div className="flex flex-col gap-3 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:gap-4 sm:px-5">
+      <div className="min-w-0">
+        <p className="text-sm font-medium text-foreground">Refresh steps</p>
+        <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">
+          {isPending
+            ? isStalePending
+              ? "Taking longer than usual — you can retry shortly."
+              : `Checking ${sub.merchant} help center… auto-updates in a bit.`
+            : sub.researchStatus === "failed"
+              ? "That check came up empty. Try it again."
+              : inCooldown
+                ? lastChecked
+                  ? `Last checked ${lastChecked}. Research just ran — try again in ${cooldownLabel}.`
+                  : `Research just ran — try again in ${cooldownLabel}.`
+                : lastChecked
+                  ? `Last checked ${lastChecked}. Looks off? Pull fresh steps. The old ones stay.`
+                  : "Looks off? Pull fresh steps. The old ones stay."}
+        </p>
       </div>
       <Button
         variant="secondary"
         size="sm"
         disabled={busy || isPending || inCooldown}
         onClick={() => void handleRefresh()}
-        className="h-8 shrink-0 gap-1.5 text-xs font-medium"
+        className="h-9 w-full shrink-0 justify-center gap-1.5 text-xs font-medium sm:h-8 sm:w-auto"
       >
         <HugeiconsIcon
           icon={

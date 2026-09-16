@@ -373,17 +373,32 @@ export function DetailSkeleton() {
         </div>
       </section>
 
-      {/* Manage card */}
-      <div className="rounded-xl border border-border bg-card p-5">
-        <Line className="h-4 w-40" />
-        <div className="mt-4 space-y-3">
-          {[0, 1, 2].map((i) => (
-            <div key={i} className="flex items-center gap-3">
-              <div className="h-8 w-8 shrink-0 animate-pulse rounded-lg bg-primary/10" />
-              <Line className="h-4 flex-1" />
+      {/* Manage card — main settings + separated danger zone */}
+      <div className="rounded-xl border border-border bg-card">
+        <div className="space-y-4 p-4 sm:p-5">
+          <div>
+            <Line className="h-4 w-32" />
+            <Line className="mt-1.5 h-3 w-full" />
+            <Line className="mt-3 h-9 w-full rounded-lg sm:h-8 sm:w-28" />
+          </div>
+          <div className="flex items-center justify-between gap-3 border-t border-border/40 pt-4">
+            <div className="flex-1">
+              <Line className="h-4 w-36" />
+              <Line className="mt-1.5 h-3 w-full" />
             </div>
-          ))}
+            <div className="h-5 w-9 shrink-0 animate-pulse rounded-full bg-border/60" />
+          </div>
+          <div className="border-t border-border/40 pt-4">
+            <Line className="h-4 w-40" />
+            <Line className="mt-1.5 h-3 w-full" />
+            <Line className="mt-3 h-9 w-full rounded-lg sm:h-8 sm:w-32" />
+          </div>
         </div>
+      </div>
+      <div className="rounded-xl border border-destructive/30 p-4 sm:p-5">
+        <Line className="h-4 w-40" />
+        <Line className="mt-1.5 h-3 w-full" />
+        <Line className="mt-3 h-9 w-full rounded-lg sm:h-8 sm:w-24" />
       </div>
     </div>
   );

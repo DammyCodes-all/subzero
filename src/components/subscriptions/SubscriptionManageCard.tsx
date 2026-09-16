@@ -1,11 +1,5 @@
 "use client";
 
-import {
-  CheckmarkCircle01Icon,
-  Delete02Icon,
-  Notification01Icon,
-} from "@hugeicons/core-free-icons";
-import { HugeiconsIcon } from "@hugeicons/react";
 import { useMutation } from "convex/react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -14,7 +8,6 @@ import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/material-design-3-switch";
 import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
-import { ManageRowIcon } from "./ManageRowIcon";
 import { SubscriptionResearchRefresh } from "./SubscriptionResearchRefresh";
 
 type ManageSub = {
@@ -69,19 +62,16 @@ export function SubscriptionManageCard({ sub }: { sub: ManageSub }) {
         <SubscriptionResearchRefresh sub={sub} />
 
         {/* Mute */}
-        <div className="flex items-center justify-between gap-4 px-5 py-4">
-          <div className="flex items-start gap-3">
-            <ManageRowIcon icon={Notification01Icon} />
-            <div>
-              <p className="text-sm font-medium text-foreground">
-                Mute notifications
-              </p>
-              <p className="mt-0.5 text-xs text-muted-foreground">
-                {isCancelled
-                  ? "Cancelled subscriptions never send alerts."
-                  : "Renewal alerts stop for this one. We still tell you if it gets cancelled."}
-              </p>
-            </div>
+        <div className="flex items-center justify-between gap-3 px-4 py-4 sm:gap-4 sm:px-5">
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-medium text-foreground">
+              Mute notifications
+            </p>
+            <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">
+              {isCancelled
+                ? "Cancelled subscriptions never send alerts."
+                : "Renewal alerts stop for this one. We still tell you if it gets cancelled."}
+            </p>
           </div>
           <Switch
             size="sm"
@@ -99,33 +89,31 @@ export function SubscriptionManageCard({ sub }: { sub: ManageSub }) {
               })
             }
             aria-label="Mute notifications for this subscription"
+            className="shrink-0"
           />
         </div>
 
         {/* Cancel / restore */}
-        <div className="flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-start gap-3">
-            <ManageRowIcon icon={CheckmarkCircle01Icon} />
-            <div className="min-w-0">
-              <p className="text-sm font-medium text-foreground">
-                {isCancelled ? "Restore to active" : "Mark as cancelled"}
-              </p>
-              <p className="mt-0.5 text-xs text-muted-foreground">
-                {isCancelled
-                  ? "Bring this back to your active list with alerts on."
-                  : "Already cancelled outside SubZero? Mark it so tracking and alerts stop."}
-              </p>
-            </div>
+        <div className="flex flex-col gap-3 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:gap-4 sm:px-5">
+          <div className="min-w-0">
+            <p className="text-sm font-medium text-foreground">
+              {isCancelled ? "Restore to active" : "Mark as cancelled"}
+            </p>
+            <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">
+              {isCancelled
+                ? "Bring this back to your active list with alerts on."
+                : "Already cancelled outside SubZero? Mark it so tracking and alerts stop."}
+            </p>
           </div>
           {confirming === "cancel" && !isCancelled ? (
-            <div className="flex shrink-0 items-center gap-2">
+            <div className="grid shrink-0 grid-cols-2 gap-2 sm:flex sm:items-center">
               <Button
                 size="sm"
                 disabled={busy !== null}
                 onClick={() =>
                   run("cancel", () => markCancelled({ id: sub._id }))
                 }
-                className="h-8 text-xs font-semibold"
+                className="h-9 justify-center text-xs font-semibold sm:h-8"
               >
                 {busy === "cancel" ? "Marking..." : "Yes, mark cancelled"}
               </Button>
@@ -134,7 +122,7 @@ export function SubscriptionManageCard({ sub }: { sub: ManageSub }) {
                 size="sm"
                 disabled={busy !== null}
                 onClick={() => setConfirming(null)}
-                className="h-8 text-xs font-medium"
+                className="h-9 justify-center text-xs font-medium sm:h-8"
               >
                 Keep tracking
               </Button>
@@ -151,7 +139,7 @@ export function SubscriptionManageCard({ sub }: { sub: ManageSub }) {
                   setConfirming("cancel");
                 }
               }}
-              className="h-8 shrink-0 text-xs font-medium"
+              className="h-9 w-full justify-center text-xs font-medium sm:h-8 sm:w-auto"
             >
               {busy === "cancel"
                 ? "Working..."
@@ -161,75 +149,58 @@ export function SubscriptionManageCard({ sub }: { sub: ManageSub }) {
             </Button>
           )}
         </div>
+      </div>
 
-        {/* Remove */}
-        <div className="flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-start gap-3">
-            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-destructive/10 text-destructive">
-              <HugeiconsIcon
-                icon={
-                  Delete02Icon as unknown as Parameters<
-                    typeof HugeiconsIcon
-                  >[0]["icon"]
-                }
-                size={18}
-                strokeWidth={1.8}
-                color="currentColor"
-              />
-            </div>
-            <div className="min-w-0">
-              <p className="text-sm font-medium text-foreground">
-                Remove from SubZero
-              </p>
-              <p className="mt-0.5 text-xs text-muted-foreground">
-                Permanently deletes this entry, its receipts, and its history.
-                Your inbox is untouched. It will not come back on rescan. This
-                cannot be undone.
-              </p>
-            </div>
-          </div>
-          {confirming === "remove" ? (
-            <div className="flex shrink-0 items-center gap-2">
-              <Button
-                variant="destructive"
-                size="sm"
-                disabled={busy !== null}
-                onClick={() =>
-                  run("remove", async () => {
-                    await deleteSubscription({ id: sub._id });
-                    sileo.success({
-                      title: "Deleted",
-                      description: `${sub.merchant} is permanently gone.`,
-                    });
-                    router.push("/dashboard/subscriptions");
-                  })
-                }
-                className="h-8 text-xs font-semibold"
-              >
-                {busy === "remove" ? "Removing..." : "Yes, remove"}
-              </Button>
-              <Button
-                variant="secondary"
-                size="sm"
-                disabled={busy !== null}
-                onClick={() => setConfirming(null)}
-                className="h-8 text-xs font-medium"
-              >
-                Keep it
-              </Button>
-            </div>
-          ) : (
+      {/* Danger zone — separated so Remove never reads as a normal setting */}
+      <div className="rounded-xl border border-destructive/25 bg-destructive/[0.04] p-4 sm:px-5">
+        <p className="text-sm font-medium text-foreground">
+          Remove from SubZero
+        </p>
+        <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">
+          Permanently deletes receipts and history. Your inbox is untouched
+          and it won&apos;t come back on rescan.
+        </p>
+        {confirming === "remove" ? (
+          <div className="mt-3 grid grid-cols-2 gap-2 sm:flex sm:items-center">
             <Button
               variant="destructive"
               size="sm"
               disabled={busy !== null}
-              onClick={() => setConfirming("remove")}
-              className="h-8 shrink-0 text-xs font-medium"
+              onClick={() =>
+                run("remove", async () => {
+                  await deleteSubscription({ id: sub._id });
+                  sileo.success({
+                    title: "Deleted",
+                    description: `${sub.merchant} is permanently gone.`,
+                  });
+                  router.push("/dashboard/subscriptions");
+                })
+              }
+              className="h-9 justify-center text-xs font-semibold sm:h-8"
             >
-              Remove
+              {busy === "remove" ? "Removing..." : "Yes, remove"}
             </Button>
-          )}
-        </div>
+            <Button
+              variant="secondary"
+              size="sm"
+              disabled={busy !== null}
+              onClick={() => setConfirming(null)}
+              className="h-9 justify-center text-xs font-medium sm:h-8"
+            >
+              Keep it
+            </Button>
+          </div>
+        ) : (
+          <Button
+            variant="destructive"
+            size="sm"
+            disabled={busy !== null}
+            onClick={() => setConfirming("remove")}
+            className="mt-3 h-9 w-full justify-center text-xs font-medium sm:h-8 sm:w-auto"
+          >
+            Remove
+          </Button>
+        )}
       </div>
 
       {error && (
