@@ -10,7 +10,9 @@
     "format": "biome format .",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "check": "tsc --noEmit && biome check . && vitest run"
+    "check": "tsc --noEmit && biome check . && vitest run",
+    "deploy": "npx @convex-dev/static-hosting deploy -d out",
+    "deploy:frontend": "npx @convex-dev/static-hosting deploy -d out --skip-convex"
   },
   "dependencies": {
     "@agentmail/convex": "^0.1.0",
