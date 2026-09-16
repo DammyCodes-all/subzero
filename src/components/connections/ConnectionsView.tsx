@@ -1,7 +1,5 @@
 "use client";
 
-import { MailAccount01Icon } from "@hugeicons/core-free-icons";
-import { HugeiconsIcon } from "@hugeicons/react";
 import { useAction, useMutation, useQuery } from "convex/react";
 import { useState } from "react";
 import { sileo } from "sileo";
@@ -120,9 +118,9 @@ export function ConnectionsView() {
   );
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
+    <div className="space-y-4 sm:space-y-6">
+      <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <div className="min-w-0">
           <h1 className="font-heading text-2xl font-bold tracking-tight">
             Connections
           </h1>
@@ -132,7 +130,7 @@ export function ConnectionsView() {
           </p>
         </div>
         {googleConns.length > 0 ? (
-          <ConnectGmailButton className="h-8 gap-1.5 rounded-lg border border-border bg-transparent px-3 text-xs font-medium text-foreground/80 hover:border-primary hover:bg-primary hover:text-primary-foreground">
+          <ConnectGmailButton className="h-9 w-full justify-center gap-1.5 rounded-lg border border-border bg-transparent px-3 text-xs font-medium text-foreground/80 hover:border-primary hover:bg-primary hover:text-primary-foreground sm:h-8 sm:w-auto">
             Add another inbox
           </ConnectGmailButton>
         ) : null}
@@ -147,33 +145,19 @@ export function ConnectionsView() {
             {lastSync ? ` · last synced ${timeAgo(lastSync)}` : ""}
           </p>
 
-          {/* Gmail inboxes */}
-          <section className="space-y-6 rounded-xl border border-border bg-card p-6 shadow-xs">
-            <div className="flex items-center gap-2.5 border-b border-border pb-4">
-              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                <HugeiconsIcon
-                  icon={
-                    MailAccount01Icon as unknown as Parameters<
-                      typeof HugeiconsIcon
-                    >[0]["icon"]
-                  }
-                  size={20}
-                  strokeWidth={1.8}
-                  color="currentColor"
-                />
-              </div>
-              <div>
-                <h2 className="font-heading text-base font-semibold">
-                  Gmail
-                </h2>
-                <p className="text-xs text-muted-foreground">
-                  Automatically keeps SubZero up to date when new subscription
-                  emails arrive.
-                </p>
-              </div>
+          {/* Gmail inboxes — single flat card, rows divide, no inner box */}
+          <section className="rounded-xl border border-border bg-card p-4 sm:p-5">
+            <div className="flex items-baseline justify-between gap-2">
+              <h2 className="font-heading text-base font-semibold">Gmail</h2>
+              <p className="shrink-0 font-mono text-[11px] text-muted-foreground">
+                Auto-sync
+              </p>
             </div>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              New subscription emails keep SubZero up to date.
+            </p>
 
-            <div className="space-y-3">
+            <div className="mt-2 divide-y divide-border/40 border-t border-border/40">
               {googleConns.map((conn) => (
                 <GmailInboxRow
                   key={conn._id}
@@ -192,7 +176,7 @@ export function ConnectionsView() {
               ))}
 
               {googleConns.length === 0 && (
-                <div className="rounded-lg border border-dashed border-border/60 p-6 text-center">
+                <div className="py-6 text-center">
                   <p className="text-sm font-medium text-foreground">
                     Nothing connected yet
                   </p>
@@ -200,14 +184,14 @@ export function ConnectionsView() {
                     Hook up Gmail and SubZero quietly picks up your
                     subscriptions and trials in the background.
                   </p>
-                  <ConnectGmailButton className="mx-auto mt-4 gap-1.5 rounded-lg bg-primary text-xs font-semibold text-primary-foreground hover:bg-primary/90">
+                  <ConnectGmailButton className="mx-auto mt-4 h-9 justify-center gap-1.5 rounded-lg bg-primary text-xs font-semibold text-primary-foreground hover:bg-primary/90">
                     Connect Gmail
                   </ConnectGmailButton>
                 </div>
               )}
             </div>
 
-            <p className="border-t border-border pt-3 font-mono text-[11px] text-muted-foreground">
+            <p className="mt-3 text-[11px] text-muted-foreground">
               Read-only access. SubZero looks for receipts, nothing else.
             </p>
           </section>

@@ -31,7 +31,7 @@ export function ForwardingCard() {
 
   if (!inbox) {
     return (
-      <div className="rounded-md border border-dashed border-border/60 bg-transparent p-5">
+      <div className="rounded-xl border border-border bg-card p-4 shadow-xs sm:p-5">
         <h3 className="text-sm font-medium text-foreground">Forward any receipt</h3>
         <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">
           Your forwarding address is being set up. Check back in a moment.
@@ -72,14 +72,14 @@ export function ForwardingCard() {
   }
 
   return (
-    <div className="rounded-md border border-dashed border-border/60 bg-transparent p-4">
+    <div className="rounded-xl border border-border bg-card p-4 shadow-xs sm:p-5">
       <h3 className="text-sm font-medium text-foreground">Forward any receipt</h3>
       <p className="mt-0.5 text-xs text-muted-foreground">
         Send any subscription receipt here and it will appear in SubZero
         automatically.
       </p>
-      <div className="mt-3 flex items-center gap-2">
-        <code className="flex-1 truncate rounded-md border border-border bg-secondary px-3 py-2 font-mono text-[13px] font-medium tabular-nums text-foreground">
+      <div className="mt-3 flex min-w-0 items-center gap-2">
+        <code className="h-9 min-w-0 flex-1 truncate rounded-md border border-border bg-secondary px-3 py-2 font-mono text-[12px] font-medium tabular-nums text-foreground sm:text-[13px]">
           {displayInbox}
         </code>
         <Button

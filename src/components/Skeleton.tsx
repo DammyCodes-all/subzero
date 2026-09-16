@@ -279,21 +279,18 @@ export function SettingsSkeleton() {
 
 function InboxRowSkeleton() {
   return (
-    <div className="rounded-lg border border-border/80 bg-background/50 p-4">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex min-w-0 items-center gap-3">
-          <div className="h-8 w-8 shrink-0 animate-pulse rounded-full bg-muted" />
-          <div className="min-w-0">
-            <div className="flex items-center gap-2">
-              <Line className="h-4 w-44" />
-              <Line className="h-5 w-16 rounded-full" />
-            </div>
-            <Line className="mt-1.5 h-3 w-40" />
+    <div className="py-4 first:pt-3 last:pb-1">
+      <div className="flex flex-col gap-2.5 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5">
+            <Line className="h-4 w-44 max-w-full" />
+            <Line className="h-5 w-16 rounded-full" />
           </div>
+          <Line className="mt-1.5 h-3 w-40 max-w-full" />
         </div>
-        <div className="flex shrink-0 items-center gap-2">
-          <Line className="h-8 w-24" />
+        <div className="flex shrink-0 items-center gap-1.5 pt-0.5 sm:pt-0 sm:pl-4">
           <Line className="h-8 w-20" />
+          <Line className="h-8 w-16" />
         </div>
       </div>
     </div>
@@ -302,8 +299,8 @@ function InboxRowSkeleton() {
 
 export function ConnectionsSkeleton() {
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-end justify-between gap-3">
+    <div className="space-y-4 sm:space-y-6">
+      <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <Line className="h-7 w-40" />
           <Line className="mt-1 h-4 w-96 max-w-full" />
@@ -311,17 +308,20 @@ export function ConnectionsSkeleton() {
       </div>
       <Line className="h-3 w-48 font-mono" />
 
-      {/* Gmail section card */}
-      <section className="space-y-3 rounded-xl border border-border bg-card p-6 shadow-xs">
-        <div className="border-b border-border pb-4">
-          <SectionHeaderSkeleton iconSize="h-9 w-9" />
-          <Line className="mt-1 h-3 w-72 max-w-full" />
+      {/* Gmail section card — flat, rows divide */}
+      <section className="rounded-xl border border-border bg-card p-4 sm:p-5">
+        <div className="flex items-baseline justify-between gap-2">
+          <Line className="h-5 w-16" />
+          <Line className="h-3 w-20" />
         </div>
-        <InboxRowSkeleton />
-        <InboxRowSkeleton />
-        <p className="border-t border-border pt-3">
-          <Line className="h-3 w-64" />
-        </p>
+        <Line className="mt-1.5 h-3 w-72 max-w-full" />
+        <div className="mt-2 divide-y divide-border/40 border-t border-border/40">
+          <InboxRowSkeleton />
+          <InboxRowSkeleton />
+        </div>
+        <div className="mt-3">
+          <Line className="h-3 w-64 max-w-full" />
+        </div>
       </section>
 
       {/* Forwarding card */}
@@ -391,12 +391,12 @@ export function DetailSkeleton() {
 
 export function ForwardingCardSkeleton() {
   return (
-    <div className="animate-pulse rounded-md border border-dashed border-border/60 bg-transparent p-5">
+    <div className="animate-pulse rounded-xl border border-border bg-card p-4 sm:p-5">
       <Line className="h-4 w-32" />
       <Line className="mt-2.5 h-3.5 w-full" />
-      <div className="mt-4 flex items-center gap-2">
+      <div className="mt-4 flex min-w-0 items-center gap-2">
         <Line className="h-9 flex-1" />
-        <Line className="h-8 w-16 shrink-0" />
+        <Line className="h-9 w-16 shrink-0" />
       </div>
       <Line className="mt-2 h-3 w-48" />
     </div>
@@ -405,13 +405,10 @@ export function ForwardingCardSkeleton() {
 
 export function ConnectionsAgentMailSkeleton() {
   return (
-    <div className="animate-pulse flex flex-col gap-3 rounded-lg border border-border/80 bg-background/50 p-4 sm:flex-row sm:items-center sm:justify-between">
-      <div className="flex items-center gap-3">
-        <div className="h-8 w-8 rounded-full bg-muted" />
-        <div>
-          <Line className="h-4 w-48" />
-          <Line className="mt-1.5 h-3 w-56" />
-        </div>
+    <div className="animate-pulse flex flex-col gap-2.5 py-4 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+      <div>
+        <Line className="h-4 w-48 max-w-full" />
+        <Line className="mt-1.5 h-3 w-56 max-w-full" />
       </div>
       <Line className="h-8 w-20" />
     </div>

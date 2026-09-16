@@ -1,8 +1,6 @@
 "use client";
 
 import {
-  Cancel01Icon,
-  CheckmarkCircle01Icon,
   Loading03Icon,
   MailSearch01Icon,
 } from "@hugeicons/core-free-icons";
@@ -118,42 +116,19 @@ export function GmailInboxRow({
   };
 
   return (
-    <div className="rounded-lg border border-border/80 bg-background/50 p-4">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex min-w-0 items-center gap-3">
-          <div
-            className={
-              isDisconnected
-                ? "flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground"
-                : health === "reauth"
-                  ? "flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-amber-500/10 text-amber-300"
-                  : "flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-emerald-500/10 text-emerald-400"
-            }
-          >
-            <HugeiconsIcon
-              icon={
-                (isDisconnected || health === "reauth"
-                  ? Cancel01Icon
-                  : CheckmarkCircle01Icon) as unknown as Parameters<
-                  typeof HugeiconsIcon
-                >[0]["icon"]
-              }
-              size={16}
-              strokeWidth={1.8}
-              color="currentColor"
-            />
-          </div>
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-2">
+    <div className="py-4 first:pt-3 last:pb-1">
+      <div className="flex flex-col gap-2.5 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+        <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5">
               {conn.accountEmail ? (
                 <a
                   href={`mailto:${conn.accountEmail}`}
-                  className="truncate font-mono text-sm font-medium text-foreground underline-offset-4 hover:underline"
+                  className="min-w-0 break-all font-mono text-sm font-medium text-foreground underline-offset-4 hover:underline"
                 >
                   {conn.accountEmail}
                 </a>
               ) : (
-                <p className="truncate font-mono text-sm font-medium text-foreground">
+                <p className="min-w-0 break-all font-mono text-sm font-medium text-foreground">
                   Connected Gmail
                 </p>
               )}
@@ -205,15 +180,14 @@ export function GmailInboxRow({
               </p>
             ) : null}
           </div>
-        </div>
 
-        <div className="flex shrink-0 items-center gap-2">
+        <div className="flex shrink-0 items-center gap-1.5 pt-0.5 sm:pt-0 sm:pl-4">
           {isDisconnected || health === "reauth" ? (
             <Button
-              variant="outline"
+              variant="secondary"
               size="sm"
               onClick={onReconnect}
-              className="h-8 gap-1.5 text-xs font-medium"
+              className="h-8 flex-none gap-1.5 px-3 text-xs font-medium"
             >
               Reconnect
             </Button>
@@ -224,7 +198,7 @@ export function GmailInboxRow({
                 size="sm"
                 disabled={disconnecting}
                 onClick={onDisconnect}
-                className="h-8 text-xs font-medium"
+                className="h-8 flex-none px-3 text-xs font-medium"
               >
                 {disconnecting ? "Disconnecting…" : "Yes, disconnect"}
               </Button>
@@ -233,7 +207,7 @@ export function GmailInboxRow({
                 size="sm"
                 disabled={disconnecting}
                 onClick={disarm}
-                className="h-8 text-xs"
+                className="h-8 flex-none px-2 text-xs"
               >
                 Keep it
               </Button>
@@ -241,7 +215,7 @@ export function GmailInboxRow({
           ) : (
             <>
               <Button
-                variant="outline"
+                variant="secondary"
                 size="sm"
                 disabled={scanning || scanBusy || onCooldown || disconnecting}
                 onClick={onScan}
@@ -250,7 +224,7 @@ export function GmailInboxRow({
                     ? `Try again in ${cooldownLabel}`
                     : "Scan this inbox now"
                 }
-                className="h-8 gap-1.5 text-xs font-medium"
+                className="h-8 flex-none gap-1.5 px-3 text-xs font-medium"
               >
                 {scanning ? (
                   <>
@@ -277,7 +251,16 @@ export function GmailInboxRow({
                       size={14}
                       color="currentColor"
                     />
-                    {onCooldown ? `Try again in ${cooldownLabel}` : "Scan now"}
+                    {onCooldown ? (
+                      <>
+                        <span className="sm:hidden">In {cooldownLabel}</span>
+                        <span className="hidden sm:inline">
+                          Try again in {cooldownLabel}
+                        </span>
+                      </>
+                    ) : (
+                      "Scan now"
+                    )}
                   </>
                 )}
               </Button>
@@ -286,7 +269,7 @@ export function GmailInboxRow({
                 size="sm"
                 disabled={disconnecting || scanning}
                 onClick={arm}
-                className="h-8 gap-1.5 text-xs text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                className="h-8 flex-none gap-1 px-2 text-xs text-muted-foreground hover:bg-transparent hover:text-destructive"
               >
                 Disconnect
               </Button>
