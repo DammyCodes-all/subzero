@@ -7,26 +7,26 @@ import { action } from "./_generated/server";
 import {
   buildGmailQuery,
   getAccessToken,
-  getMessage,
   getProfileHistoryId,
   isAuthError,
   listMessages,
 } from "./lib/gmail";
 import {
-  handleFetchedMessage,
+  fetchAndHandle,
   mapWithConcurrency,
   newScanCounters,
-  queueFailure,
 } from "./lib/gmailProcess";
+import {
+  INITIAL_SCAN_INLINE_CAP,
+  remainingScanBudget,
+} from "./lib/gmailScanBudget";
 import { processOneEmail } from "./lib/processEmail";
 
 const COOLDOWN_MS = 10 * 60 * 1000;
 
-// Manual scan budget: 50 emails inline per run per connection (matches the
-// backfill lifetime cap, so a typical first scan finishes in one action).
-// Anything beyond that chains into the fast-drain backfill worker (~20s
-// between batches) so the first sync lands in ~1min, not via the 15m cron.
-const MANUAL_PER_RUN = 50;
+// Keep the interactive pass to one Gmail page. The remaining historical
+// budget moves to the resumable worker so the action returns quickly and the
+// dashboard can render results as they arrive.
 
 export const scanGmail = action({
   args: {
@@ -153,45 +153,29 @@ export const scanGmail = action({
       let stoppedEarly = false;
       try {
         do {
+          const pageBudget = remainingScanBudget(
+            runProcessed,
+            INITIAL_SCAN_INLINE_CAP,
+          );
+          if (pageBudget <= 0) {
+            stoppedEarly = !!pageToken;
+            break;
+          }
           const { messages, nextPageToken } = await listMessages(
             accessToken,
             q,
-            15,
+            Math.min(15, pageBudget),
             pageToken,
           );
           pageToken = nextPageToken;
           pages++;
-          for (let i = 0; i < messages.length; i += 5) {
-            const batch = messages.slice(i, i + 5);
-            const fetched = await Promise.all(
-              batch.map((m) => getMessage(accessToken, m.id).catch(() => null)),
-            );
-            const jobs: { msg: any }[] = [];
-            for (let j = 0; j < batch.length; j++) {
-              const msg = fetched[j];
-              runProcessed++;
-              if (!msg) {
-                await queueFailure(
-                  ctx,
-                  userId,
-                  conn,
-                  batch[j].id,
-                  "fetch",
-                  "fetch_failed",
-                  c,
-                );
-                continue;
-              }
-              anyScanned = true;
-              jobs.push({ msg });
-            }
-            // 3-wide extracts with token-bucket pacing (see gmailProcess) —
-            // replaces serial + fixed 450ms sleep.
-            await mapWithConcurrency(jobs, ({ msg }) =>
-              handleFetchedMessage(ctx, userId, conn, msg, c),
-            );
-          }
-          if (runProcessed >= MANUAL_PER_RUN && pageToken) {
+          const scannedBefore = c.scanned;
+          await mapWithConcurrency(messages, (message) =>
+            fetchAndHandle(ctx, userId, conn, accessToken, message.id, c),
+          );
+          runProcessed += messages.length;
+          if (c.scanned > scannedBefore) anyScanned = true;
+          if (runProcessed >= INITIAL_SCAN_INLINE_CAP && pageToken) {
             stoppedEarly = true;
             break;
           }
@@ -253,10 +237,13 @@ export const scanGmail = action({
         // Seed historyId for future incremental poll (proactive watching)
         try {
           const hid = await getProfileHistoryId(accessToken);
-          await ctx.runMutation(internal.gmailConnectionState.updateHistoryId as any, {
-            connId: conn._id,
-            historyId: hid,
-          });
+          await ctx.runMutation(
+            internal.gmailConnectionState.updateHistoryId as any,
+            {
+              connId: conn._id,
+              historyId: hid,
+            },
+          );
         } catch {}
         // Best-effort ensure watch if topic configured
         try {
@@ -298,9 +285,12 @@ export const scanGmail = action({
         const mine = failed.filter((s) => s.userId === userId).slice(0, 3);
         for (const s of mine) {
           try {
-            await ctx.runMutation(internal.subscriptions.markResearchPending as any, {
-              id: s._id,
-            });
+            await ctx.runMutation(
+              internal.subscriptions.markResearchPending as any,
+              {
+                id: s._id,
+              },
+            );
             await ctx.scheduler.runAfter(
               60 * 1000,
               internal.research.researchCancellationRoute as any,
