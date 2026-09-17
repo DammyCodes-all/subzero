@@ -11,6 +11,7 @@ import { dedupKey } from "./lib/dedup";
 import { getDifficulty } from "./lib/difficulty";
 import { healUserData } from "./lib/heal";
 import { cleanProductName } from "./lib/product";
+import { canRetryResearch } from "./lib/researchRetry";
 
 export const list = query({
   args: {},
@@ -368,10 +369,34 @@ export const getFailedForRetry = internalQuery({
       .query("subscriptions")
       .withIndex("by_researchStatus", (q) => q.eq("researchStatus", "pending"))
       .collect();
-    const stuck = pending.filter(
-      (s) => (s.researchedAt ?? s._creationTime) < oneHourAgo,
+    const retryableFailed = failed.filter((s) =>
+      canRetryResearch(s.researchAttempts),
     );
-    return [...failed, ...stuck];
+    const stuck = pending.filter(
+      (s) =>
+        (s.researchedAt ?? s._creationTime) < oneHourAgo &&
+        canRetryResearch(s.researchAttempts),
+    );
+    return [...retryableFailed, ...stuck];
+  },
+});
+
+export const beginResearchAttempt = internalMutation({
+  args: { id: v.id("subscriptions") },
+  returns: v.object({ allowed: v.boolean(), attempts: v.number() }),
+  handler: async (ctx, args) => {
+    const sub = await ctx.db.get(args.id);
+    if (!sub) return { allowed: false, attempts: 0 };
+    const attempts = sub.researchAttempts ?? 0;
+    if (!canRetryResearch(attempts)) {
+      return { allowed: false, attempts };
+    }
+    const nextAttempts = attempts + 1;
+    await ctx.db.patch(args.id, {
+      researchAttempts: nextAttempts,
+      researchedAt: Date.now(),
+    });
+    return { allowed: true, attempts: nextAttempts };
   },
 });
 
@@ -588,6 +613,8 @@ export const requestResearchRetry = mutation({
     const patch: Record<string, unknown> = {
       researchStatus: "pending",
       researchedAt: now,
+      // An explicit user retry starts a fresh bounded automatic attempt cycle.
+      researchAttempts: 0,
     };
     if (sub.status === "failed") patch.status = "active";
     await ctx.db.patch(args.id, patch as never);
