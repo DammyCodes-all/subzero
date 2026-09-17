@@ -32,8 +32,10 @@ export function DashboardView() {
   const attention = useQuery(api.subscriptions.needsAttention, { days: 7 });
   const all = useQuery(api.subscriptions.list);
   const gmailStatus = useQuery(api.gmail.getGmailStatus);
+  const scanHealth = useQuery(api.gmailRetries.getScanHealth);
   const viewer = useQuery(api.users.getViewer);
   const subCount = all?.length ?? 0;
+  const backfillActive = (scanHealth ?? []).some((h) => h.backfillActive);
   const {
     showFullFirstScan,
     showFirstSummary,
@@ -44,7 +46,7 @@ export function DashboardView() {
     retry: retryFirstScan,
     email: scanEmail,
     foundCount: scanCount,
-  } = useFirstScan({ gmailStatus, subCount });
+  } = useFirstScan({ gmailStatus, subCount, backfillActive });
 
   const dataLoading = attention === undefined || all === undefined;
   const statusLoading = gmailStatus === undefined;
@@ -208,7 +210,7 @@ export function DashboardView() {
             <FirstScanView
               email={scanEmail ?? undefined}
               foundCount={scanCount}
-              scanning={firstScanScanning}
+              scanning={firstScanScanning || backfillActive}
               error={firstScanError}
               onRetry={retryFirstScan}
             />

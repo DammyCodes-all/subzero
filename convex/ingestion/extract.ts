@@ -307,7 +307,21 @@ Document: Subject: Your trial ends soon Body: Spotify Premium $9.99/month renews
 
 VALIDATION: Respond with raw JSON only. No markdown, no code fences, no extra text. All keys present, no trailing commas, no single quotes.`;
 
-    const userContent = `Subject: ${args.subject}\n\nBody:\n${args.text.slice(0, 15000)}`;
+    // Head-cut loses forwards (original sits behind headers/quotes) and long
+    // threads (receipt below quoted noise). Keep the head plus a window
+    // around the first price signal so the LLM sees headers AND evidence.
+    const selectWindow = (text: string): string => {
+      const HEAD = 3000;
+      const WINDOW = 1500;
+      const CAP = 4500;
+      if (text.length <= CAP) return text;
+      const head = text.slice(0, HEAD);
+      const m = /(\$|€|£|₦|₹|¥)\s*[\d,]+|[\d,]+\s*(USD|EUR|GBP|NGN|INR|JPY|CAD|AUD)/i.exec(text);
+      if (!m?.index || m.index < HEAD) return text.slice(0, CAP);
+      const start = Math.max(0, m.index - 500);
+      return `${head}\n…\n${text.slice(start, start + WINDOW)}`.slice(0, CAP);
+    };
+    const userContent = `Subject: ${args.subject}\n\nBody:\n${selectWindow(args.text)}`;
     type ProviderCfg = {
       id: string;
       key: string;
@@ -341,14 +355,17 @@ VALIDATION: Respond with raw JSON only. No markdown, no code fences, no extra te
       });
 
     try {
-      // Try providers in order Groq -> OpenRouter -> OpenAI, with 429 backoff and fallback
+      // Try providers in order Groq -> OpenRouter -> OpenAI, fail fast on
+      // 429: Groq gets 1 attempt then immediate fallback (3x retries cost
+      // ~4s per throttled mail and the fallback is what succeeds anyway).
       let res: Response | null = null;
       let lastErrText = "";
       let usedProvider: string = primaryProvider ?? "unknown";
       providerLoop: for (const prov of providers) {
         usedProvider = prov.id;
         console.log(`[extract] Trying provider ${prov.id} model ${prov.model}`);
-        for (let attempt = 0; attempt < 3; attempt++) {
+        const maxAttempts = prov.id === "groq" ? 1 : 2;
+        for (let attempt = 0; attempt < maxAttempts; attempt++) {
           try {
             const headers: Record<string, string> = {
               Authorization: `Bearer ${prov.key}`,
@@ -378,14 +395,14 @@ VALIDATION: Respond with raw JSON only. No markdown, no code fences, no extra te
             }
             lastErrText = await r.text();
             console.error(
-              `[extract] LLM API error ${prov.id}: ${r.status} ${lastErrText.slice(0, 200)} attempt ${attempt + 1}/3`,
+              `[extract] LLM API error ${prov.id}: ${r.status} ${lastErrText.slice(0, 200)} attempt ${attempt + 1}/${maxAttempts}`,
             );
-            if (r.status === 429 && attempt < 2) {
+            if (r.status === 429 && attempt < maxAttempts - 1) {
               const backoff = 1200 * (attempt + 1) + Math.random() * 400;
               await new Promise((rr) => setTimeout(rr, backoff));
               continue;
             }
-            if (r.status === 429 && attempt === 2) {
+            if (r.status === 429 && attempt === maxAttempts - 1) {
               console.log(
                 `[extract] Provider ${prov.id} exhausted 429, trying next provider`,
               );
@@ -395,9 +412,9 @@ VALIDATION: Respond with raw JSON only. No markdown, no code fences, no extra te
           } catch (e) {
             lastErrText = String(e).slice(0, 200);
             console.error(
-              `[extract] LLM fetch failed ${prov.id} attempt ${attempt + 1}/3: ${lastErrText}`,
+              `[extract] LLM fetch failed ${prov.id} attempt ${attempt + 1}/${maxAttempts}: ${lastErrText}`,
             );
-            if (attempt < 2)
+            if (attempt < maxAttempts - 1)
               await new Promise((rr) => setTimeout(rr, 800 * (attempt + 1)));
             else break;
           }
