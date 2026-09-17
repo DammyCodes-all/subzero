@@ -8,6 +8,20 @@ const PRICE_HINT =
 const KEYWORDS =
   /receipt|invoice|trial|renew|subscri(?!be)|member|charged|billed|cancel|payment|plan|welcome|started|order number|auto[- ]?pay|billing|statement|GPA\./i;
 
+// Promotional offers describe what you COULD buy ("Offer ends…", "Get deal",
+// "92% off") — not a subscription the recipient holds. Screened pre-LLM so
+// promos never burn extraction or reach the retry queue. Requires BOTH: an
+// explicit offer marker AND no transaction evidence (receipt/order/active
+// language saves legit mails that mention a discount).
+const PROMO_OFFER =
+  /offer ends|get (the )?deal|save now|\d+\s*% off|limited[- ]time offer|promo(code)?\b|use (this|the) code|deal expires/i;
+const TRANSACTION_EVIDENCE =
+  /order(\s|#| number)|receipt|invoice|GPA\.|charged|you paid|payment (received|confirmed|successful)|is now active|has (started|renewed|been activated)|welcome|trial (started|is active|ends)|first renewal|next (billing|renewal)/i;
+
+export function isPromoOffer(hay: string): boolean {
+  return PROMO_OFFER.test(hay) && !TRANSACTION_EVIDENCE.test(hay);
+}
+
 export async function processOneEmail(
   ctx: any,
   userId: string,
@@ -26,6 +40,8 @@ export async function processOneEmail(
   const normalized = normalizeEmail({ text, html, subject });
   const hay = `${normalized.text} ${normalized.subject}`;
   if (!KEYWORDS.test(hay)) return { status: "skipped" };
+  // PromoOffers ("Go Unlimited for US$1… Offer ends…") are not subscriptions.
+  if (isPromoOffer(hay)) return { status: "skipped" };
   if (!PRICE_HINT.test(hay) && !/cancel/i.test(hay)) {
     // Bare "member" without price/cancel/trial/renewal signal stays out —
     // keeps "team member joined" noise from reaching the AI.
@@ -36,6 +52,7 @@ export async function processOneEmail(
     {
       text: normalized.text,
       subject: normalized.subject,
+      from: from ?? undefined,
     },
   );
   if (

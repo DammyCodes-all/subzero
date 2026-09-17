@@ -398,6 +398,7 @@ export const saveResearchResult = internalMutation({
     difficulty: v.optional(v.string()),
     evidenceUrl: v.optional(v.string()),
     evidenceExcerpt: v.optional(v.string()),
+    websiteDomain: v.optional(v.string()),
     researchStatus: v.optional(
       v.union(v.literal("pending"), v.literal("done"), v.literal("failed")),
     ),
@@ -488,6 +489,11 @@ export const saveResearchResult = internalMutation({
       patch.cancellationUrl = undefined;
     } else if (finalUrl) {
       patch.cancellationUrl = finalUrl;
+    }
+    // Company website from Firecrawl hits — powers the brand favicon.
+    // Only set when research actually found a merchant-matched domain.
+    if (args.websiteDomain) {
+      patch.websiteDomain = args.websiteDomain;
     }
     await ctx.db.patch(args.subscriptionId, patch as never);
 

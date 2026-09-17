@@ -5,6 +5,7 @@ import { internal } from "../_generated/api";
 import type { Id } from "../_generated/dataModel";
 import { internalAction } from "../_generated/server";
 import { isSelfEmail } from "../lib/selfMail";
+import { isPromoOffer } from "../lib/processEmail";
 import { normalizeEmail } from "./normalize";
 
 const KEYWORDS =
@@ -150,6 +151,11 @@ export const processForwardedEmail = internalAction({
         });
         return { subscriptionId: null, evidenceId: null, status: "skipped" };
       }
+      if (isPromoOffer(bodyForKeyword)) {
+        console.log("[ingestion] Promo offer, not a subscription — skipping");
+        await markAttempt("skipped", { reason: "skipped: promo offer" });
+        return { subscriptionId: null, evidenceId: null, status: "skipped" };
+      }
 
       // 5. Extract via OpenAI (or mock)
       const extracted: {
@@ -167,6 +173,7 @@ export const processForwardedEmail = internalAction({
       } = await ctx.runAction(internal.ingestion.extract.extractSubscription, {
         text: normalized.text,
         subject: normalized.subject,
+        from: from || undefined,
       });
       console.log(
         `[ingestion] Extraction result: merchant="${extracted.merchant ?? "null"}", price=${extracted.price ?? "null"}, currency="${extracted.currency}", isConfirmation=${extracted.isConfirmation}, confidence=${extracted.confidence}, quote="${extracted.quote.slice(0, 80)}"`,
