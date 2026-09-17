@@ -12,7 +12,7 @@ import { getAccessToken, getProfileHistoryId, isAuthError } from "./lib/gmail";
 import { newScanCounters } from "./lib/gmailProcess";
 
 // Fast-drain worker for first/deep scans. Processes one backfill batch,
-// then re-schedules itself ~5s later while work remains — so a 50-mail
+// then re-schedules itself ~5s later while work remains — so a 100-mail
 // backfill finishes in ~1min instead of trickling via the 15-minute poll
 // cron (which stays as the safety net for steady-state).
 export const drainBackfill = internalAction({

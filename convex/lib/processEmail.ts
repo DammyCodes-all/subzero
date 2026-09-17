@@ -23,6 +23,31 @@ export function isPromoOffer(hay: string): boolean {
   return PROMO_OFFER.test(hay) && !TRANSACTION_EVIDENCE.test(hay);
 }
 
+// Pure-JS pre-LLM screen: self-mail, keyword, promo-offer, and price-hint
+// checks with no DB or LLM calls. processBatch runs this over all fetched
+// bodies so junk never reaches the paced 3-wide LLM stage.
+export function prefilterEmail(input: {
+  subject: string;
+  text: string;
+  html: string;
+  from?: string;
+}): { keep: boolean } {
+  if (isSelfEmail({ from: input.from, subject: input.subject, text: `${input.subject} ${input.text}` }))
+    return { keep: false };
+  const normalized = normalizeEmail({
+    text: input.text,
+    html: input.html,
+    subject: input.subject,
+  });
+  const hay = `${normalized.text} ${normalized.subject}`;
+  if (!KEYWORDS.test(hay)) return { keep: false };
+  if (isPromoOffer(hay)) return { keep: false };
+  if (!PRICE_HINT.test(hay) && !/cancel/i.test(hay)) {
+    if (!/trial|renew|subscri(?!be)/i.test(hay)) return { keep: false };
+  }
+  return { keep: true };
+}
+
 export async function processOneEmail(
   ctx: any,
   userId: string,
@@ -36,18 +61,11 @@ export async function processOneEmail(
 ): Promise<{ status: string; subscriptionId?: string }> {
   // Never ingest our own outbound mail (nudges / test mails land in the
   // user's inbox and would otherwise become dummy subscriptions).
-  if (isSelfEmail({ from, subject, text: `${subject} ${text}` }))
+  // Pre-LLM screen lives in prefilterEmail so the batch pipeline can run it
+  // over all fetched bodies before spending paced LLM calls.
+  if (!prefilterEmail({ subject, text, html, from }).keep)
     return { status: "skipped" };
   const normalized = normalizeEmail({ text, html, subject });
-  const hay = `${normalized.text} ${normalized.subject}`;
-  if (!KEYWORDS.test(hay)) return { status: "skipped" };
-  // PromoOffers ("Go Unlimited for US$1… Offer ends…") are not subscriptions.
-  if (isPromoOffer(hay)) return { status: "skipped" };
-  if (!PRICE_HINT.test(hay) && !/cancel/i.test(hay)) {
-    // Bare "member" without price/cancel/trial/renewal signal stays out —
-    // keeps "team member joined" noise from reaching the AI.
-    if (!/trial|renew|subscri(?!be)/i.test(hay)) return { status: "skipped" };
-  }
   const extracted: any = await ctx.runAction(
     internal.ingestion.extract.extractSubscription,
     {

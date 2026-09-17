@@ -11,11 +11,7 @@ import {
   isAuthError,
   listMessages,
 } from "./lib/gmail";
-import {
-  fetchAndHandle,
-  mapWithConcurrency,
-  newScanCounters,
-} from "./lib/gmailProcess";
+import { newScanCounters, processBatch } from "./lib/gmailProcess";
 import {
   INITIAL_SCAN_INLINE_CAP,
   remainingScanBudget,
@@ -164,14 +160,19 @@ export const scanGmail = action({
           const { messages, nextPageToken } = await listMessages(
             accessToken,
             q,
-            Math.min(15, pageBudget),
+            Math.min(30, pageBudget),
             pageToken,
           );
           pageToken = nextPageToken;
           pages++;
           const scannedBefore = c.scanned;
-          await mapWithConcurrency(messages, (message) =>
-            fetchAndHandle(ctx, userId, conn, accessToken, message.id, c),
+          await processBatch(
+            ctx,
+            userId,
+            conn,
+            accessToken,
+            messages.map((message) => message.id),
+            c,
           );
           runProcessed += messages.length;
           if (c.scanned > scannedBefore) anyScanned = true;

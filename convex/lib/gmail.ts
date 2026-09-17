@@ -28,7 +28,7 @@ export function buildGmailQuery(days = 90): string {
   // ("Welcome to Creative Cloud" has no receipt keyword in subject).
   // Precision stays in code via processOneEmail KEYWORDS + PRICE_HINT.
   // Bare `active`/`order` deliberately excluded: they match most shopping
-  // mail (`order shipped`) and would crowd the 50-cap with one-timers.
+  // mail (`order shipped`) and would crowd the 100-cap with one-timers.
   // Never add `-unsubscribe`: real receipts carry unsubscribe footers and
   // Gmail matches that flag against the whole message, killing recall.
   return `(receipt OR invoice OR trial OR renewal OR subscription OR membership OR billing OR payment OR charged OR billed OR welcome OR started) in:inbox newer_than:${days}d`;

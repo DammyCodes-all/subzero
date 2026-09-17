@@ -11,11 +11,7 @@ import {
   isAuthError,
   listMessages,
 } from "./lib/gmail";
-import {
-  fetchAndHandle,
-  mapWithConcurrency,
-  newScanCounters,
-} from "./lib/gmailProcess";
+import { newScanCounters, processBatch } from "./lib/gmailProcess";
 import { processOneEmail } from "./lib/processEmail";
 
 const COOLDOWN_MS = 10 * 60 * 1000;
@@ -80,11 +76,16 @@ export const scanForUser = internalAction({
         const tok = await getAccessToken(conn.gmailRefreshToken);
         const q = buildGmailQuery(60);
         const { messages } = await listMessages(tok.accessToken, q, 15);
-        // Shared path: fetchAndHandle brings dedup-before-LLM, token-bucket
-        // pacing, and retry-queue enqueue — same as manual/incremental scans.
+        // Shared path: processBatch brings dedup-before-download, wide fetch,
+        // JS prefilter, and paced LLM with retry-queue enqueue.
         const c = newScanCounters();
-        await mapWithConcurrency(messages.slice(0, 5), (m) =>
-          fetchAndHandle(ctx, args.userId, conn, tok.accessToken, m.id, c),
+        await processBatch(
+          ctx,
+          args.userId,
+          conn,
+          tok.accessToken,
+          messages.slice(0, 5).map((m) => m.id),
+          c,
         );
         scanned += c.scanned;
         created += c.created;

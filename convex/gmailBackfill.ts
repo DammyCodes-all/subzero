@@ -6,11 +6,7 @@ import {
   buildGmailQuery,
   listMessages,
 } from "./lib/gmail";
-import {
-  fetchAndHandle,
-  mapWithConcurrency,
-  type ScanCounters,
-} from "./lib/gmailProcess";
+import { processBatch, type ScanCounters } from "./lib/gmailProcess";
 import {
   INITIAL_SCAN_NARROW_CAP,
   INITIAL_SCAN_TOTAL_CAP,
@@ -67,7 +63,7 @@ export const clearBackfill = internalMutation({
   },
 });
 
-// Deep-backfill bounds: 90-day window, max 50 emails per connection per
+// Deep-backfill bounds: 90-day window, max 100 emails per connection per
 // backfill lifetime, max 25 per tick (after live mail). Each email costs
 // ~1 AI extraction, hence the per-tick budget. First scans drain fast via
 // the self-chaining drainBackfill worker (~5s between batches) instead of
@@ -99,7 +95,7 @@ export async function runBackfillBatch(
   let processed = conn.gmailBackfillProcessed ?? 0;
 
   // Self-heal cursors written by the old inline scan, which could seed 60
-  // processed messages into a 50-message lifetime cap.
+  // processed messages into a 100-message lifetime cap.
   if (remainingScanBudget(processed, INITIAL_SCAN_TOTAL_CAP) === 0) {
     await ctx.runMutation(internal.gmailBackfill.clearBackfill, {
       connId: conn._id,
@@ -136,8 +132,13 @@ export async function runBackfillBatch(
     processed,
     phaseCap,
   );
-  await mapWithConcurrency(todo, (m) =>
-    fetchAndHandle(ctx, userId, conn, accessToken, m.id, counters),
+  await processBatch(
+    ctx,
+    userId,
+    conn,
+    accessToken,
+    todo.map((m) => m.id),
+    counters,
   );
   processed += todo.length;
   const phaseHasMore = processed < phaseCap && !!nextPageToken;
@@ -171,8 +172,13 @@ export async function runBackfillBatch(
       processed,
       INITIAL_SCAN_TOTAL_CAP,
     );
-    await mapWithConcurrency(broadTodo, (m) =>
-      fetchAndHandle(ctx, userId, conn, accessToken, m.id, counters),
+    await processBatch(
+      ctx,
+      userId,
+      conn,
+      accessToken,
+      broadTodo.map((m) => m.id),
+      counters,
     );
     processed += broadTodo.length;
     const broadHasMore =

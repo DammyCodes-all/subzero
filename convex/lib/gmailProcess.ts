@@ -1,6 +1,6 @@
 import { internal } from "../_generated/api";
 import { getMessage } from "./gmail";
-import { processOneEmail } from "./processEmail";
+import { prefilterEmail, processOneEmail } from "./processEmail";
 
 export type ScanCounters = {
   scanned: number;
@@ -39,10 +39,12 @@ type FetchedMsg = {
   from: string;
 };
 
-// Three-wide extraction with a small per-isolate start gap to avoid a single
-// scan bursting requests simultaneously. Provider usage is recorded separately
-// so deployment-level TPM limits can be tuned from real traffic.
+// Fetch is cheap HTTP — run it wide. LLM extraction is the bottleneck and
+// stays narrow with per-isolate pacing (see paceExtract below). Provider
+// usage is recorded separately so deployment-level TPM limits can be tuned
+// from real traffic.
 const EXTRACT_CONCURRENCY = 3;
+const FETCH_CONCURRENCY = 12;
 const MIN_START_GAP_MS = 350;
 let lastExtractStart = 0;
 let startChain: Promise<void> = Promise.resolve();
@@ -115,7 +117,7 @@ export async function handleFetchedMessage(
 ): Promise<void> {
   counters.scanned++;
   // persist stores gmail:${id} as svixId, so one indexed check skips the
-  // ~1-60s LLM call entirely. fetchAndHandle performs this check before the
+  // ~1-60s LLM call entirely. processBatch performs this check before the
   // Gmail body download; callers with an existing body check here.
   if (!dedupeChecked) {
     try {
@@ -245,6 +247,103 @@ export async function fetchAndHandle(
   await handleFetchedMessage(ctx, userId, conn, msg, counters, true);
 }
 
+// Two-stage batch: 1) dedup-check + fetch all bodies wide (12-parallel,
+// cheap HTTP), 2) pure-JS prefilter to drop junk, 3) LLM-extract survivors
+// narrow (3-wide paced). Replaces per-id fetchAndHandle loops where the
+// caller already has a list of Gmail ids.
+export async function processBatch(
+  ctx: any,
+  userId: string,
+  conn: ConnRef,
+  accessToken: string,
+  gmailIds: string[],
+  counters: ScanCounters,
+): Promise<void> {
+  if (gmailIds.length === 0) return;
+  // Stage 1a: dedup-check all ids wide — skips the Gmail download entirely
+  // for already-ingested mail.
+  const needFetch: string[] = [];
+  await mapWithConcurrency(
+    gmailIds,
+    async (gmailId) => {
+      try {
+        const seen = await ctx.runQuery(
+          internal.ingestion.persist.checkSvixId,
+          { svixId: `gmail:${gmailId}` },
+        );
+        if (seen) {
+          counters.scanned++;
+          counters.duplicate++;
+          try {
+            await ctx.runMutation(internal.gmailRetries.resolveForMessage, {
+              connId: conn._id,
+              gmailMessageId: gmailId,
+            });
+          } catch {}
+          return;
+        }
+      } catch {}
+      needFetch.push(gmailId);
+    },
+    FETCH_CONCURRENCY,
+  );
+  if (needFetch.length === 0) return;
+  // Stage 1b: fetch all bodies wide. Individual failures queue for retry —
+  // one bad mail never blocks the batch.
+  const fetched: FetchedMsg[] = [];
+  await mapWithConcurrency(
+    needFetch,
+    async (gmailId) => {
+      try {
+        const msg = await getMessage(accessToken, gmailId);
+        if (msg) fetched.push(msg);
+        else
+          await queueFailure(ctx, userId, conn, gmailId, "fetch", "empty_response", counters);
+      } catch (e: any) {
+        await queueFailure(ctx, userId, conn, gmailId, "fetch", String(e?.message ?? e), counters);
+      }
+    },
+    FETCH_CONCURRENCY,
+  );
+  if (fetched.length === 0) return;
+  // Stage 2: pure-JS prefilter — junk never reaches the paced LLM stage.
+  // Matches processOneEmail's pre-LLM screen; survivors re-check inside
+  // processOneEmail (cheap, no LLM spent on re-check).
+  const candidates: FetchedMsg[] = [];
+  for (const msg of fetched) {
+    let keep = true;
+    try {
+      keep = prefilterEmail({
+        subject: msg.subject,
+        text: msg.text,
+        html: msg.html,
+        from: msg.from,
+      }).keep;
+    } catch {
+      keep = true;
+    }
+    if (!keep) {
+      counters.scanned++;
+      counters.skipped++;
+      try {
+        await ctx.runMutation(internal.gmailRetries.resolveForMessage, {
+          connId: conn._id,
+          gmailMessageId: msg.id,
+        });
+      } catch {}
+      continue;
+    }
+    candidates.push(msg);
+  }
+  if (candidates.length === 0) return;
+  // Stage 3: LLM-extract survivors narrow with pacing.
+  await mapWithConcurrency(
+    candidates,
+    (msg) => handleFetchedMessage(ctx, userId, conn, msg, counters, true),
+    EXTRACT_CONCURRENCY,
+  );
+}
+
 // Reprocess due retry-queue rows for one connection (live mail first —
 // callers run this after their live batch). Returns rows still failing.
 export async function runDueRetries(
@@ -266,14 +365,12 @@ export async function runDueRetries(
     console.error("getDue failed", conn._id, String(e).slice(0, 200));
     return;
   }
-  await mapWithConcurrency(due, (row) =>
-    fetchAndHandle(
-      ctx,
-      userId,
-      conn,
-      accessToken,
-      row.gmailMessageId,
-      counters,
-    ),
+  await processBatch(
+    ctx,
+    userId,
+    conn,
+    accessToken,
+    due.map((row: any) => row.gmailMessageId as string),
+    counters,
   );
 }
