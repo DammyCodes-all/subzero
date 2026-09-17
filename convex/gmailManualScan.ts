@@ -14,6 +14,7 @@ import {
 } from "./lib/gmail";
 import {
   handleFetchedMessage,
+  mapWithConcurrency,
   newScanCounters,
   queueFailure,
 } from "./lib/gmailProcess";
@@ -28,7 +29,10 @@ const COOLDOWN_MS = 10 * 60 * 1000;
 const MANUAL_PER_RUN = 50;
 
 export const scanGmail = action({
-  args: { connectionId: v.optional(v.id("connections")) },
+  args: {
+    connectionId: v.optional(v.id("connections")),
+    force: v.optional(v.boolean()),
+  },
   returns: v.object({
     scanned: v.number(),
     created: v.number(),
@@ -59,6 +63,7 @@ export const scanGmail = action({
       // Fixtures are user-agnostic — scan once
       const first = conns[0];
       if (
+        !args.force &&
         first?.lastGmailScanAt &&
         Date.now() - first.lastGmailScanAt < COOLDOWN_MS
       ) {
@@ -109,8 +114,10 @@ export const scanGmail = action({
     let completedAnyConn = false;
     let chainedAny = false;
     for (const conn of active) {
-      // Per-connection cooldown — skip connections scanned recently, scan the rest
+      // Per-connection cooldown — explicit Rescans pass force:true to bypass
+      // (send-then-scan test loop); cron/poll keeps the guard.
       if (
+        !args.force &&
         conn.lastGmailScanAt &&
         Date.now() - conn.lastGmailScanAt < COOLDOWN_MS
       ) {
@@ -159,6 +166,7 @@ export const scanGmail = action({
             const fetched = await Promise.all(
               batch.map((m) => getMessage(accessToken, m.id).catch(() => null)),
             );
+            const jobs: { msg: any }[] = [];
             for (let j = 0; j < batch.length; j++) {
               const msg = fetched[j];
               runProcessed++;
@@ -175,10 +183,13 @@ export const scanGmail = action({
                 continue;
               }
               anyScanned = true;
-              await handleFetchedMessage(ctx, userId, conn, msg, c);
-              // Throttle to stay under Groq 8000 TPM on large scans
-              await new Promise((rr) => setTimeout(rr, 450));
+              jobs.push({ msg });
             }
+            // 3-wide extracts with token-bucket pacing (see gmailProcess) —
+            // replaces serial + fixed 450ms sleep.
+            await mapWithConcurrency(jobs, ({ msg }) =>
+              handleFetchedMessage(ctx, userId, conn, msg, c),
+            );
           }
           if (runProcessed >= MANUAL_PER_RUN && pageToken) {
             stoppedEarly = true;
@@ -204,7 +215,7 @@ export const scanGmail = action({
       if (connCompleted && conn?._id) {
         completedAnyConn = true;
         // Hit the per-run cap with pages left: chain the rest into the
-        // fast-drain backfill worker (~20s batches) instead of trickling
+        // fast-drain backfill worker (~5s batches) instead of trickling
         // via the 15-minute poll cron. An already-active backfill is left
         // alone — its drain chain (or the cron) keeps working through it.
         if (stoppedEarly && pageToken && !conn.gmailBackfillSeededAt) {
@@ -262,11 +273,13 @@ export const scanGmail = action({
       if (authFailed && !completedAnyConn) {
         return done({ reason: "no_consent" });
       }
-      const allOnCooldown = active.every(
-        (conn) =>
-          conn.lastGmailScanAt &&
-          Date.now() - conn.lastGmailScanAt < COOLDOWN_MS,
-      );
+      const allOnCooldown =
+        !args.force &&
+        active.every(
+          (conn) =>
+            conn.lastGmailScanAt &&
+            Date.now() - conn.lastGmailScanAt < COOLDOWN_MS,
+        );
       if (allOnCooldown) {
         return done({ reason: "cooldown" });
       }

@@ -121,7 +121,7 @@ function AuthenticatedEmptyState() {
     inFlightRef.current = true;
     setScanning(true);
     try {
-      const r = await scan({});
+      const r = await scan({ force: true });
       const res = r as { scanned: number; created: number; reason?: string };
       const copy = scanResultCopy(res);
       if (copy.kind === "error") {
