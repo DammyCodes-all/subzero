@@ -14,6 +14,7 @@ import {
 import { BACKFILL_PER_TICK, runBackfillBatch } from "./gmailBackfill";
 import {
   fetchAndHandle,
+  mapWithConcurrency,
   newScanCounters,
   runDueRetries,
 } from "./lib/gmailProcess";
@@ -243,10 +244,9 @@ export const ingestIncremental = internalAction({
 
     const c = newScanCounters();
 
-    for (const m of uniq) {
-      await fetchAndHandle(ctx, args.userId, conn, accessToken, m.id, c);
-      await new Promise((rr) => setTimeout(rr, 450));
-    }
+    await mapWithConcurrency(uniq, (m) =>
+      fetchAndHandle(ctx, args.userId, conn, accessToken, m.id, c),
+    );
 
     // Live mail first, then due retries from the safety net, then backfill.
     await runDueRetries(ctx, args.userId, conn, accessToken, 25, c);
