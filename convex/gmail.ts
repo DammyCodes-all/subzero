@@ -16,6 +16,15 @@ function userIdCandidates(userId: string) {
   return new Set([userId, uid, `user:${uid}`]);
 }
 
+function initialBackfillState() {
+  return {
+    gmailBackfillSeededAt: Date.now(),
+    gmailBackfillQuery: "narrow" as const,
+    gmailBackfillPageToken: undefined,
+    gmailBackfillProcessed: 0,
+  };
+}
+
 export const getGmailStatus = query({
   args: {},
   returns: v.object({
@@ -156,6 +165,7 @@ export const storeGmailToken = internalMutation({
       (c) => c.provider === "google" && c.accountEmail === emailNorm,
     );
     let connId: Id<"connections"> | null = null;
+    let shouldStartInitialScan = false;
     if (existing) {
       const wasDisconnected =
         (existing as { status?: string }).status === "disconnected";
@@ -170,17 +180,23 @@ export const storeGmailToken = internalMutation({
           .first();
         if (!anySub) resetCursor = true;
       }
+      shouldStartInitialScan = resetCursor;
       await ctx.db.patch(existing._id, {
         gmailRefreshToken: refreshToken,
         gmailScopeGranted: true,
         accountEmail: emailNorm || existing.accountEmail,
         status: "connected",
         ...(resetCursor
-          ? { lastGmailScanAt: undefined, gmailHistoryId: undefined }
+          ? {
+              lastGmailScanAt: undefined,
+              gmailHistoryId: undefined,
+              ...initialBackfillState(),
+            }
           : {}),
       });
       connId = existing._id;
     } else {
+      shouldStartInitialScan = true;
       connId = await ctx.db.insert("connections", {
         userId: args.userId,
         provider: "google",
@@ -188,6 +204,7 @@ export const storeGmailToken = internalMutation({
         gmailScopeGranted: true,
         accountEmail: emailNorm,
         status: "connected",
+        ...initialBackfillState(),
       });
     }
     // Never overwrite signup profile: only fill image if user has none.
@@ -218,13 +235,15 @@ export const storeGmailToken = internalMutation({
       } catch {}
     }
     if (connId) {
-      // No immediate incremental poll here on purpose: it only scans a
-      // 7-day window yet stamps lastGmailScanAt, which suppresses the
-      // dashboard's full first scan (useFirstScan fires only when no scan
-      // timestamp exists yet). The dashboard auto-runs the full 90-day
-      // scan right after connect (25 inline, rest auto-chained into the
-      // resumable backfill), and the 15-min cron covers background.
-      // Watch setup is best-effort — only if GMAIL_PUBSUB_TOPIC is set
+      // First scans are backend-owned so closing the dashboard after OAuth
+      // cannot skip historical ingestion. Watch setup remains best-effort.
+      if (shouldStartInitialScan) {
+        await ctx.scheduler.runAfter(
+          0,
+          internal.gmailBackfillDrain.drainBackfill,
+          { connId },
+        );
+      }
       await ctx.scheduler.runAfter(0, internal.gmailWatch.ensureWatchForConn, {
         connId,
       });
@@ -297,6 +316,7 @@ export const storeByEmail = mutation({
       (c: any) => c.provider === "google" && c.accountEmail === emailNorm,
     );
     let connId2: Id<"connections"> | null = null;
+    let shouldStartInitialScan2 = false;
     if (existing) {
       // Same email reconnecting — update tokens in place. A disconnected
       // row reconnects fresh; a connected row with no data heals its stale
@@ -311,6 +331,7 @@ export const storeByEmail = mutation({
           .first();
         if (!anySub) resetCursor = true;
       }
+      shouldStartInitialScan2 = resetCursor;
       await ctx.db.patch(existing._id, {
         userId,
         gmailRefreshToken: refreshToken,
@@ -318,12 +339,17 @@ export const storeByEmail = mutation({
         accountEmail: emailNorm,
         status: "connected",
         ...(resetCursor
-          ? { lastGmailScanAt: undefined, gmailHistoryId: undefined }
+          ? {
+              lastGmailScanAt: undefined,
+              gmailHistoryId: undefined,
+              ...initialBackfillState(),
+            }
           : {}),
       });
       connId2 = existing._id;
     } else {
       // New email or no existing connection — insert a separate row
+      shouldStartInitialScan2 = true;
       connId2 = await ctx.db.insert("connections", {
         userId,
         provider: "google",
@@ -331,6 +357,7 @@ export const storeByEmail = mutation({
         gmailScopeGranted: true,
         accountEmail: emailNorm,
         status: "connected",
+        ...initialBackfillState(),
       } as any);
     }
     // Never overwrite signup profile: only fill image if user has none.
@@ -347,9 +374,13 @@ export const storeByEmail = mutation({
       } catch {}
     }
     if (connId2) {
-      // Same as storeGmailToken: no immediate incremental poll — it would
-      // stamp lastGmailScanAt from a 7-day scan and suppress the full
-      // first scan. Dashboard auto-scans on connect; cron covers the rest.
+      if (shouldStartInitialScan2) {
+        await ctx.scheduler.runAfter(
+          0,
+          internal.gmailBackfillDrain.drainBackfill,
+          { connId: connId2 },
+        );
+      }
       await ctx.scheduler.runAfter(0, internal.gmailWatch.ensureWatchForConn, {
         connId: connId2,
       });
@@ -489,4 +520,3 @@ export const markTokenInvalid = internalMutation({
     await purgeQueuedForConn(ctx, args.connId);
   },
 });
-
