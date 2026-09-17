@@ -36,6 +36,7 @@ const extractedValidator = v.object({
   isConfirmation: v.boolean(),
   confidence: v.number(),
   quote: v.string(),
+  lastChargeAt: v.optional(v.number()),
 });
 
 export const persistExtracted = internalMutation({
@@ -256,6 +257,27 @@ export const persistExtracted = internalMutation({
       };
     }
 
+    // Derived renewal: order/start date + interval when the mail states no
+    // explicit renewal (e.g. Duolingo order receipt: ordered Sept 12,
+    // monthly → Oct 12). Without this such subs stay dateless and invisible
+    // in Upcoming. Never overrides an explicit date or a trial.
+    let nextRenewalAt = ex.nextRenewalAt;
+    if (
+      !nextRenewalAt &&
+      !ex.trialEndsAt &&
+      ex.lastChargeAt &&
+      ex.billingInterval !== "unknown"
+    ) {
+      const d = new Date(ex.lastChargeAt);
+      if (!Number.isNaN(d.getTime())) {
+        if (ex.billingInterval === "monthly") d.setMonth(d.getMonth() + 1);
+        else if (ex.billingInterval === "yearly")
+          d.setFullYear(d.getFullYear() + 1);
+        else d.setDate(d.getDate() + 7);
+        nextRenewalAt = d.getTime();
+      }
+    }
+
     const key = dedupKey({
       merchant,
       product,
@@ -340,10 +362,10 @@ export const persistExtracted = internalMutation({
       // and new evidence means the subscription is live again.
       if (existing.hidden === true) patch.hidden = false;
       if (
-        ex.nextRenewalAt &&
-        (!existing.nextRenewalAt || ex.nextRenewalAt > existing.nextRenewalAt)
+        nextRenewalAt &&
+        (!existing.nextRenewalAt || nextRenewalAt > existing.nextRenewalAt)
       ) {
-        patch.nextRenewalAt = ex.nextRenewalAt;
+        patch.nextRenewalAt = nextRenewalAt;
       }
       if (
         ex.trialEndsAt &&
@@ -390,7 +412,7 @@ export const persistExtracted = internalMutation({
         currency,
         billingInterval: ex.billingInterval,
         status: "active",
-        nextRenewalAt: ex.nextRenewalAt,
+        nextRenewalAt,
         trialEndsAt: ex.trialEndsAt,
         billingProvider: ex.billingProvider,
         sourceEmail: args.sourceEmail,

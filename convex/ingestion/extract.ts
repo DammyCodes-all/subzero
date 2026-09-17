@@ -2,7 +2,7 @@
 
 import { v } from "convex/values";
 import { env, internalAction } from "../_generated/server";
-import { GROQ_EXTRACTION_MODEL } from "../lib/aiModels";
+import { GROQ_EXTRACTION_MODEL, groqApiKeysFrom } from "../lib/aiModels";
 import {
   ISO_SET,
   normalizeCurrency,
@@ -27,6 +27,7 @@ const extractedReturns = v.object({
   isConfirmation: v.boolean(),
   confidence: v.number(),
   quote: v.string(),
+  lastChargeAt: v.optional(v.number()),
 });
 
 function parseDateToMs(iso: string | null | undefined): number | undefined {
@@ -52,6 +53,7 @@ function mockExtract(
   isConfirmation: boolean;
   confidence: number;
   quote: string;
+  lastChargeAt: number | undefined;
 } {
   const combined = `${subject} ${text}`.toLowerCase();
   const combinedRaw = `${subject} ${text}`; // keep original case for symbol detection
@@ -270,6 +272,7 @@ function mockExtract(
     confidence:
       merchant && price ? 0.7 : isConfirmation && merchant ? 0.8 : 0.3,
     quote,
+    lastChargeAt: undefined,
   };
 }
 
@@ -281,24 +284,25 @@ export const extractSubscription = internalAction({
   },
   returns: extractedReturns,
   handler: async (_ctx, args) => {
-    const groqKey =
-      (env as unknown as { GROQ_API_KEY?: string }).GROQ_API_KEY ??
-      process.env.GROQ_API_KEY;
+    const deploymentEnv = env as unknown as Record<string, string | undefined>;
+    const localEnv = process.env as unknown as Record<string, string | undefined>;
+    // Deployment env wins locally (Convex dev loads .env.local into env).
+    const mergedEnv = { ...localEnv, ...deploymentEnv };
+    const groqKeys = groqApiKeysFrom(mergedEnv);
     const openrouterKey =
-      (env as unknown as { OPENROUTER_API_KEY?: string }).OPENROUTER_API_KEY ??
-      process.env.OPENROUTER_API_KEY;
+      deploymentEnv.OPENROUTER_API_KEY ?? localEnv.OPENROUTER_API_KEY;
     const openaiKey =
-      (env as unknown as { OPENAI_API_KEY?: string }).OPENAI_API_KEY ??
-      process.env.OPENAI_API_KEY;
-    // Prefer Groq -> OpenRouter -> OpenAI -> mock
-    const hasAnyKey = !!(groqKey || openrouterKey || openaiKey);
-    const primaryProvider = groqKey
-      ? "groq"
-      : openrouterKey
-        ? "openrouter"
-        : openaiKey
-          ? "openai"
-          : null;
+      deploymentEnv.OPENAI_API_KEY ?? localEnv.OPENAI_API_KEY;
+    // Prefer Groq layers -> OpenRouter -> OpenAI -> mock
+    const hasAnyKey = groqKeys.length > 0 || !!openrouterKey || !!openaiKey;
+    const primaryProvider =
+      groqKeys.length > 0
+        ? "groq"
+        : openrouterKey
+          ? "openrouter"
+          : openaiKey
+            ? "openai"
+            : null;
     console.log(
       `[extract] Provider: ${primaryProvider ?? "MOCK (no API key)"}, subject="${args.subject.slice(0, 60)}", textLen=${args.text.length}`,
     );
@@ -324,6 +328,7 @@ export const extractSubscription = internalAction({
         isConfirmation: m.isConfirmation,
         confidence: m.confidence,
         quote: m.quote,
+        lastChargeAt: m.lastChargeAt,
       };
     }
 
@@ -344,7 +349,8 @@ SCHEMA — return ONLY valid JSON matching this exact schema. Do not add keys. D
   "billingProvider": "<string | null>",
   "isConfirmation": "<boolean>",
   "confidence": "<number 0-1>",
-  "quote": "<exact substring from email max 300 chars>"
+  "quote": "<exact substring from email max 300 chars>",
+  "lastChargeAt": "<ISO 8601 date string | null>"
 }
 
 RULES:
@@ -355,6 +361,7 @@ RULES:
 - currency: infer from symbol/suffix: $→USD, C$→CAD, A$→AUD, €→EUR, £→GBP, ₦→NGN, ₹→INR, ¥→JPY, or suffix "12.99 CAD". If unsure, null (not USD).
 - billingInterval enum only monthly|yearly|weekly|unknown. unknown if not stated.
 - dates ISO 8601 YYYY-MM-DD or null. Do not compute; use explicit date in text.
+- lastChargeAt: the explicit order/charge/start date stated in the mail (e.g. "Order date: September 12, 2026" → "2026-09-12"). Null if none stated. Never compute it — code derives the renewal from it.
 - isConfirmation true only if email explicitly confirms cancellation (cancelled/canceled confirmed).
 - quote: exact substring backing price or renewal date, max 300 chars. Minimal markdown (**bold**, *italic*, \`code\`, [text](https://…)) wherever it aids clarity; never headings, lists, tables, or images.
 - CONFIDENCE: 0.95-0.99 explicit price+renewal labeled, 0.85-0.95 needs minor interpretation, 0.6-0.85 ambiguous.
@@ -373,16 +380,16 @@ CANONICAL MERCHANT MAP (brand only, never product/billingProvider):
 FEW-SHOT — exact outputs:
 
 Document: Subject: Your Google Play Order Receipt from 20 Aug 2026 Body: Google AI Plus (400 GB) (Google One) Your trial will end on 20 Aug 2027. You will be automatically charged ₦7,700.00/month via Google Play
-=> {"merchant":"Google One","product":"Google AI Plus (400 GB)","price":7700,"currency":"NGN","billingInterval":"monthly","nextRenewalAt":"2027-08-20","trialEndsAt":"2027-08-20","billingProvider":"Google Play","isConfirmation":false,"confidence":0.98,"quote":"Your trial will end on 20 Aug 2027. You will be automatically charged ₦7,700.00/month"}
+=> {"merchant":"Google One","product":"Google AI Plus (400 GB)","price":7700,"currency":"NGN","billingInterval":"monthly","nextRenewalAt":"2027-08-20","trialEndsAt":"2027-08-20","billingProvider":"Google Play","isConfirmation":false,"confidence":0.98,"quote":"Your trial will end on 20 Aug 2027. You will be automatically charged ₦7,700.00/month","lastChargeAt":null}
 
 Document: Subject: NATIONAL EXAMINATIONS COUNCIL Invoice Body: ₦5,100 single payment for 2024 exam, no renewal
-=> {"merchant":null,"product":null,"price":null,"currency":null,"billingInterval":"unknown","nextRenewalAt":null,"trialEndsAt":null,"billingProvider":null,"isConfirmation":false,"confidence":0.99,"quote":"₦5,100 single payment"}
+=> {"merchant":null,"product":null,"price":null,"currency":null,"billingInterval":"unknown","nextRenewalAt":null,"trialEndsAt":null,"billingProvider":null,"isConfirmation":false,"confidence":0.99,"quote":"₦5,100 single payment","lastChargeAt":null}
 
 Document: Subject: Your trial ends soon Body: Spotify Premium $9.99/month renews 2026-09-15
-=> {"merchant":"Spotify","product":"Spotify Premium","price":9.99,"currency":"USD","billingInterval":"monthly","nextRenewalAt":"2026-09-15","trialEndsAt":null,"billingProvider":null,"isConfirmation":false,"confidence":0.96,"quote":"$9.99/month renews 2026-09-15"}
+=> {"merchant":"Spotify","product":"Spotify Premium","price":9.99,"currency":"USD","billingInterval":"monthly","nextRenewalAt":"2026-09-15","trialEndsAt":null,"billingProvider":null,"isConfirmation":false,"confidence":0.96,"quote":"$9.99/month renews 2026-09-15","lastChargeAt":null}
 
 Document: From: The Proton Team Subject: Go Unlimited for US$1 Body: Upgrade to Proton Unlimited for US$1 in your first month. Get deal. 92% off. Billed at US$1 for the first month. Renews at US$12.99. Offer ends September 11, 2026.
-=> {"merchant":null,"product":null,"price":null,"currency":null,"billingInterval":"unknown","nextRenewalAt":null,"trialEndsAt":null,"billingProvider":null,"isConfirmation":false,"confidence":0.95,"quote":"Offer ends September 11, 2026"}
+=> {"merchant":null,"product":null,"price":null,"currency":null,"billingInterval":"unknown","nextRenewalAt":null,"trialEndsAt":null,"billingProvider":null,"isConfirmation":false,"confidence":0.95,"quote":"Offer ends September 11, 2026","lastChargeAt":null}
 
 VALIDATION: Respond with raw JSON only. No markdown, no code fences, no extra text. All keys present, no trailing commas, no single quotes.`;
 
@@ -408,13 +415,14 @@ VALIDATION: Respond with raw JSON only. No markdown, no code fences, no extra te
       model: string;
     };
     const providers: ProviderCfg[] = [];
-    if (groqKey)
+    groqKeys.forEach((key, i) =>
       providers.push({
-        id: "groq",
-        key: groqKey,
+        id: i === 0 ? "groq" : `groq-${i + 1}`,
+        key,
         endpoint: "https://api.groq.com/openai/v1/chat/completions",
         model: GROQ_EXTRACTION_MODEL,
-      });
+      }),
+    );
     if (openrouterKey)
       providers.push({
         id: "openrouter",
@@ -443,7 +451,7 @@ VALIDATION: Respond with raw JSON only. No markdown, no code fences, no extra te
       providerLoop: for (const prov of providers) {
         usedProvider = prov.id;
         console.log(`[extract] Trying provider ${prov.id} model ${prov.model}`);
-        const maxAttempts = prov.id === "groq" ? 1 : 2;
+        const maxAttempts = prov.id.startsWith("groq") ? 1 : 2;
         for (let attempt = 0; attempt < maxAttempts; attempt++) {
           try {
             const headers: Record<string, string> = {
@@ -536,6 +544,7 @@ VALIDATION: Respond with raw JSON only. No markdown, no code fences, no extra te
           isConfirmation: m.isConfirmation,
           confidence: m.confidence,
           quote: m.quote,
+          lastChargeAt: m.lastChargeAt,
         };
       }
 
@@ -659,6 +668,9 @@ VALIDATION: Respond with raw JSON only. No markdown, no code fences, no extra te
         parsed.nextRenewalAt as string | null,
       );
       const trialEndsAt = parseDateToMs(parsed.trialEndsAt as string | null);
+      const lastChargeAt = parseDateToMs(
+        parsed.lastChargeAt as string | null,
+      );
 
       console.log(
         `[extract] Final LLM result: merchant="${merchant ?? "null"}", price=${price ?? "null"}, currency="${currency}", isConfirmation=${isConfirmation}, confidence=${confidence}`,
@@ -676,6 +688,7 @@ VALIDATION: Respond with raw JSON only. No markdown, no code fences, no extra te
         isConfirmation,
         confidence,
         quote,
+        lastChargeAt,
       };
     } catch {
       const m = mockExtract(args.text, args.subject, args.from);
@@ -695,6 +708,7 @@ VALIDATION: Respond with raw JSON only. No markdown, no code fences, no extra te
         isConfirmation: m.isConfirmation,
         confidence: m.confidence,
         quote: m.quote,
+        lastChargeAt: m.lastChargeAt,
       };
     }
   },

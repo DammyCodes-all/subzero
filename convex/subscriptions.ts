@@ -398,7 +398,7 @@ export const saveResearchResult = internalMutation({
     difficulty: v.optional(v.string()),
     evidenceUrl: v.optional(v.string()),
     evidenceExcerpt: v.optional(v.string()),
-    websiteDomain: v.optional(v.string()),
+    websiteDomain: v.optional(v.union(v.string(), v.null())),
     researchStatus: v.optional(
       v.union(v.literal("pending"), v.literal("done"), v.literal("failed")),
     ),
@@ -491,9 +491,13 @@ export const saveResearchResult = internalMutation({
       patch.cancellationUrl = finalUrl;
     }
     // Company website from Firecrawl hits — powers the brand favicon.
-    // Only set when research actually found a merchant-matched domain.
+    // Fresh research always sets it: a new match overwrites a stale wrong
+    // domain, null clears it when fresh search matches nothing. Early exits
+    // (missing keys, LLM failure) omit the field and preserve the old value.
     if (args.websiteDomain) {
       patch.websiteDomain = args.websiteDomain;
+    } else if (args.websiteDomain === null) {
+      patch.websiteDomain = undefined;
     }
     await ctx.db.patch(args.subscriptionId, patch as never);
 

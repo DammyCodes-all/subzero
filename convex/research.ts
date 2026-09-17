@@ -1,7 +1,7 @@
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import { env, internalAction } from "./_generated/server";
-import { GROQ_EXTRACTION_MODEL } from "./lib/aiModels";
+import { GROQ_EXTRACTION_MODEL, groqApiKeysFrom } from "./lib/aiModels";
 import { firecrawlScrape, firecrawlSearch } from "./lib/firecrawl";
 
 export const researchCancellationRoute = internalAction({
@@ -14,7 +14,9 @@ export const researchCancellationRoute = internalAction({
 
     const firecrawlKey = (env as unknown as { FIRECRAWL_API_KEY?: string })
       .FIRECRAWL_API_KEY;
-    const groqKey = (env as unknown as { GROQ_API_KEY?: string }).GROQ_API_KEY;
+    const deploymentEnv = env as unknown as Record<string, string | undefined>;
+    const localEnv = process.env as unknown as Record<string, string | undefined>;
+    const groqKeys = groqApiKeysFrom({ ...localEnv, ...deploymentEnv });
     const openrouterKey =
       (env as unknown as { OPENROUTER_API_KEY?: string }).OPENROUTER_API_KEY ??
       (process.env as unknown as { OPENROUTER_API_KEY?: string })
@@ -23,7 +25,7 @@ export const researchCancellationRoute = internalAction({
       .OPENAI_API_KEY;
 
     // No keys → never invent. Persist as unknown, let UI show "No verified route".
-    if (!firecrawlKey || (!groqKey && !openrouterKey && !openaiKey)) {
+    if (!firecrawlKey || (groqKeys.length === 0 && !openrouterKey && !openaiKey)) {
       await ctx.runMutation(internal.subscriptions.saveResearchResult, {
         subscriptionId: args.subscriptionId,
         cancellationMethod: "unknown",
@@ -67,7 +69,30 @@ export const researchCancellationRoute = internalAction({
       .split(/[^a-z0-9]+/)
       .filter((t) => t.length >= 3)
       .slice(0, 3);
-    // Domain matcher shared by the no-hits fallback and the ranked pass.
+    // Domain matcher shared by ranking and website extraction. Label-boundary
+    // only: token "fitness" must NOT match "fitnessai" or "24hourfitness"
+    // (wrong companies wore our icon because of substring matching).
+    function registrableOf(host: string): string {
+      const parts = host.split(".");
+      if (parts.length <= 2) return host;
+      if (
+        parts.length >= 3 &&
+        new Set(["co", "com", "org", "net", "gov", "edu", "ac"]).has(
+          parts[parts.length - 2],
+        )
+      )
+        return parts.slice(-3).join(".");
+      return parts.slice(-2).join(".");
+    }
+    function merchantHostMatch(host: string): boolean {
+      const labels = host.split(".");
+      if (
+        !!merchantSlug &&
+        labels.some((l) => l === merchantSlug)
+      )
+        return true;
+      return merchantTokens.some((tok) => labels.includes(tok));
+    }
     function matchWebsiteDomain(
       hits: { url?: string }[],
     ): string | undefined {
@@ -79,20 +104,7 @@ export const researchCancellationRoute = internalAction({
           if (hn.includes(".")) host = hn;
         } catch {}
         if (!host) continue;
-        const parts = host.split(".");
-        const reg =
-          parts.length <= 2
-            ? host
-            : parts.length >= 3 &&
-                new Set(["co", "com", "org", "net", "gov", "edu", "ac"]).has(
-                  parts[parts.length - 2],
-                )
-              ? parts.slice(-3).join(".")
-              : parts.slice(-2).join(".");
-        const slugHit =
-          !!merchantSlug && reg.replace(/\./g, "").includes(merchantSlug);
-        const tokHit = merchantTokens.some((tok) => reg.includes(tok));
-        if (slugHit || tokHit) return reg;
+        if (merchantHostMatch(host)) return registrableOf(host);
       }
       return undefined;
     }
@@ -122,7 +134,7 @@ export const researchCancellationRoute = internalAction({
         instructions: [],
         evidenceUrl: undefined,
         evidenceExcerpt: undefined,
-        ...(websiteDomain ? { websiteDomain } : {}),
+        websiteDomain: websiteDomain ?? null,
       });
       return { success: true, mock: false, reason: "no_firecrawl_hits" };
     }
@@ -174,11 +186,9 @@ export const researchCancellationRoute = internalAction({
         path.includes("help")
       )
         s += 5;
-      const merchantHostMatch =
-        (merchantSlug && host.includes(merchantSlug)) ||
-        merchantTokens.some((tok) => host.includes(tok));
+      const hostIsMerchant = merchantHostMatch(host);
       if (
-        merchantHostMatch &&
+        hostIsMerchant &&
         (path.includes("help") ||
           path.includes("support") ||
           path.includes("faq") ||
@@ -209,12 +219,12 @@ export const researchCancellationRoute = internalAction({
         s += 4;
       if (providerLower.includes("apple") && path.includes("apple")) s += 4;
       // For store-billed, demote merchant portal account pages generically (not snap-specific)
-      if (providerLower && merchantHostMatch && path.includes("accounts."))
+      if (providerLower && hostIsMerchant && path.includes("accounts."))
         s -= 4;
       // For store-billed, slightly prefer provider help over merchant cancel page when both exist
       if (
         providerLower &&
-        merchantHostMatch &&
+        hostIsMerchant &&
         path.includes("cancel") &&
         (host.startsWith("help.") || host.startsWith("support."))
       ) {
@@ -333,7 +343,7 @@ export const researchCancellationRoute = internalAction({
         instructions: [],
         evidenceUrl: sourceUrl,
         evidenceExcerpt: undefined,
-        ...(websiteDomain ? { websiteDomain } : {}),
+        websiteDomain: websiteDomain ?? null,
       });
       return { success: true, mock: false, reason: "no_firecrawl_content" };
     }
@@ -402,13 +412,14 @@ ${markdownContent.slice(0, 8000)}`;
       model: string;
     };
     const providers: ProviderCfg[] = [];
-    if (groqKey)
+    groqKeys.forEach((key, i) =>
       providers.push({
-        id: "groq",
-        key: groqKey,
+        id: i === 0 ? "groq" : `groq-${i + 1}`,
+        key,
         endpoint: "https://api.groq.com/openai/v1/chat/completions",
         model: GROQ_EXTRACTION_MODEL,
-      });
+      }),
+    );
     if (openrouterKey)
       providers.push({
         id: "openrouter",
@@ -446,7 +457,10 @@ ${markdownContent.slice(0, 8000)}`;
         console.log(
           `[research] Trying provider ${prov.id} model ${prov.model}`,
         );
-        for (let attempt = 0; attempt < 3; attempt++) {
+        // Groq layers fail fast (1 attempt each, next key covers the retry);
+        // OpenRouter/OpenAI keep 3 attempts.
+        const maxAttempts = prov.id.startsWith("groq") ? 1 : 3;
+        for (let attempt = 0; attempt < maxAttempts; attempt++) {
           const controller = new AbortController();
           const t = setTimeout(() => controller.abort(), 20000);
           try {
@@ -482,12 +496,15 @@ ${markdownContent.slice(0, 8000)}`;
               `AI extraction failed: ${r.status} ${r.statusText}`,
             );
             // Retry only on 429 or 5xx
-            if ((r.status === 429 || r.status >= 500) && attempt < 2) {
+            if (
+              (r.status === 429 || r.status >= 500) &&
+              attempt < maxAttempts - 1
+            ) {
               const backoff = 1500 * (attempt + 1) + Math.random() * 500;
               await new Promise((rr) => setTimeout(rr, backoff));
               continue;
             }
-            if (r.status === 429 && attempt === 2) {
+            if (r.status === 429 && attempt === maxAttempts - 1) {
               console.log(
                 `[research] Provider ${prov.id} 429 exhausted, trying next`,
               );
@@ -500,19 +517,23 @@ ${markdownContent.slice(0, 8000)}`;
             const msg = String(e);
             const isRateLimit =
               msg.includes("429") || msg.includes("Rate limit");
-            if (isRateLimit && attempt < 2) {
+            if (isRateLimit && attempt < maxAttempts - 1) {
               const backoff = 1500 * (attempt + 1) + Math.random() * 500;
               await new Promise((rr) => setTimeout(rr, backoff));
               continue;
             }
-            if (isRateLimit && attempt === 2) {
+            if (isRateLimit && attempt === maxAttempts - 1) {
               console.log(
                 `[research] Provider ${prov.id} rate limit, falling back`,
               );
               break;
             }
-            if (attempt === 2) throw e;
-            if (e instanceof Error && e.name === "AbortError" && attempt < 2) {
+            if (attempt === maxAttempts - 1) throw e;
+            if (
+              e instanceof Error &&
+              e.name === "AbortError" &&
+              attempt < maxAttempts - 1
+            ) {
               await new Promise((rr) => setTimeout(rr, 800));
               continue;
             }
@@ -683,7 +704,7 @@ ${markdownContent.slice(0, 8000)}`;
       instructions,
       evidenceUrl: sourceUrl,
       evidenceExcerpt,
-      ...(websiteDomain ? { websiteDomain } : {}),
+      websiteDomain: websiteDomain ?? null,
     });
 
     return { success: true, mock: false };

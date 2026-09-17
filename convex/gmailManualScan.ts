@@ -287,6 +287,29 @@ export const scanGmail = action({
         return done({ reason: "scan_failed" });
       }
     }
+    // Rescan re-fires rate-limit casualties: failed/stuck research for this
+    // user goes pending again (max 3) instead of waiting on the 6h cron.
+    if (completedAnyConn) {
+      try {
+        const failed: any[] = await ctx.runQuery(
+          internal.subscriptions.getFailedForRetry as any,
+          {},
+        );
+        const mine = failed.filter((s) => s.userId === userId).slice(0, 3);
+        for (const s of mine) {
+          try {
+            await ctx.runMutation(internal.subscriptions.markResearchPending as any, {
+              id: s._id,
+            });
+            await ctx.scheduler.runAfter(
+              60 * 1000,
+              internal.research.researchCancellationRoute as any,
+              { subscriptionId: s._id },
+            );
+          } catch {}
+        }
+      } catch {}
+    }
     return done(chainedAny ? { remaining: true } : undefined);
   },
 });

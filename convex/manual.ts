@@ -31,6 +31,7 @@ export const previewPaste = action({
       isConfirmation: boolean;
       confidence: number;
       quote: string;
+      lastChargeAt?: number;
     } = await ctx.runAction(internal.ingestion.extract.extractSubscription, {
       text,
       subject,

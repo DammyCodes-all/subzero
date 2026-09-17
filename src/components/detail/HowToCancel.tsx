@@ -2,10 +2,14 @@
 
 import { ExternalLinkIcon, Loading03Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
+import { useMutation } from "convex/react";
+import { useState } from "react";
+import { sileo } from "sileo";
 import { Button } from "@/components/ui/button";
 import { useCancelStarted } from "@/hooks/useCancelStarted";
 import { difficultyReasons, openExternalUrl } from "@/lib/cancellation";
 import { frictionLabel } from "@/lib/format";
+import { api } from "../../../convex/_generated/api";
 
 type Sub = {
   _id: string;
@@ -32,6 +36,26 @@ export function HowToCancel({
 }) {
   const method = sub.cancellationMethod ?? "unknown";
   const trackStarted = useCancelStarted();
+  const retryResearch = useMutation(api.subscriptions.requestResearchRetry);
+  const [retrying, setRetrying] = useState(false);
+  const onRetry = async () => {
+    if (retrying) return;
+    setRetrying(true);
+    try {
+      await retryResearch({ id: sub._id as never });
+      sileo.info({
+        title: "Rechecking cancellation route",
+        description: `Looking up ${sub.merchant} help center again.`,
+      });
+    } catch (e) {
+      sileo.error({
+        title: "Couldn't recheck yet",
+        description: e instanceof Error ? e.message : "Try again in a bit.",
+      });
+    } finally {
+      setRetrying(false);
+    }
+  };
   const difficulty = sub.cancellationDifficulty;
   const provider = sub.billingProvider;
   const url = sub.cancellationUrl;
@@ -400,10 +424,11 @@ export function HowToCancel({
         <Button
           variant="outline"
           size="sm"
-          disabled
+          onClick={() => void onRetry()}
+          disabled={retrying}
           className="mt-4 font-mono text-xs"
         >
-          No verified route
+          {retrying ? "Rechecking…" : "Recheck route"}
         </Button>
       </div>
     </div>

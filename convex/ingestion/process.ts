@@ -170,6 +170,7 @@ export const processForwardedEmail = internalAction({
         isConfirmation: boolean;
         confidence: number;
         quote: string;
+        lastChargeAt?: number;
       } = await ctx.runAction(internal.ingestion.extract.extractSubscription, {
         text: normalized.text,
         subject: normalized.subject,
