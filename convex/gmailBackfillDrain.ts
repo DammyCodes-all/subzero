@@ -3,8 +3,12 @@
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import { internalAction } from "./_generated/server";
-import { BACKFILL_PER_TICK, DRAIN_DELAY_MS, runBackfillBatch } from "./gmailBackfill";
-import { getAccessToken, isAuthError } from "./lib/gmail";
+import {
+  BACKFILL_PER_TICK,
+  DRAIN_DELAY_MS,
+  runBackfillBatch,
+} from "./gmailBackfill";
+import { getAccessToken, getProfileHistoryId, isAuthError } from "./lib/gmail";
 import { newScanCounters } from "./lib/gmailProcess";
 
 // Fast-drain worker for first/deep scans. Processes one backfill batch,
@@ -55,7 +59,32 @@ export const drainBackfill = internalAction({
       return { drained: 0, stillActive: true, reason: "transient" };
     }
     const c = newScanCounters();
-    await runBackfillBatch(ctx, conn.userId, conn, accessToken, BACKFILL_PER_TICK, c);
+    try {
+      await runBackfillBatch(
+        ctx,
+        conn.userId,
+        conn,
+        accessToken,
+        BACKFILL_PER_TICK,
+        c,
+      );
+    } catch (e: any) {
+      const msg = String(e?.message ?? e);
+      if (isAuthError(msg)) {
+        try {
+          await ctx.runMutation(internal.gmail.markTokenInvalid, {
+            connId: args.connId,
+          });
+        } catch {}
+        return { drained: c.scanned, stillActive: true, reason: "no_consent" };
+      }
+      await ctx.scheduler.runAfter(
+        Math.max(DRAIN_DELAY_MS, 30 * 1000),
+        internal.gmailBackfillDrain.drainBackfill,
+        { connId: args.connId },
+      );
+      return { drained: c.scanned, stillActive: true, reason: "transient" };
+    }
     const drained = c.scanned;
     const updated: any = await ctx.runQuery(
       internal.gmailConnectionState.getConnectionByIdInternal,
@@ -68,6 +97,30 @@ export const drainBackfill = internalAction({
         internal.gmailBackfillDrain.drainBackfill,
         { connId: args.connId },
       );
+    } else {
+      // Mark the historical scan complete even when the user closes the
+      // dashboard before the worker finishes.
+      try {
+        const historyId = await getProfileHistoryId(accessToken);
+        await ctx.runMutation(internal.gmailConnectionState.updateHistoryId, {
+          connId: args.connId,
+          historyId,
+        });
+      } catch {
+        await ctx.runMutation(internal.gmailConnectionState.touchScan, {
+          connId: args.connId,
+        });
+      }
+      try {
+        await ctx.runMutation(internal.gmailRetries.recordRun, {
+          userId: conn.userId,
+          connId: args.connId,
+          trigger: "connect",
+          scanned: drained,
+          created: c.created,
+          failed: c.failed,
+        });
+      } catch {}
     }
     return { drained, stillActive };
   },
