@@ -25,10 +25,13 @@ export function useFirstScan({
   gmailStatus,
   subCount,
   backfillActive = false,
+  backfillReady = true,
 }: {
   gmailStatus: FirstScanStatus | undefined;
   subCount: number;
   backfillActive?: boolean;
+  /** False while scan-health is still loading — don't decide yet. */
+  backfillReady?: boolean;
 }) {
   const scan = useAction(api.gmailManualScan.scanGmail);
   const [scanning, setScanning] = useState(false);
@@ -47,6 +50,10 @@ export function useFirstScan({
   const triedRef = useRef(false);
   const inFlightRef = useRef(false);
   const mountedRef = useRef(true);
+  const prevNeverRef = useRef(false);
+  // True once we observe backend-owned historical work for this episode.
+  // Powers the summary when no browser-owned scan ever ran.
+  const [sawBackendWork, setSawBackendWork] = useState(false);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -59,15 +66,29 @@ export function useFirstScan({
   const lastScanAt = gmailStatus?.lastGmailScanAt;
   const isNeverScanned = connected && !lastScanAt;
 
+  // Remember backend work for the summary gate.
   useEffect(() => {
-    if (!isNeverScanned) {
-      // While our own full scan is still in flight, keep the latch. The
-      // scan timestamp can land early (the incremental poll stamps it as
-      // soon as it seeds the history id), and resetting here would unmount
-      // the takeover mid-scan and flicker to the zero-state.
-      if (!inFlightRef.current) setStartedZero(null);
-      return;
+    if (backfillActive) setSawBackendWork(true);
+  }, [backfillActive]);
+
+  // New episode (never-scanned flips false→true): latch zero-start, reset
+  // per-episode UI so a later reconnect can show its own summary.
+  useEffect(() => {
+    if (isNeverScanned && !prevNeverRef.current) {
+      setStartedZero(subCount === 0);
+      setSummaryDismissed(false);
+      setScanResult(null);
+      setSawBackendWork(backfillActive);
     }
+    prevNeverRef.current = isNeverScanned;
+  }, [isNeverScanned, subCount, backfillActive]);
+
+  // Mid-scan latch: preserve startedZero while the episode is active so
+  // streaming receipts don't flip full-takeover to banner. Do NOT clear on
+  // completion — the summary needs the latch after lastScanAt lands. The
+  // next episode's transition above re-latches.
+  useEffect(() => {
+    if (!isNeverScanned) return;
     setStartedZero((prev) => (prev === null ? subCount === 0 : prev));
   }, [isNeverScanned, subCount]);
 
@@ -154,19 +175,32 @@ export function useFirstScan({
       inFlightRef.current = false;
       setScanError(null);
       setScanning(false);
+      setSawBackendWork(false);
+      setStartedZero(null);
       return;
     }
     if (lastScanAt) {
       setScanError(null);
       return;
     }
+    // Wait for scan-health before deciding: immediately after OAuth the
+    // health query is still loading (backfillActive=false) while the
+    // backend has already seeded its drain. Triggering now would double-scan.
+    if (!backfillReady) return;
     // A new connection seeds its historical backfill in the token-storage
     // mutation. Let that backend-owned worker run instead of racing it with a
     // second browser-owned scan.
     if (backfillActive) return;
     if (triedRef.current || inFlightRef.current) return;
     void triggerScan();
-  }, [gmailStatus, connected, lastScanAt, backfillActive, triggerScan]);
+  }, [
+    gmailStatus,
+    connected,
+    lastScanAt,
+    backfillActive,
+    backfillReady,
+    triggerScan,
+  ]);
 
   // Latch the first pass: once the drain clears, remaining flips false and
   // the summary below may fire once with final live counts.
@@ -191,7 +225,7 @@ export function useFirstScan({
       !scanning &&
       !deepScanRunning &&
       !summaryDismissed &&
-      (scanResult?.created ?? 0) > 0,
+      ((scanResult?.created ?? 0) > 0 || (sawBackendWork && subCount > 0)),
     dismissSummary: () => setSummaryDismissed(true),
     /** Legacy alias. Prefer showFullFirstScan. */
     showFirstScan: showFullFirstScan,

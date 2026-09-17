@@ -36,6 +36,7 @@ export function DashboardView() {
   const viewer = useQuery(api.users.getViewer);
   const subCount = all?.length ?? 0;
   const backfillActive = (scanHealth ?? []).some((h) => h.backfillActive);
+  const backfillReady = scanHealth !== undefined;
   const {
     showFullFirstScan,
     showFirstSummary,
@@ -46,7 +47,7 @@ export function DashboardView() {
     retry: retryFirstScan,
     email: scanEmail,
     foundCount: scanCount,
-  } = useFirstScan({ gmailStatus, subCount, backfillActive });
+  } = useFirstScan({ gmailStatus, subCount, backfillActive, backfillReady });
 
   const dataLoading = attention === undefined || all === undefined;
   const statusLoading = gmailStatus === undefined;

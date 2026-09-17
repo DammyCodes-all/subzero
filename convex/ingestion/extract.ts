@@ -4,12 +4,7 @@ import { v } from "convex/values";
 import { env, internalAction } from "../_generated/server";
 import { GROQ_EXTRACTION_MODEL, groqApiKeysFrom } from "../lib/aiModels";
 import { type ProviderUsage, recordAiUsage } from "../lib/aiUsage";
-import {
-  ISO_SET,
-  normalizeCurrency,
-  SYMBOL_TO_ISO,
-  ZERO_DECIMAL,
-} from "../lib/currencies";
+import { ISO_SET, normalizeCurrency } from "../lib/currencies";
 
 const extractedReturns = v.object({
   merchant: v.optional(v.string()),
@@ -38,245 +33,6 @@ function parseDateToMs(iso: string | null | undefined): number | undefined {
   return ms;
 }
 
-function mockExtract(
-  text: string,
-  subject: string,
-  from?: string,
-): {
-  merchant: string | undefined;
-  product: string | undefined;
-  price: number | undefined;
-  currency: string;
-  billingInterval: "monthly" | "yearly" | "weekly" | "unknown";
-  nextRenewalAt: number | undefined;
-  trialEndsAt: number | undefined;
-  billingProvider: string | undefined;
-  isConfirmation: boolean;
-  confidence: number;
-  quote: string;
-  lastChargeAt: number | undefined;
-} {
-  const combined = `${subject} ${text}`.toLowerCase();
-  const combinedRaw = `${subject} ${text}`; // keep original case for symbol detection
-  const isConfirmation =
-    /cancellation confirmed|subscription.*has been cancell?ed|has been cancell?ed|successfully cancell?ed|your subscription.*cancell?ed/i.test(
-      combined,
-    );
-
-  // Top 8 currency extraction — symbol directly before number wins (not any symbol in body)
-  // Handles US 7,700.00 only (strip commas), not EU 1.234,56 (documented out-of-scope)
-  let price: number | undefined;
-  let currency = "USD";
-  let rawPriceStr: string | undefined;
-  let detectedCurrency: string | undefined;
-
-  // 1) Explicit suffix code: "12.99 USD", "1,499.00 INR", "7,700 CAD" — most reliable
-  const suffixMatch = combinedRaw.match(
-    /([\d,]+(?:\.\d{1,2})?)\s*(USD|EUR|GBP|NGN|INR|JPY|CAD|AUD)\b/i,
-  );
-  if (suffixMatch) {
-    rawPriceStr = suffixMatch[1];
-    detectedCurrency = suffixMatch[2].toUpperCase();
-  } else {
-    // 2) Symbol before number — check longest symbols first (C$, A$ before $)
-    // Order: C$, A$, ₦, ₹, ¥, €, £, $
-    const symbolPatterns: Array<{ sym: string; iso: string; regex: RegExp }> = [
-      { sym: "C$", iso: "CAD", regex: /C\$\s*([\d,]+(?:\.\d{1,2})?)/ },
-      { sym: "A$", iso: "AUD", regex: /A\$\s*([\d,]+(?:\.\d{1,2})?)/ },
-      { sym: "₦", iso: "NGN", regex: /₦\s*([\d,]+(?:\.\d{1,2})?)/ },
-      { sym: "₹", iso: "INR", regex: /₹\s*([\d,]+(?:\.\d{1,2})?)/ },
-      { sym: "¥", iso: "JPY", regex: /¥\s*([\d,]+(?:\.\d{1,2})?)/ },
-      { sym: "€", iso: "EUR", regex: /€\s*([\d,]+(?:\.\d{1,2})?)/ },
-      { sym: "£", iso: "GBP", regex: /£\s*([\d,]+(?:\.\d{1,2})?)/ },
-      { sym: "$", iso: "USD", regex: /\$\s*([\d,]+(?:\.\d{1,2})?)/ },
-    ];
-    for (const p of symbolPatterns) {
-      const m = combinedRaw.match(p.regex);
-      if (m) {
-        rawPriceStr = m[1];
-        detectedCurrency = p.iso;
-        // Disambiguate $: if text contains CAD/AUD near the price, use that instead
-        if (p.sym === "$") {
-          const lower = combined;
-          const dollarIdx = combinedRaw.indexOf(m[0]);
-          const window = combined.slice(
-            Math.max(0, dollarIdx - 20),
-            dollarIdx + m[0].length + 20,
-          );
-          if (window.includes("cad") || lower.includes("canadian"))
-            detectedCurrency = "CAD";
-          else if (window.includes("aud") || lower.includes("australian"))
-            detectedCurrency = "AUD";
-        }
-        break;
-      }
-    }
-    // 3) Fallback: bare number with 2 decimals and no symbol (e.g. "7,700.00" alone) → keep USD only if no other hint
-    if (!rawPriceStr) {
-      const bare = combined.match(/([\d,]+\.\d{2})/);
-      if (bare) {
-        // Avoid capturing years like 2026.00 — require price < 1M and not a year prefix
-        rawPriceStr = bare[1];
-        detectedCurrency = "USD";
-      }
-    }
-  }
-
-  if (detectedCurrency) {
-    const norm = normalizeCurrency(detectedCurrency);
-    if (norm) currency = norm;
-    else if (ISO_SET.has(detectedCurrency)) currency = detectedCurrency;
-  }
-  if (rawPriceStr) {
-    const cleaned = rawPriceStr.replace(/,/g, "");
-    const n = Number.parseFloat(cleaned);
-    // Allow integers for JPY (¥7,700), otherwise require >0
-    const isZeroDec = detectedCurrency
-      ? ZERO_DECIMAL.has(detectedCurrency)
-      : false;
-    if (!Number.isNaN(n) && n > 0 && n < 1000000) {
-      // For zero-decimal like JPY, price should be integer — but still accept float and floor?
-      price = isZeroDec ? Math.round(n) : n;
-    }
-  }
-
-  // Merchant: known brands first, then sender cross-validated against the
-  // body, then subject patterns. Never the old naive guess (first
-  // capitalized word → "Welcome" for "Welcome to i-Fitness!").
-  const GENERIC_MERCHANT = new Set(
-    [
-      "welcome",
-      "your",
-      "hello",
-      "hi",
-      "dear",
-      "thanks",
-      "thank",
-      "team",
-      "support",
-      "billing",
-      "payment",
-      "receipt",
-      "invoice",
-      "order",
-      "monthly",
-      "subscription",
-      "membership",
-      "february",
-      "march",
-      "april",
-      "may",
-      "june",
-      "july",
-      "august",
-      "september",
-      "october",
-      "november",
-      "december",
-    ].map((w) => w.toLowerCase()),
-  );
-  const cleanBrand = (s: string): string | undefined => {
-    const t = s
-      .replace(/["']/g, "")
-      .replace(/\s+(inc|ltd|llc|gmbh|pty|ab)\.?$/i, "")
-      .replace(/[-_]+/g, " ")
-      .replace(/\s+/g, " ")
-      .trim()
-      .slice(0, 40);
-    if (!t) return undefined;
-    if (GENERIC_MERCHANT.has(t.split(" ")[0].toLowerCase())) return undefined;
-    return t;
-  };
-  let merchant: string | undefined;
-  // 1) Sender display cross-validated: "i-Fitness <info@ifitness.ng>" counts
-  // only if the brand also appears in subject/body (rejects self-sent mail
-  // where From is the user's own name).
-  const display = (from ?? "").split("<")[0].trim();
-  if (display) {
-    const brand = cleanBrand(display);
-    if (
-      brand &&
-      brand.length >= 3 &&
-      (subject.toLowerCase().includes(brand.toLowerCase()) ||
-        text.toLowerCase().includes(brand.toLowerCase()))
-    ) {
-      merchant = brand;
-    }
-  }
-
-  // 2) Known brands — snap before google so "Snap Inc on Google Play"
-  // doesn't become Google.
-  if (!merchant) {
-    const merchants = [
-      "snap",
-      "adobe",
-      "canva",
-      "spotify",
-      "notion",
-      "netflix",
-      "chatgpt",
-      "figma",
-      "linear",
-      "google",
-      "apple",
-    ];
-    for (const m of merchants) {
-      if (combined.includes(m)) {
-        merchant = m.charAt(0).toUpperCase() + m.slice(1);
-        if (m === "chatgpt") merchant = "ChatGPT";
-        if (m === "snap") merchant = "Snap Inc";
-        break;
-      }
-    }
-  }
-  // 3) Subject patterns: "Welcome to i-Fitness!", "Your i-Fitness membership".
-  if (!merchant) {
-    const pat =
-      /welcome to ([A-Z][\w&.-]+(?: [A-Z][\w&.-]+){0,2})/i.exec(subject) ??
-      /your ([A-Z][\w&.-]+(?: [A-Z][\w&.-]+){0,2}) (membership|subscription|plan|receipt)/i.exec(
-        subject,
-      );
-    if (pat?.[1]) merchant = cleanBrand(pat[1]);
-  }
-  // 4) Else undefined — never guess. A null merchant routes to unparsed
-  // (retry) instead of creating a "Welcome" subscription.
-
-  const interval = (
-    combined.includes("yearly") || combined.includes("annual")
-      ? "yearly"
-      : combined.includes("weekly")
-        ? "weekly"
-        : /month/i.test(combined)
-          ? "monthly"
-          : "unknown"
-  ) as "monthly" | "yearly" | "weekly" | "unknown";
-
-  let billingProvider: string | undefined;
-  if (combined.includes("google play") || combined.includes("google"))
-    billingProvider = "Google Play";
-  else if (combined.includes("apple") || combined.includes("app store"))
-    billingProvider = "Apple";
-  else if (combined.includes("amazon")) billingProvider = "Amazon";
-
-  const quote = text.slice(0, 300).trim() || subject.slice(0, 300);
-
-  return {
-    merchant,
-    product: undefined,
-    price,
-    currency,
-    billingInterval: interval,
-    nextRenewalAt: undefined,
-    trialEndsAt: undefined,
-    billingProvider,
-    isConfirmation,
-    confidence:
-      merchant && price ? 0.7 : isConfirmation && merchant ? 0.8 : 0.3,
-    quote,
-    lastChargeAt: undefined,
-  };
-}
-
 export const extractSubscription = internalAction({
   args: {
     text: v.string(),
@@ -296,7 +52,8 @@ export const extractSubscription = internalAction({
     const openrouterKey =
       deploymentEnv.OPENROUTER_API_KEY ?? localEnv.OPENROUTER_API_KEY;
     const openaiKey = deploymentEnv.OPENAI_API_KEY ?? localEnv.OPENAI_API_KEY;
-    // Prefer Groq layers -> OpenRouter -> OpenAI -> mock
+    // Prefer Groq layers -> OpenRouter -> OpenAI. No mock fallback: without
+    // keys extraction cannot run — the caller queues the mail for retry.
     const hasAnyKey = groqKeys.length > 0 || !!openrouterKey || !!openaiKey;
     const primaryProvider =
       groqKeys.length > 0
@@ -307,32 +64,10 @@ export const extractSubscription = internalAction({
             ? "openai"
             : null;
     console.log(
-      `[extract] Provider: ${primaryProvider ?? "MOCK (no API key)"}, subject="${args.subject.slice(0, 60)}", textLen=${args.text.length}`,
+      `[extract] Provider: ${primaryProvider ?? "NONE"}, subject="${args.subject.slice(0, 60)}", textLen=${args.text.length}`,
     );
     if (!hasAnyKey || !primaryProvider) {
-      console.log("[extract] No API key — using mock extraction");
-      const m = mockExtract(args.text, args.subject, args.from);
-      console.log(
-        `[extract] Mock result: merchant="${m.merchant ?? "null"}", price=${m.price ?? "null"}, currency="${m.currency}"`,
-      );
-      return {
-        merchant: m.merchant,
-        product: m.product,
-        price: m.price,
-        currency: m.currency,
-        billingInterval: m.billingInterval as
-          | "monthly"
-          | "yearly"
-          | "weekly"
-          | "unknown",
-        nextRenewalAt: m.nextRenewalAt,
-        trialEndsAt: m.trialEndsAt,
-        billingProvider: m.billingProvider,
-        isConfirmation: m.isConfirmation,
-        confidence: m.confidence,
-        quote: m.quote,
-        lastChargeAt: m.lastChargeAt,
-      };
+      throw new Error("extraction_unavailable_no_api_key");
     }
 
     const system = `You are a precise subscription extraction engine. Extract from forwarded email text into valid JSON ONLY.
@@ -540,31 +275,11 @@ VALIDATION: Respond with raw JSON only. No markdown, no code fences, no extra te
         if (!res) break;
       }
       if (!res || !res.ok) {
-        console.error(
+        // No mock fallback: a failed LLM means no data, not invented data.
+        // The caller catches this and queues the mail for retry.
+        throw new Error(
           `[extract] LLM failed after retries: ${lastErrText.slice(0, 200)}`,
         );
-        const m = mockExtract(args.text, args.subject, args.from);
-        console.log(
-          `[extract] Falling back to mock: merchant="${m.merchant ?? "null"}", price=${m.price ?? "null"}`,
-        );
-        return {
-          merchant: m.merchant,
-          product: m.product,
-          price: m.price,
-          currency: m.currency,
-          billingInterval: m.billingInterval as
-            | "monthly"
-            | "yearly"
-            | "weekly"
-            | "unknown",
-          nextRenewalAt: m.nextRenewalAt,
-          trialEndsAt: m.trialEndsAt,
-          billingProvider: m.billingProvider,
-          isConfirmation: m.isConfirmation,
-          confidence: m.confidence,
-          quote: m.quote,
-          lastChargeAt: m.lastChargeAt,
-        };
       }
 
       const json = (await res.json()) as {
@@ -602,69 +317,14 @@ VALIDATION: Respond with raw JSON only. No markdown, no code fences, no extra te
         typeof parsed.currency === "string" ? parsed.currency : undefined,
       );
       if (!currency && price !== undefined) currency = "USD";
-      // Use mock as fallback when Groq omits or hallucinates (e.g. "US Dollar" → USD via normalize, but invalid ISO).
-      // Merchant backfill only accepts non-generic brands (mock never emits
-      // greeting words, but an LLM "Welcome" hallucination must not survive).
-      const mockFallback = mockExtract(args.text, args.subject, args.from);
-      const mockIso =
-        normalizeCurrency(mockFallback.currency) ?? mockFallback.currency;
-      if (price === undefined && mockFallback.price !== undefined) {
-        price = mockFallback.price;
-        if (mockIso) currency = mockIso;
-      }
-      if (!merchant && mockFallback.merchant) {
-        merchant = mockFallback.merchant;
-      }
+      // Never invent: if the LLM omitted merchant/price, they stay missing
+      // and the caller routes the mail to skipped/unparsed — no guessing.
       if (merchant && /^(welcome|hello|hi|your|dear)\b/i.test(merchant)) {
         merchant = undefined;
       }
-      // Correct currency if Groq and mock disagree but price matches — use symbol directly before number (not any symbol in body)
-      // Avoids misfire on "$45 approx ₦68k" where body contains ₦ but price is $45
-      if (
-        mockIso &&
-        currency &&
-        mockIso !== currency &&
-        mockFallback.price === price
-      ) {
-        const priceStr = String(price);
-        const mockSym =
-          Object.keys(SYMBOL_TO_ISO).find(
-            (k) => SYMBOL_TO_ISO[k] === mockIso,
-          ) ?? "";
-        const groqSym =
-          Object.keys(SYMBOL_TO_ISO).find(
-            (k) => SYMBOL_TO_ISO[k] === currency,
-          ) ?? "";
-        const text = args.text;
-        const hasMockSym = mockSym
-          ? text.includes(`${mockSym}${priceStr}`) ||
-            text.includes(`${mockSym} ${priceStr}`) ||
-            text.includes(`${priceStr} ${mockIso}`) ||
-            mockFallback.quote.includes(mockSym)
-          : false;
-        const hasGroqSym = groqSym
-          ? text.includes(`${groqSym}${priceStr}`) ||
-            text.includes(`${groqSym} ${priceStr}`) ||
-            (parsed.quote as string | "")?.includes(groqSym)
-          : false;
-        if (hasMockSym && !hasGroqSym) currency = mockIso;
-        else if (!hasMockSym && hasGroqSym) {
-          // keep Groq
-        } else if (hasMockSym && hasGroqSym) {
-          // Both present — keep Groq (LLM more context)
-        } else {
-          // Neither symbol clearly — if Groq is generic USD and mock is specific (NGN/INR/JPY), prefer mock only when Groq quote doesn't contain $
-          if (
-            currency === "USD" &&
-            mockIso !== "USD" &&
-            !(parsed.quote as string | "")?.includes("$")
-          )
-            currency = mockIso;
-        }
-      }
       // Final validation: if currency not in Top 8 but looks like ISO (e.g. ZAR), allow it (Intl will try), else default USD
       if (currency && !ISO_SET.has(currency) && !/^[A-Z]{3}$/.test(currency)) {
-        currency = mockIso ?? "USD";
+        currency = "USD";
       }
       const intervalRaw =
         typeof parsed.billingInterval === "string"
@@ -716,26 +376,10 @@ VALIDATION: Respond with raw JSON only. No markdown, no code fences, no extra te
         quote,
         lastChargeAt,
       };
-    } catch {
-      const m = mockExtract(args.text, args.subject, args.from);
-      return {
-        merchant: m.merchant,
-        product: m.product,
-        price: m.price,
-        currency: m.currency,
-        billingInterval: m.billingInterval as
-          | "monthly"
-          | "yearly"
-          | "weekly"
-          | "unknown",
-        nextRenewalAt: m.nextRenewalAt,
-        trialEndsAt: m.trialEndsAt,
-        billingProvider: m.billingProvider,
-        isConfirmation: m.isConfirmation,
-        confidence: m.confidence,
-        quote: m.quote,
-        lastChargeAt: m.lastChargeAt,
-      };
+    } catch (e) {
+      // No mock fallback: bad JSON / unexpected failure means no data.
+      // The caller catches this and queues the mail for retry.
+      throw e;
     }
   },
 });
