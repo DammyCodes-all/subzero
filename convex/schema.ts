@@ -78,6 +78,7 @@ export default defineSchema({
     billingProvider: v.optional(v.string()),
     sourceEmail: v.optional(v.string()),
     sourceConnectionId: v.optional(v.id("connections")),
+    websiteDomain: v.optional(v.string()),
     dedupKey: v.string(),
     muted: v.optional(v.boolean()),
     hidden: v.optional(v.boolean()),

@@ -57,26 +57,6 @@ export const researchCancellationRoute = internalAction({
       snippet?: string;
       markdown?: string;
     };
-    let searchHits: SearchHit[] = [];
-    try {
-      searchHits = await firecrawlSearch(ctx, searchQuery, 10);
-    } catch {
-      searchHits = [];
-    }
-
-    if (searchHits.length === 0) {
-      await ctx.runMutation(internal.subscriptions.saveResearchResult, {
-        subscriptionId: args.subscriptionId,
-        cancellationMethod: "unknown",
-        cancellationUrl: undefined,
-        instructions: [],
-        evidenceUrl: undefined,
-        evidenceExcerpt: undefined,
-      });
-      return { success: true, mock: false, reason: "no_firecrawl_hits" };
-    }
-
-    // 2. Generic ranking — merchant-agnostic
     const merchantSlug = sub.merchant
       .toLowerCase()
       .replace(/\s+/g, "")
@@ -87,6 +67,67 @@ export const researchCancellationRoute = internalAction({
       .split(/[^a-z0-9]+/)
       .filter((t) => t.length >= 3)
       .slice(0, 3);
+    // Domain matcher shared by the no-hits fallback and the ranked pass.
+    function matchWebsiteDomain(
+      hits: { url?: string }[],
+    ): string | undefined {
+      for (const h of hits) {
+        let host: string | null = null;
+        try {
+          const u = new URL(String(h.url ?? ""));
+          const hn = u.hostname.toLowerCase();
+          if (hn.includes(".")) host = hn;
+        } catch {}
+        if (!host) continue;
+        const parts = host.split(".");
+        const reg =
+          parts.length <= 2
+            ? host
+            : parts.length >= 3 &&
+                new Set(["co", "com", "org", "net", "gov", "edu", "ac"]).has(
+                  parts[parts.length - 2],
+                )
+              ? parts.slice(-3).join(".")
+              : parts.slice(-2).join(".");
+        const slugHit =
+          !!merchantSlug && reg.replace(/\./g, "").includes(merchantSlug);
+        const tokHit = merchantTokens.some((tok) => reg.includes(tok));
+        if (slugHit || tokHit) return reg;
+      }
+      return undefined;
+    }
+    let searchHits: SearchHit[] = [];
+    try {
+      searchHits = await firecrawlSearch(ctx, searchQuery, 10);
+    } catch {
+      searchHits = [];
+    }
+
+    if (searchHits.length === 0) {
+      // Cancel search empty — still try one website lookup so the icon can
+      // resolve from the merchant name alone. Cached on the sub forever.
+      let websiteDomain: string | undefined;
+      try {
+        const webHits = await firecrawlSearch(
+          ctx,
+          `${sub.merchant} official website`,
+          5,
+        );
+        websiteDomain = matchWebsiteDomain(webHits);
+      } catch {}
+      await ctx.runMutation(internal.subscriptions.saveResearchResult, {
+        subscriptionId: args.subscriptionId,
+        cancellationMethod: "unknown",
+        cancellationUrl: undefined,
+        instructions: [],
+        evidenceUrl: undefined,
+        evidenceExcerpt: undefined,
+        ...(websiteDomain ? { websiteDomain } : {}),
+      });
+      return { success: true, mock: false, reason: "no_firecrawl_hits" };
+    }
+
+    // 2. Generic ranking — merchant-agnostic
 
     function scoreHit(h: SearchHit): number {
       const urlStr = String(h.url ?? "");
@@ -205,6 +246,23 @@ export const researchCancellationRoute = internalAction({
         .join(" | ")}`,
     );
 
+    // Company website: first merchant-matched domain across Firecrawl hits.
+    // Zero extra lookups — the search above already ran. Saved for the brand
+    // favicon (icon comes from the company site, never guessed).
+    let websiteDomain = matchWebsiteDomain(ranked.map((r) => r.h));
+    if (!websiteDomain) {
+      // Last resort, one lookup, cached on the sub forever: ask for the
+      // website directly. Only runs when the cancel search matched nothing.
+      try {
+        const webHits = await firecrawlSearch(
+          ctx,
+          `${sub.merchant} official website`,
+          5,
+        );
+        websiteDomain = matchWebsiteDomain(webHits);
+      } catch {}
+    }
+
     // 3. Scrape only top 1-2 (two-step pattern) — keep allUrls for verbatim check
     let markdownContent = "";
     let sourceUrl: string | undefined = ranked[0]?.h.url as string | undefined;
@@ -275,6 +333,7 @@ export const researchCancellationRoute = internalAction({
         instructions: [],
         evidenceUrl: sourceUrl,
         evidenceExcerpt: undefined,
+        ...(websiteDomain ? { websiteDomain } : {}),
       });
       return { success: true, mock: false, reason: "no_firecrawl_content" };
     }
@@ -624,6 +683,7 @@ ${markdownContent.slice(0, 8000)}`;
       instructions,
       evidenceUrl: sourceUrl,
       evidenceExcerpt,
+      ...(websiteDomain ? { websiteDomain } : {}),
     });
 
     return { success: true, mock: false };

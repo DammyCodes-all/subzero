@@ -39,6 +39,7 @@ function parseDateToMs(iso: string | null | undefined): number | undefined {
 function mockExtract(
   text: string,
   subject: string,
+  from?: string,
 ): {
   merchant: string | undefined;
   product: string | undefined;
@@ -136,34 +137,106 @@ function mockExtract(
     }
   }
 
-  // Merchant from subject or common names — snap before google so "Snap Inc on Google Play" doesn't become Google
-  const merchants = [
-    "snap",
-    "adobe",
-    "canva",
-    "spotify",
-    "notion",
-    "netflix",
-    "chatgpt",
-    "figma",
-    "linear",
-    "google",
-    "apple",
-  ];
+  // Merchant: known brands first, then sender cross-validated against the
+  // body, then subject patterns. Never the old naive guess (first
+  // capitalized word → "Welcome" for "Welcome to i-Fitness!").
+  const GENERIC_MERCHANT = new Set(
+    [
+      "welcome",
+      "your",
+      "hello",
+      "hi",
+      "dear",
+      "thanks",
+      "thank",
+      "team",
+      "support",
+      "billing",
+      "payment",
+      "receipt",
+      "invoice",
+      "order",
+      "monthly",
+      "subscription",
+      "membership",
+      "february",
+      "march",
+      "april",
+      "may",
+      "june",
+      "july",
+      "august",
+      "september",
+      "october",
+      "november",
+      "december",
+    ].map((w) => w.toLowerCase()),
+  );
+  const cleanBrand = (s: string): string | undefined => {
+    const t = s
+      .replace(/["']/g, "")
+      .replace(/\s+(inc|ltd|llc|gmbh|pty|ab)\.?$/i, "")
+      .replace(/[-_]+/g, " ")
+      .replace(/\s+/g, " ")
+      .trim()
+      .slice(0, 40);
+    if (!t) return undefined;
+    if (GENERIC_MERCHANT.has(t.split(" ")[0].toLowerCase())) return undefined;
+    return t;
+  };
   let merchant: string | undefined;
-  for (const m of merchants) {
-    if (combined.includes(m)) {
-      merchant = m.charAt(0).toUpperCase() + m.slice(1);
-      if (m === "chatgpt") merchant = "ChatGPT";
-      if (m === "snap") merchant = "Snap Inc";
-      break;
+  // 1) Sender display cross-validated: "i-Fitness <info@ifitness.ng>" counts
+  // only if the brand also appears in subject/body (rejects self-sent mail
+  // where From is the user's own name).
+  const display = (from ?? "").split("<")[0].trim();
+  if (display) {
+    const brand = cleanBrand(display);
+    if (
+      brand &&
+      brand.length >= 3 &&
+      (subject.toLowerCase().includes(brand.toLowerCase()) ||
+        text.toLowerCase().includes(brand.toLowerCase()))
+    ) {
+      merchant = brand;
     }
   }
+
+  // 2) Known brands — snap before google so "Snap Inc on Google Play"
+  // doesn't become Google.
   if (!merchant) {
-    // Fallback: first capitalized word in subject
-    const subjMatch = subject.match(/([A-Z][a-z]+)/);
-    if (subjMatch) merchant = subjMatch[1];
+    const merchants = [
+      "snap",
+      "adobe",
+      "canva",
+      "spotify",
+      "notion",
+      "netflix",
+      "chatgpt",
+      "figma",
+      "linear",
+      "google",
+      "apple",
+    ];
+    for (const m of merchants) {
+      if (combined.includes(m)) {
+        merchant = m.charAt(0).toUpperCase() + m.slice(1);
+        if (m === "chatgpt") merchant = "ChatGPT";
+        if (m === "snap") merchant = "Snap Inc";
+        break;
+      }
+    }
   }
+  // 3) Subject patterns: "Welcome to i-Fitness!", "Your i-Fitness membership".
+  if (!merchant) {
+    const pat =
+      /welcome to ([A-Z][\w&.-]+(?: [A-Z][\w&.-]+){0,2})/i.exec(subject) ??
+      /your ([A-Z][\w&.-]+(?: [A-Z][\w&.-]+){0,2}) (membership|subscription|plan|receipt)/i.exec(
+        subject,
+      );
+    if (pat?.[1]) merchant = cleanBrand(pat[1]);
+  }
+  // 4) Else undefined — never guess. A null merchant routes to unparsed
+  // (retry) instead of creating a "Welcome" subscription.
 
   const interval = (
     combined.includes("yearly") || combined.includes("annual")
@@ -204,6 +277,7 @@ export const extractSubscription = internalAction({
   args: {
     text: v.string(),
     subject: v.string(),
+    from: v.optional(v.string()),
   },
   returns: extractedReturns,
   handler: async (_ctx, args) => {
@@ -230,7 +304,7 @@ export const extractSubscription = internalAction({
     );
     if (!hasAnyKey || !primaryProvider) {
       console.log("[extract] No API key — using mock extraction");
-      const m = mockExtract(args.text, args.subject);
+      const m = mockExtract(args.text, args.subject, args.from);
       console.log(
         `[extract] Mock result: merchant="${m.merchant ?? "null"}", price=${m.price ?? "null"}, currency="${m.currency}"`,
       );
@@ -276,6 +350,7 @@ SCHEMA — return ONLY valid JSON matching this exact schema. Do not add keys. D
 RULES:
 - Missing field → null. Do NOT guess, do NOT infer. If not explicitly stated, null.
 - Only recurring subscriptions (monthly/yearly/weekly or auto-renew trial). One-time purchase/exam fee without renewal (e.g., NATIONAL EXAMINATIONS COUNCIL ₦5,100) → merchant null, price null.
+- Promotional offers are NOT subscriptions, even with a price: upgrade prompts, discount offers, win-back deals ("Offer ends…", "Get deal", "% off", "Save now") describing what you COULD buy. Only extract when the mail confirms an EXISTING subscription, trial, order, receipt, or renewal for the recipient. Promo → merchant null, price null, confidence 0.9+.
 - price: strip commas ₦7,700.00→7700; JPY no decimals ¥7,700→7700; number type, not string.
 - currency: infer from symbol/suffix: $→USD, C$→CAD, A$→AUD, €→EUR, £→GBP, ₦→NGN, ₹→INR, ¥→JPY, or suffix "12.99 CAD". If unsure, null (not USD).
 - billingInterval enum only monthly|yearly|weekly|unknown. unknown if not stated.
@@ -287,6 +362,7 @@ RULES:
 CANONICAL MERCHANT MAP (brand only, never product/billingProvider):
 - Any merchant containing "google" → "Google One"
 - Snap → "Snap Inc", OpenAI → "ChatGPT", others: Adobe, Spotify, Notion, Netflix, Figma, Linear, Canva, YouTube
+- Unknown brands (gyms, local businesses): use the sender/brand name from the From header or the "Welcome to X" subject — e.g. From "i-Fitness" + Subject "Welcome to i-Fitness!" → merchant "i-Fitness". Never use greeting words ("Welcome", "Hello") or pronouns ("Your") as the merchant; if no brand is identifiable, return null.
 - Examples:
   1) Input text "Google AI Plus (400 GB) (Google One)" → merchant "Google One", product "Google AI Plus (400 GB)"
   2) Input "Google One 2TB via Google Play ₦7,700 monthly" → merchant "Google One", product "Google One 2TB"
@@ -305,6 +381,9 @@ Document: Subject: NATIONAL EXAMINATIONS COUNCIL Invoice Body: ₦5,100 single p
 Document: Subject: Your trial ends soon Body: Spotify Premium $9.99/month renews 2026-09-15
 => {"merchant":"Spotify","product":"Spotify Premium","price":9.99,"currency":"USD","billingInterval":"monthly","nextRenewalAt":"2026-09-15","trialEndsAt":null,"billingProvider":null,"isConfirmation":false,"confidence":0.96,"quote":"$9.99/month renews 2026-09-15"}
 
+Document: From: The Proton Team Subject: Go Unlimited for US$1 Body: Upgrade to Proton Unlimited for US$1 in your first month. Get deal. 92% off. Billed at US$1 for the first month. Renews at US$12.99. Offer ends September 11, 2026.
+=> {"merchant":null,"product":null,"price":null,"currency":null,"billingInterval":"unknown","nextRenewalAt":null,"trialEndsAt":null,"billingProvider":null,"isConfirmation":false,"confidence":0.95,"quote":"Offer ends September 11, 2026"}
+
 VALIDATION: Respond with raw JSON only. No markdown, no code fences, no extra text. All keys present, no trailing commas, no single quotes.`;
 
     // Head-cut loses forwards (original sits behind headers/quotes) and long
@@ -321,7 +400,7 @@ VALIDATION: Respond with raw JSON only. No markdown, no code fences, no extra te
       const start = Math.max(0, m.index - 500);
       return `${head}\n…\n${text.slice(start, start + WINDOW)}`.slice(0, CAP);
     };
-    const userContent = `Subject: ${args.subject}\n\nBody:\n${selectWindow(args.text)}`;
+    const userContent = `From: ${args.from ?? "(unknown)"}\nSubject: ${args.subject}\n\nBody:\n${selectWindow(args.text)}`;
     type ProviderCfg = {
       id: string;
       key: string;
@@ -437,7 +516,7 @@ VALIDATION: Respond with raw JSON only. No markdown, no code fences, no extra te
         console.error(
           `[extract] LLM failed after retries: ${lastErrText.slice(0, 200)}`,
         );
-        const m = mockExtract(args.text, args.subject);
+        const m = mockExtract(args.text, args.subject, args.from);
         console.log(
           `[extract] Falling back to mock: merchant="${m.merchant ?? "null"}", price=${m.price ?? "null"}`,
         );
@@ -486,8 +565,10 @@ VALIDATION: Respond with raw JSON only. No markdown, no code fences, no extra te
         typeof parsed.currency === "string" ? parsed.currency : undefined,
       );
       if (!currency && price !== undefined) currency = "USD";
-      // Use mock as fallback when Groq omits or hallucinates (e.g. "US Dollar" → USD via normalize, but invalid ISO)
-      const mockFallback = mockExtract(args.text, args.subject);
+      // Use mock as fallback when Groq omits or hallucinates (e.g. "US Dollar" → USD via normalize, but invalid ISO).
+      // Merchant backfill only accepts non-generic brands (mock never emits
+      // greeting words, but an LLM "Welcome" hallucination must not survive).
+      const mockFallback = mockExtract(args.text, args.subject, args.from);
       const mockIso =
         normalizeCurrency(mockFallback.currency) ?? mockFallback.currency;
       if (price === undefined && mockFallback.price !== undefined) {
@@ -496,6 +577,9 @@ VALIDATION: Respond with raw JSON only. No markdown, no code fences, no extra te
       }
       if (!merchant && mockFallback.merchant) {
         merchant = mockFallback.merchant;
+      }
+      if (merchant && /^(welcome|hello|hi|your|dear)\b/i.test(merchant)) {
+        merchant = undefined;
       }
       // Correct currency if Groq and mock disagree but price matches — use symbol directly before number (not any symbol in body)
       // Avoids misfire on "$45 approx ₦68k" where body contains ₦ but price is $45
@@ -594,7 +678,7 @@ VALIDATION: Respond with raw JSON only. No markdown, no code fences, no extra te
         quote,
       };
     } catch {
-      const m = mockExtract(args.text, args.subject);
+      const m = mockExtract(args.text, args.subject, args.from);
       return {
         merchant: m.merchant,
         product: m.product,
