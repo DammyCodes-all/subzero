@@ -1,8 +1,8 @@
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import { env, internalAction } from "./_generated/server";
-import { GROQ_EXTRACTION_MODEL, groqApiKeysFrom } from "./lib/aiModels";
-import { type ProviderUsage, recordAiUsage } from "./lib/aiUsage";
+import { groqApiKeysFrom } from "./lib/aiModels";
+import { type LlmResult, chatJson } from "./lib/llm";
 import { firecrawlScrape, firecrawlSearch } from "./lib/firecrawl";
 import { researchCacheKey } from "./lib/researchCache";
 
@@ -434,43 +434,6 @@ VALIDATION: Raw JSON only. All keys present. No trailing commas. No single quote
 HELP CONTENT:
 ${markdownContent.slice(0, 8000)}`;
 
-    type ProviderCfg = {
-      id: string;
-      key: string;
-      endpoint: string;
-      model: string;
-    };
-    const providers: ProviderCfg[] = [];
-    groqKeys.forEach((key, i) => {
-      providers.push({
-        id: i === 0 ? "groq" : `groq-${i + 1}`,
-        key,
-        endpoint: "https://api.groq.com/openai/v1/chat/completions",
-        model: GROQ_EXTRACTION_MODEL,
-      });
-    });
-    if (openrouterKey)
-      providers.push({
-        id: "openrouter",
-        key: openrouterKey,
-        endpoint: "https://openrouter.ai/api/v1/chat/completions",
-        model:
-          (env as unknown as { OPENROUTER_MODEL?: string }).OPENROUTER_MODEL ??
-          (process.env as unknown as { OPENROUTER_MODEL?: string })
-            .OPENROUTER_MODEL ??
-          "openrouter/free",
-      });
-    if (openaiKey)
-      providers.push({
-        id: "openai",
-        key: openaiKey,
-        endpoint: "https://api.openai.com/v1/chat/completions",
-        model: "gpt-4o-mini",
-      });
-    const primaryProvider = providers[0]?.id ?? "none";
-    let usedProvider = primaryProvider;
-    let usedModel = providers[0]?.model ?? "unknown";
-    let successfulLatencyMs = 0;
 
     type LLMOutput = {
       cancellationMethod: string | null;
@@ -481,136 +444,18 @@ ${markdownContent.slice(0, 8000)}`;
     let parsed: LLMOutput | null = null;
     try {
       // Try providers Groq -> OpenRouter -> OpenAI with 429 backoff and fallback
-      let res: Response | null = null;
-      let lastErr: unknown = null;
-      providerLoop: for (const prov of providers) {
-        usedProvider = prov.id;
-        usedModel = prov.model;
-        console.log(
-          `[research] Trying provider ${prov.id} model ${prov.model}`,
-        );
-        // Groq layers fail fast (1 attempt each, next key covers the retry);
-        // OpenRouter/OpenAI keep 3 attempts.
-        const maxAttempts = prov.id.startsWith("groq") ? 1 : 3;
-        for (let attempt = 0; attempt < maxAttempts; attempt++) {
-          const controller = new AbortController();
-          const t = setTimeout(() => controller.abort(), 20000);
-          try {
-            const headers: Record<string, string> = {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${prov.key}`,
-            };
-            if (prov.id === "openrouter") {
-              headers["HTTP-Referer"] =
-                process.env.SITE_URL ?? "http://localhost:3000";
-              headers["X-Title"] = "SubZero";
-            }
-            const startedAt = Date.now();
-            const r = await fetch(prov.endpoint, {
-              method: "POST",
-              headers,
-              body: JSON.stringify({
-                model: prov.model,
-                response_format: { type: "json_object" },
-                messages: [
-                  { role: "system", content: system },
-                  { role: "user", content: userContent },
-                ],
-                temperature: 0,
-                max_tokens: 600,
-              }),
-              signal: controller.signal,
-            });
-            clearTimeout(t);
-            if (r.ok) {
-              successfulLatencyMs = Date.now() - startedAt;
-              res = r;
-              break providerLoop;
-            }
-            await recordAiUsage(ctx, {
-              operation: "research",
-              provider: prov.id,
-              model: prov.model,
-              latencyMs: Date.now() - startedAt,
-              success: false,
-            });
-            lastErr = new Error(
-              `AI extraction failed: ${r.status} ${r.statusText}`,
-            );
-            // Retry only on 429 or 5xx
-            if (
-              (r.status === 429 || r.status >= 500) &&
-              attempt < maxAttempts - 1
-            ) {
-              const backoff = 1500 * (attempt + 1) + Math.random() * 500;
-              await new Promise((rr) => setTimeout(rr, backoff));
-              continue;
-            }
-            if (r.status === 429 && attempt === maxAttempts - 1) {
-              console.log(
-                `[research] Provider ${prov.id} 429 exhausted, trying next`,
-              );
-              break;
-            }
-            throw lastErr;
-          } catch (e) {
-            clearTimeout(t);
-            lastErr = e;
-            const msg = String(e);
-            const isRateLimit =
-              msg.includes("429") || msg.includes("Rate limit");
-            if (isRateLimit && attempt < maxAttempts - 1) {
-              const backoff = 1500 * (attempt + 1) + Math.random() * 500;
-              await new Promise((rr) => setTimeout(rr, backoff));
-              continue;
-            }
-            if (isRateLimit && attempt === maxAttempts - 1) {
-              console.log(
-                `[research] Provider ${prov.id} rate limit, falling back`,
-              );
-              break;
-            }
-            if (attempt === maxAttempts - 1) throw e;
-            if (
-              e instanceof Error &&
-              e.name === "AbortError" &&
-              attempt < maxAttempts - 1
-            ) {
-              await new Promise((rr) => setTimeout(rr, 800));
-              continue;
-            }
-            throw e;
-          }
-        }
-        if (!res && lastErr && String(lastErr).includes("429")) {
-          console.log(
-            `[research] Falling back from ${prov.id} to next provider`,
-          );
-          continue;
-        }
-        if (!res) break;
-      }
-      if (!res)
-        throw lastErr ?? new Error("AI extraction failed after retries");
-
-      const data = (await res.json()) as unknown as {
-        choices?: Array<{ message?: { content?: string } }>;
-        usage?: ProviderUsage;
-      };
-      await recordAiUsage(ctx, {
+      // Single shared provider loop (rotation + breaker + repair in lib/llm).
+      // Throws into the catch below, which saves a retryable failed result.
+      const result: LlmResult = await chatJson({
+        ctx,
         operation: "research",
-        provider: usedProvider,
-        model: usedModel,
-        usage: data.usage,
-        latencyMs: successfulLatencyMs,
-        success: true,
+        logTag: "[research]",
+        system,
+        user: userContent,
+        maxTokens: 600,
+        timeoutMs: 20_000,
       });
-      const content = data.choices?.[0]?.message?.content ?? "{}";
-      const raw = JSON.parse(content) as unknown;
-      if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
-        throw new Error("Invalid LLM JSON: not an object");
-      }
-      parsed = raw as LLMOutput;
+      parsed = result.parsed as LLMOutput;
       // Strict shape validation — throw to trigger failed retry path, not crash
       if (
         typeof parsed.cancellationMethod !== "string" &&

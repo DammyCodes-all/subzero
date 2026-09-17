@@ -1,9 +1,8 @@
 "use node";
 
 import { v } from "convex/values";
-import { env, internalAction } from "../_generated/server";
-import { GROQ_EXTRACTION_MODEL, groqApiKeysFrom } from "../lib/aiModels";
-import { type ProviderUsage, recordAiUsage } from "../lib/aiUsage";
+import { internalAction } from "../_generated/server";
+import { type LlmResult, chatJson } from "../lib/llm";
 import { ISO_SET, normalizeCurrency } from "../lib/currencies";
 
 const extractedReturns = v.object({
@@ -41,34 +40,9 @@ export const extractSubscription = internalAction({
   },
   returns: extractedReturns,
   handler: async (ctx, args) => {
-    const deploymentEnv = env as unknown as Record<string, string | undefined>;
-    const localEnv = process.env as unknown as Record<
-      string,
-      string | undefined
-    >;
-    // Deployment env wins locally (Convex dev loads .env.local into env).
-    const mergedEnv = { ...localEnv, ...deploymentEnv };
-    const groqKeys = groqApiKeysFrom(mergedEnv);
-    const openrouterKey =
-      deploymentEnv.OPENROUTER_API_KEY ?? localEnv.OPENROUTER_API_KEY;
-    const openaiKey = deploymentEnv.OPENAI_API_KEY ?? localEnv.OPENAI_API_KEY;
-    // Prefer Groq layers -> OpenRouter -> OpenAI. No mock fallback: without
-    // keys extraction cannot run — the caller queues the mail for retry.
-    const hasAnyKey = groqKeys.length > 0 || !!openrouterKey || !!openaiKey;
-    const primaryProvider =
-      groqKeys.length > 0
-        ? "groq"
-        : openrouterKey
-          ? "openrouter"
-          : openaiKey
-            ? "openai"
-            : null;
     console.log(
-      `[extract] Provider: ${primaryProvider ?? "NONE"}, subject="${args.subject.slice(0, 60)}", textLen=${args.text.length}`,
+      `[extract] subject="${args.subject.slice(0, 60)}", textLen=${args.text.length}`,
     );
-    if (!hasAnyKey || !primaryProvider) {
-      throw new Error("extraction_unavailable_no_api_key");
-    }
 
     const system = `You are a precise subscription extraction engine. Extract from forwarded email text into valid JSON ONLY.
 
@@ -123,9 +97,6 @@ Document: Subject: Your Google Play Order Receipt from 20 Aug 2026 Body: Google 
 Document: Subject: NATIONAL EXAMINATIONS COUNCIL Invoice Body: ₦5,100 single payment for 2024 exam, no renewal
 => {"merchant":null,"product":null,"price":null,"currency":null,"billingInterval":"unknown","nextRenewalAt":null,"trialEndsAt":null,"billingProvider":null,"isConfirmation":false,"confidence":0.99,"quote":"₦5,100 single payment","lastChargeAt":null}
 
-Document: Subject: Your trial ends soon Body: Spotify Premium $9.99/month renews 2026-09-15
-=> {"merchant":"Spotify","product":"Spotify Premium","price":9.99,"currency":"USD","billingInterval":"monthly","nextRenewalAt":"2026-09-15","trialEndsAt":null,"billingProvider":null,"isConfirmation":false,"confidence":0.96,"quote":"$9.99/month renews 2026-09-15","lastChargeAt":null}
-
 Document: From: The Proton Team Subject: Go Unlimited for US$1 Body: Upgrade to Proton Unlimited for US$1 in your first month. Get deal. 92% off. Billed at US$1 for the first month. Renews at US$12.99. Offer ends September 11, 2026.
 => {"merchant":null,"product":null,"price":null,"currency":null,"billingInterval":"unknown","nextRenewalAt":null,"trialEndsAt":null,"billingProvider":null,"isConfirmation":false,"confidence":0.95,"quote":"Offer ends September 11, 2026","lastChargeAt":null}
 
@@ -149,154 +120,18 @@ VALIDATION: Respond with raw JSON only. No markdown, no code fences, no extra te
       return `${head}\n…\n${text.slice(start, start + WINDOW)}`.slice(0, CAP);
     };
     const userContent = `From: ${args.from ?? "(unknown)"}\nSubject: ${args.subject}\n\nBody:\n${selectWindow(args.text)}`;
-    type ProviderCfg = {
-      id: string;
-      key: string;
-      endpoint: string;
-      model: string;
-    };
-    const providers: ProviderCfg[] = [];
-    groqKeys.forEach((key, i) => {
-      providers.push({
-        id: i === 0 ? "groq" : `groq-${i + 1}`,
-        key,
-        endpoint: "https://api.groq.com/openai/v1/chat/completions",
-        model: GROQ_EXTRACTION_MODEL,
-      });
+    // Single shared provider loop (rotation + breaker + repair in lib/llm).
+    // Throws when every provider fails — the caller queues the mail for retry.
+    const result: LlmResult = await chatJson({
+      ctx,
+      operation: "extraction",
+      logTag: "[extract]",
+      system,
+      user: userContent,
+      maxTokens: 300,
+      timeoutMs: 25_000,
     });
-    if (openrouterKey)
-      providers.push({
-        id: "openrouter",
-        key: openrouterKey,
-        endpoint: "https://openrouter.ai/api/v1/chat/completions",
-        model:
-          (env as unknown as { OPENROUTER_MODEL?: string }).OPENROUTER_MODEL ??
-          process.env.OPENROUTER_MODEL ??
-          "openrouter/free",
-      });
-    if (openaiKey)
-      providers.push({
-        id: "openai",
-        key: openaiKey,
-        endpoint: "https://api.openai.com/v1/chat/completions",
-        model: "gpt-4o-mini",
-      });
-
-    let usedProvider = primaryProvider ?? "unknown";
-    let usedModel = providers[0]?.model ?? "unknown";
-    let successfulLatencyMs = 0;
-    try {
-      // Try providers in order Groq -> OpenRouter -> OpenAI, fail fast on
-      // 429: Groq gets 1 attempt then immediate fallback (3x retries cost
-      // ~4s per throttled mail and the fallback is what succeeds anyway).
-      let res: Response | null = null;
-      let lastErrText = "";
-      providerLoop: for (const prov of providers) {
-        usedProvider = prov.id;
-        usedModel = prov.model;
-        console.log(`[extract] Trying provider ${prov.id} model ${prov.model}`);
-        const maxAttempts = prov.id.startsWith("groq") ? 1 : 2;
-        for (let attempt = 0; attempt < maxAttempts; attempt++) {
-          try {
-            const headers: Record<string, string> = {
-              Authorization: `Bearer ${prov.key}`,
-              "Content-Type": "application/json",
-            };
-            if (prov.id === "openrouter") {
-              headers["HTTP-Referer"] =
-                process.env.SITE_URL ?? "http://localhost:3000";
-              headers["X-Title"] = "SubZero";
-            }
-            const startedAt = Date.now();
-            const r = await fetch(prov.endpoint, {
-              method: "POST",
-              headers,
-              body: JSON.stringify({
-                model: prov.model,
-                temperature: 0,
-                response_format: { type: "json_object" },
-                messages: [
-                  { role: "system", content: system },
-                  { role: "user", content: userContent },
-                ],
-                max_tokens: 500,
-              }),
-            });
-            if (r.ok) {
-              successfulLatencyMs = Date.now() - startedAt;
-              res = r;
-              break providerLoop;
-            }
-            lastErrText = await r.text();
-            await recordAiUsage(ctx, {
-              operation: "extraction",
-              provider: prov.id,
-              model: prov.model,
-              latencyMs: Date.now() - startedAt,
-              success: false,
-            });
-            console.error(
-              `[extract] LLM API error ${prov.id}: ${r.status} ${lastErrText.slice(0, 200)} attempt ${attempt + 1}/${maxAttempts}`,
-            );
-            if (r.status === 429 && attempt < maxAttempts - 1) {
-              const backoff = 1200 * (attempt + 1) + Math.random() * 400;
-              await new Promise((rr) => setTimeout(rr, backoff));
-              continue;
-            }
-            if (r.status === 429 && attempt === maxAttempts - 1) {
-              console.log(
-                `[extract] Provider ${prov.id} exhausted 429, trying next provider`,
-              );
-              break; // break inner, outer will try next provider
-            }
-            break; // non-429 failure -> try next provider as well
-          } catch (e) {
-            lastErrText = String(e).slice(0, 200);
-            console.error(
-              `[extract] LLM fetch failed ${prov.id} attempt ${attempt + 1}/${maxAttempts}: ${lastErrText}`,
-            );
-            if (attempt < maxAttempts - 1)
-              await new Promise((rr) => setTimeout(rr, 800 * (attempt + 1)));
-            else break;
-          }
-        }
-        // if we exhausted attempts for this provider without success, continue to next provider if last error was rate limit or fetch error
-        if (
-          !res &&
-          (lastErrText.includes("429") ||
-            lastErrText.includes("Rate limit") ||
-            lastErrText.includes("fetch failed"))
-        ) {
-          console.log(
-            `[extract] Falling back from ${prov.id} to next provider`,
-          );
-          continue;
-        }
-        if (!res) break;
-      }
-      if (!res || !res.ok) {
-        // No mock fallback: a failed LLM means no data, not invented data.
-        // The caller catches this and queues the mail for retry.
-        throw new Error(
-          `[extract] LLM failed after retries: ${lastErrText.slice(0, 200)}`,
-        );
-      }
-
-      const json = (await res.json()) as {
-        choices?: { message?: { content?: string } }[];
-        usage?: ProviderUsage;
-      };
-      await recordAiUsage(ctx, {
-        operation: "extraction",
-        provider: usedProvider,
-        model: usedModel,
-        usage: json.usage,
-        latencyMs: successfulLatencyMs,
-        success: true,
-      });
-      const content = json.choices?.[0]?.message?.content ?? "{}";
-      console.log(`[extract] LLM raw response: ${content.slice(0, 300)}`);
-      const parsed = JSON.parse(content) as Record<string, unknown>;
+    const parsed = result.parsed;
 
       let merchant =
         typeof parsed.merchant === "string" && parsed.merchant.trim()
@@ -376,10 +211,5 @@ VALIDATION: Respond with raw JSON only. No markdown, no code fences, no extra te
         quote,
         lastChargeAt,
       };
-    } catch (e) {
-      // No mock fallback: bad JSON / unexpected failure means no data.
-      // The caller catches this and queues the mail for retry.
-      throw e;
-    }
   },
 });
