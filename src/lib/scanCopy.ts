@@ -10,11 +10,38 @@ export function scanReasonCopy(reason?: string): string | null {
   return "Something hiccuped on our side. Try again in a bit.";
 }
 
-export function scanResultCopy(res: {
+export interface ScanTotals {
   scanned: number;
   created: number;
+  merged?: number;
+  skipped?: number;
+  unparsed?: number;
+  duplicate?: number;
+  cancelled?: number;
+  failed?: number;
   reason?: string;
-}): { title: string; description: string; kind: "success" | "error" } {
+  remaining?: boolean;
+}
+
+export function scanBreakdown(res: ScanTotals): string {
+  const parts: string[] = [`${res.scanned} emails`];
+  if (res.created) parts.push(`${res.created} new`);
+  if (res.merged) parts.push(`${res.merged} updated`);
+  if (res.cancelled) parts.push(`${res.cancelled} cancelled`);
+  if (res.duplicate) parts.push(`${res.duplicate} dupes`);
+  if (res.skipped) parts.push(`${res.skipped} skipped`);
+  if (res.unparsed) parts.push(`${res.unparsed} unclear`);
+  if (res.failed) parts.push(`${res.failed} failed`);
+  if (parts.length === 1) return `Synced ${res.scanned} emails, nothing new.`;
+  const [first, ...rest] = parts;
+  return `Synced ${first}: ${rest.join(", ")}.`;
+}
+
+export function scanResultCopy(res: ScanTotals): {
+  title: string;
+  description: string;
+  kind: "success" | "error" | "progress";
+} {
   const mapped = scanReasonCopy(res.reason);
   if (mapped) {
     return {
@@ -23,9 +50,18 @@ export function scanResultCopy(res: {
       kind: "error",
     };
   }
+  // Partial: action returned but backfill/drain still working through the
+  // remainder. Never present this as the final breakdown.
+  if (res.remaining) {
+    return {
+      title: "First pass done",
+      description: `${scanBreakdown(res)} Deep scan continues in the background — final totals when it lands.`,
+      kind: "progress",
+    };
+  }
   return {
     title: "Scan done",
-    description: `Synced ${res.scanned} emails, ${res.created} new.`,
+    description: scanBreakdown(res),
     kind: "success",
   };
 }

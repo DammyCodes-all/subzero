@@ -39,6 +39,47 @@ type FetchedMsg = {
   from: string;
 };
 
+// 3-wide extracts with a start-gap so Groq 8000 TPM isn't burst-tripped.
+// Replaces the old serial + fixed 450ms sleep (505s manual scans).
+// The starter chain serializes read-wait-write so concurrent workers actually
+// space MIN_START_GAP apart (a plain read-then-write races under concurrency
+// and both workers pass with zero wait). Module-level = per-isolate throttle,
+// which is what TPM wants: concurrent scans share the same budget.
+const EXTRACT_CONCURRENCY = 3;
+const MIN_START_GAP_MS = 350;
+let lastExtractStart = 0;
+let startChain: Promise<void> = Promise.resolve();
+
+async function paceExtract() {
+  const run = startChain.then(async () => {
+    const now = Date.now();
+    const wait = MIN_START_GAP_MS - (now - lastExtractStart);
+    if (wait > 0) await new Promise((r) => setTimeout(r, wait));
+    lastExtractStart = Date.now();
+  });
+  startChain = run.catch(() => {});
+  await run;
+}
+
+export async function mapWithConcurrency<T>(
+  items: T[],
+  worker: (item: T, index: number) => Promise<void>,
+  concurrency = EXTRACT_CONCURRENCY,
+): Promise<void> {
+  let next = 0;
+  const runners = Array.from(
+    { length: Math.min(concurrency, items.length) },
+    async () => {
+      while (true) {
+        const i = next++;
+        if (i >= items.length) return;
+        await worker(items[i], i);
+      }
+    },
+  );
+  await Promise.all(runners);
+}
+
 // Queue one failure for later retry. Exported for loops that fetch
 // messages themselves (batched manual scan).
 export async function queueFailure(
@@ -75,6 +116,25 @@ export async function handleFetchedMessage(
   counters: ScanCounters,
 ): Promise<void> {
   counters.scanned++;
+  // Dedup before LLM: re-scans must not re-extract seen mails.
+  // persist stores gmail:${id} as svixId, so one indexed check skips the
+  // ~1-60s LLM call entirely. Suppressed/deleted stays suppressed.
+  try {
+    const seen = await ctx.runQuery(internal.ingestion.persist.checkSvixId, {
+      svixId: `gmail:${msg.id}`,
+    });
+    if (seen) {
+      counters.duplicate++;
+      try {
+        await ctx.runMutation(internal.gmailRetries.resolveForMessage, {
+          connId: conn._id,
+          gmailMessageId: msg.id,
+        });
+      } catch {}
+      return;
+    }
+  } catch {}
+  await paceExtract();
   try {
     const r = await processOneEmail(
       ctx,
@@ -171,8 +231,7 @@ export async function runDueRetries(
     console.error("getDue failed", conn._id, String(e).slice(0, 200));
     return;
   }
-  for (const row of due) {
-    await fetchAndHandle(ctx, userId, conn, accessToken, row.gmailMessageId, counters);
-    await new Promise((rr) => setTimeout(rr, 450));
-  }
+  await mapWithConcurrency(due, (row) =>
+    fetchAndHandle(ctx, userId, conn, accessToken, row.gmailMessageId, counters),
+  );
 }
