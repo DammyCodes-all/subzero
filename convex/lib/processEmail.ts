@@ -1,6 +1,7 @@
 import { internal } from "../_generated/api";
 import type { Id } from "../_generated/dataModel";
 import { normalizeEmail } from "../ingestion/normalize";
+import { INGESTION_RESEARCH_DELAY_MS } from "./researchSchedule";
 import { isSelfEmail } from "./selfMail";
 
 const PRICE_HINT =
@@ -82,7 +83,7 @@ export async function processOneEmail(
     return { status: "skipped" };
   if (result.isNew && result.subscriptionId && !extracted.isConfirmation) {
     await ctx.scheduler.runAfter(
-      0,
+      INGESTION_RESEARCH_DELAY_MS,
       internal.research.researchCancellationRoute,
       {
         subscriptionId: result.subscriptionId,
