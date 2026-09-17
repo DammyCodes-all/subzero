@@ -160,9 +160,13 @@ export function useFirstScan({
       setScanError(null);
       return;
     }
+    // A new connection seeds its historical backfill in the token-storage
+    // mutation. Let that backend-owned worker run instead of racing it with a
+    // second browser-owned scan.
+    if (backfillActive) return;
     if (triedRef.current || inFlightRef.current) return;
     void triggerScan();
-  }, [gmailStatus, connected, lastScanAt, triggerScan]);
+  }, [gmailStatus, connected, lastScanAt, backfillActive, triggerScan]);
 
   // Latch the first pass: once the drain clears, remaining flips false and
   // the summary below may fire once with final live counts.
