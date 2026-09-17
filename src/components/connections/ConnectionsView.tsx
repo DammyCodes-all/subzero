@@ -1,7 +1,7 @@
 "use client";
 
 import { useAction, useMutation, useQuery } from "convex/react";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { sileo } from "sileo";
 import { ConnectGmailButton } from "@/components/ConnectGmailButton";
 import { ForwardingCard } from "@/components/ForwardingCard";
@@ -27,15 +27,58 @@ export function ConnectionsView() {
   const [lastResults, setLastResults] = useState<Record<string, ScanResult>>(
     {},
   );
+  // Tracks conns with a first pass done but deep scan still draining, so the
+  // final breakdown toast fires once when backfill clears — not at first pass.
+  const pendingFinalRef = useRef<Set<string>>(new Set());
+
+  const healthByConn = new Map(
+    (scanHealth ?? []).map((h) => [String(h.connId), h]),
+  );
+
+  // Final totals land when backfill flips active→idle after a scan.
+  useEffect(() => {
+    if (!scanHealth) return;
+    for (const id of Array.from(pendingFinalRef.current)) {
+      const h = healthByConn.get(id);
+      const prev = lastResults[id];
+      if (h && !h.backfillActive && prev?.ok) {
+        pendingFinalRef.current.delete(id);
+        setLastResults((p) => ({
+          ...p,
+          [id]: { ...prev, remaining: false },
+        }));
+        const copy = scanResultCopy({
+          scanned: prev.scanned,
+          created: prev.created,
+          merged: prev.merged,
+          skipped: prev.skipped,
+          unparsed: prev.unparsed,
+          duplicate: prev.duplicate,
+          cancelled: prev.cancelled,
+          failed: h.lastFailed ?? prev.failed,
+        });
+        sileo.success({ title: "Scan done", description: copy.description });
+      }
+    }
+  }, [scanHealth, lastResults]);
 
   const handleScan = async (connId: string) => {
     if (scanningId !== null) return;
     setScanningId(connId);
     try {
-      const res = await scan({ connectionId: connId as never });
+      const res = await scan({
+        connectionId: connId as never,
+        force: true,
+      });
       const r = res as {
         scanned: number;
         created: number;
+        merged: number;
+        skipped: number;
+        unparsed: number;
+        duplicate: number;
+        cancelled: number;
+        failed: number;
         reason?: string;
         remaining?: boolean;
       };
@@ -46,6 +89,26 @@ export function ConnectionsView() {
           [connId]: { ok: false, message: copy.description },
         }));
         sileo.error({ title: copy.title, description: copy.description });
+      } else if (copy.kind === "progress") {
+        // Partial: first pass only. Row shows "First pass … deep scan
+        // continues"; the final breakdown toast waits for backfill drain.
+        setLastResults((p) => ({
+          ...p,
+          [connId]: {
+            ok: true,
+            scanned: r.scanned,
+            created: r.created,
+            merged: r.merged,
+            skipped: r.skipped,
+            unparsed: r.unparsed,
+            duplicate: r.duplicate,
+            cancelled: r.cancelled,
+            failed: r.failed,
+            remaining: true,
+          },
+        }));
+        pendingFinalRef.current.add(connId);
+        sileo.info({ title: copy.title, description: copy.description });
       } else {
         setLastResults((p) => ({
           ...p,
@@ -53,15 +116,15 @@ export function ConnectionsView() {
             ok: true,
             scanned: r.scanned,
             created: r.created,
-            remaining: r.remaining,
+            merged: r.merged,
+            skipped: r.skipped,
+            unparsed: r.unparsed,
+            duplicate: r.duplicate,
+            cancelled: r.cancelled,
+            failed: r.failed,
           },
         }));
-        sileo.success({
-          title: copy.title,
-          description: r.remaining
-            ? `${copy.description} Deep scan continues in the background.`
-            : copy.description,
-        });
+        sileo.success({ title: copy.title, description: copy.description });
       }
     } catch {
       const message = "Something hiccuped on our side. Try again in a bit.";
@@ -109,9 +172,6 @@ export function ConnectionsView() {
 
   const googleConns =
     connections?.filter((c) => c.provider === "google") ?? [];
-  const healthByConn = new Map(
-    (scanHealth ?? []).map((h) => [String(h.connId), h]),
-  );
   const lastSync = googleConns.reduce<number | undefined>(
     (m, c) => (c.lastGmailScanAt && (!m || c.lastGmailScanAt > m) ? c.lastGmailScanAt : m),
     undefined,

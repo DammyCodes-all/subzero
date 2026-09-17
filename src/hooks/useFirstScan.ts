@@ -24,9 +24,11 @@ interface FirstScanStatus {
 export function useFirstScan({
   gmailStatus,
   subCount,
+  backfillActive = false,
 }: {
   gmailStatus: FirstScanStatus | undefined;
   subCount: number;
+  backfillActive?: boolean;
 }) {
   const scan = useAction(api.gmailManualScan.scanGmail);
   const [scanning, setScanning] = useState(false);
@@ -36,6 +38,7 @@ export function useFirstScan({
   const [scanResult, setScanResult] = useState<{
     scanned: number;
     created: number;
+    remaining?: boolean;
   } | null>(null);
   const [summaryDismissed, setSummaryDismissed] = useState(false);
   // Latched at the moment a never-scanned episode begins. Prevents
@@ -69,11 +72,14 @@ export function useFirstScan({
   }, [isNeverScanned, subCount]);
 
   const isNewUserEpisode = startedZero ?? subCount === 0;
-  // Stay on the takeover until our scan action resolves, even if the
-  // timestamp lands early via the incremental poll. Single handoff at
-  // the end, no mid-scan flicker.
-  const showFullFirstScan = (isNeverScanned || scanning) && isNewUserEpisode;
-  const showScanBanner = isNeverScanned && !isNewUserEpisode;
+  // Stay on the takeover until our scan action resolves AND the deep-scan
+  // drain clears — otherwise the "We found N" summary fires on partial
+  // counts while more subs stream in behind it.
+  const deepScanRunning = backfillActive || (scanResult?.remaining ?? false);
+  const showFullFirstScan =
+    (isNeverScanned || scanning || deepScanRunning) && isNewUserEpisode;
+  const showScanBanner =
+    (isNeverScanned || deepScanRunning) && !isNewUserEpisode;
 
   const triggerScan = useCallback(async () => {
     if (inFlightRef.current) return;
@@ -91,6 +97,7 @@ export function useFirstScan({
         scanned: number;
         created: number;
         reason?: string;
+        remaining?: boolean;
       };
       const copy = scanResultCopy(res);
       if (copy.kind === "error") {
@@ -104,6 +111,18 @@ export function useFirstScan({
           }
         }
         sileo.error({ title: copy.title, description: copy.description });
+      } else if (copy.kind === "progress") {
+        // First pass only — takeover stays up until backfill drains; the
+        // final summary fires there, not here.
+        if (mountedRef.current) {
+          setScanError(null);
+          setScanResult({
+            scanned: res.scanned ?? 0,
+            created: res.created ?? 0,
+            remaining: true,
+          });
+        }
+        sileo.info({ title: copy.title, description: copy.description });
       } else {
         if (mountedRef.current) {
           setScanError(null);
@@ -145,6 +164,14 @@ export function useFirstScan({
     void triggerScan();
   }, [gmailStatus, connected, lastScanAt, triggerScan]);
 
+  // Latch the first pass: once the drain clears, remaining flips false and
+  // the summary below may fire once with final live counts.
+  useEffect(() => {
+    if (!backfillActive && scanResult?.remaining) {
+      setScanResult((p) => (p ? { ...p, remaining: false } : p));
+    }
+  }, [backfillActive, scanResult?.remaining]);
+
   const retry = useCallback(() => {
     triedRef.current = false;
     inFlightRef.current = false;
@@ -154,10 +181,11 @@ export function useFirstScan({
   return {
     showFullFirstScan,
     showScanBanner,
-    /** One-time summary once the first scan lands with new subs. */
+    /** One-time summary once the full scan (incl. deep drain) lands. */
     showFirstSummary:
       isNewUserEpisode &&
       !scanning &&
+      !deepScanRunning &&
       !summaryDismissed &&
       (scanResult?.created ?? 0) > 0,
     dismissSummary: () => setSummaryDismissed(true),
