@@ -87,6 +87,7 @@ export default defineSchema({
       v.union(v.literal("pending"), v.literal("done"), v.literal("failed")),
     ),
     researchedAt: v.optional(v.number()),
+    researchAttempts: v.optional(v.number()),
   })
     .index("by_user", ["userId"])
     .index("by_user_and_dedup", ["userId", "dedupKey"])
@@ -202,6 +203,34 @@ export default defineSchema({
   })
     .index("by_conn", ["connId"])
     .index("by_user", ["userId"]),
+
+  cancellationRouteCache: defineTable({
+    cacheKey: v.string(),
+    cancellationMethod: v.string(),
+    cancellationUrl: v.optional(v.string()),
+    instructions: v.array(v.string()),
+    evidenceUrl: v.optional(v.string()),
+    evidenceExcerpt: v.optional(v.string()),
+    websiteDomain: v.optional(v.string()),
+    updatedAt: v.number(),
+    expiresAt: v.number(),
+  })
+    .index("by_cacheKey", ["cacheKey"])
+    .index("by_expiresAt", ["expiresAt"]),
+
+  aiUsage: defineTable({
+    operation: v.union(v.literal("extraction"), v.literal("research")),
+    provider: v.string(),
+    model: v.string(),
+    promptTokens: v.optional(v.number()),
+    completionTokens: v.optional(v.number()),
+    totalTokens: v.optional(v.number()),
+    latencyMs: v.number(),
+    success: v.boolean(),
+    createdAt: v.number(),
+  })
+    .index("by_createdAt", ["createdAt"])
+    .index("by_operation_createdAt", ["operation", "createdAt"]),
 
   ingestionAttempts: defineTable({
     userId: v.string(),
