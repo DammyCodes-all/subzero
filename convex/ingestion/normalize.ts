@@ -13,6 +13,40 @@ const FORWARD_DELIMITERS = [
 
 const MAX_CHARS = 20000;
 
+// Quoted replies, signatures, and promo footers blow up TPM (a 9734-char
+// mail alone tripped Groq 8000 TPM). The receipt signal (price/renewal) is
+// in the first ~2k chars, so strip the rest before the LLM ever sees it.
+const FOOTER_CUT = [
+  /unsubscribe[\s\S]{0,200}?((http|mailto:)[^\s]+)?/i,
+  /view in browser/i,
+  /privacy policy[\s\S]{0,300}?terms/i,
+];
+
+function stripBoilerplate(text: string): string {
+  let out = text;
+  // Remove `> ` quoted lines and `On <date>, <someone> wrote:` blocks
+  out = out
+    .split("\n")
+    .filter((l) => !l.trimStart().startsWith(">"))
+    .join("\n");
+  out = out.replace(/^On .* wrote:.*$/gim, "");
+  // Cut at first footer marker (unsubscribe / view-in-browser), but only when
+  // it sits in the footer zone (last 40%): transactional bodies mention
+  // "terms" mid-text before the price/renewal line — cutting there drops signal.
+  for (const re of FOOTER_CUT) {
+    const m = out.match(re);
+    if (
+      m?.index !== undefined &&
+      m.index > 500 &&
+      m.index > out.length * 0.6
+    ) {
+      out = out.slice(0, m.index);
+      break;
+    }
+  }
+  return out.replace(/\n{3,}/g, "\n\n").trim();
+}
+
 function stripHtml(html: string): string {
   return html
     .replace(/<style[\s\S]*?<\/style>/gi, " ")
@@ -107,7 +141,8 @@ export function normalizeEmail(input: {
     }
   }
 
-  // Cap
+  // Cap (receipt signal is front-loaded; boilerplate stripped above)
+  chosenText = stripBoilerplate(chosenText);
   if (chosenText.length > MAX_CHARS) {
     chosenText = chosenText.slice(0, MAX_CHARS);
   }

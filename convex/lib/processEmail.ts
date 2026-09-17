@@ -6,7 +6,7 @@ import { isSelfEmail } from "./selfMail";
 const PRICE_HINT =
   /(\$|€|£|₦|₹|¥)\s*[\d,]+|[\d,]+\s*(USD|EUR|GBP|NGN|INR|JPY|CAD|AUD)/i;
 const KEYWORDS =
-  /receipt|invoice|trial|renew|subscri(?!be)|member|charged|billed|cancel|payment|plan|order number|auto[- ]?pay|billing|statement|GPA\./i;
+  /receipt|invoice|trial|renew|subscri(?!be)|member|charged|billed|cancel|payment|plan|welcome|started|order number|auto[- ]?pay|billing|statement|GPA\./i;
 
 export async function processOneEmail(
   ctx: any,
