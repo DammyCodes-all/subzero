@@ -3,6 +3,7 @@
 import { v } from "convex/values";
 import { env, internalAction } from "../_generated/server";
 import { GROQ_EXTRACTION_MODEL, groqApiKeysFrom } from "../lib/aiModels";
+import { type ProviderUsage, recordAiUsage } from "../lib/aiUsage";
 import {
   ISO_SET,
   normalizeCurrency,
@@ -283,16 +284,18 @@ export const extractSubscription = internalAction({
     from: v.optional(v.string()),
   },
   returns: extractedReturns,
-  handler: async (_ctx, args) => {
+  handler: async (ctx, args) => {
     const deploymentEnv = env as unknown as Record<string, string | undefined>;
-    const localEnv = process.env as unknown as Record<string, string | undefined>;
+    const localEnv = process.env as unknown as Record<
+      string,
+      string | undefined
+    >;
     // Deployment env wins locally (Convex dev loads .env.local into env).
     const mergedEnv = { ...localEnv, ...deploymentEnv };
     const groqKeys = groqApiKeysFrom(mergedEnv);
     const openrouterKey =
       deploymentEnv.OPENROUTER_API_KEY ?? localEnv.OPENROUTER_API_KEY;
-    const openaiKey =
-      deploymentEnv.OPENAI_API_KEY ?? localEnv.OPENAI_API_KEY;
+    const openaiKey = deploymentEnv.OPENAI_API_KEY ?? localEnv.OPENAI_API_KEY;
     // Prefer Groq layers -> OpenRouter -> OpenAI -> mock
     const hasAnyKey = groqKeys.length > 0 || !!openrouterKey || !!openaiKey;
     const primaryProvider =
@@ -402,7 +405,10 @@ VALIDATION: Respond with raw JSON only. No markdown, no code fences, no extra te
       const CAP = 4500;
       if (text.length <= CAP) return text;
       const head = text.slice(0, HEAD);
-      const m = /(\$|€|£|₦|₹|¥)\s*[\d,]+|[\d,]+\s*(USD|EUR|GBP|NGN|INR|JPY|CAD|AUD)/i.exec(text);
+      const m =
+        /(\$|€|£|₦|₹|¥)\s*[\d,]+|[\d,]+\s*(USD|EUR|GBP|NGN|INR|JPY|CAD|AUD)/i.exec(
+          text,
+        );
       if (!m?.index || m.index < HEAD) return text.slice(0, CAP);
       const start = Math.max(0, m.index - 500);
       return `${head}\n…\n${text.slice(start, start + WINDOW)}`.slice(0, CAP);
@@ -415,14 +421,14 @@ VALIDATION: Respond with raw JSON only. No markdown, no code fences, no extra te
       model: string;
     };
     const providers: ProviderCfg[] = [];
-    groqKeys.forEach((key, i) =>
+    groqKeys.forEach((key, i) => {
       providers.push({
         id: i === 0 ? "groq" : `groq-${i + 1}`,
         key,
         endpoint: "https://api.groq.com/openai/v1/chat/completions",
         model: GROQ_EXTRACTION_MODEL,
-      }),
-    );
+      });
+    });
     if (openrouterKey)
       providers.push({
         id: "openrouter",
@@ -441,15 +447,18 @@ VALIDATION: Respond with raw JSON only. No markdown, no code fences, no extra te
         model: "gpt-4o-mini",
       });
 
+    let usedProvider = primaryProvider ?? "unknown";
+    let usedModel = providers[0]?.model ?? "unknown";
+    let successfulLatencyMs = 0;
     try {
       // Try providers in order Groq -> OpenRouter -> OpenAI, fail fast on
       // 429: Groq gets 1 attempt then immediate fallback (3x retries cost
       // ~4s per throttled mail and the fallback is what succeeds anyway).
       let res: Response | null = null;
       let lastErrText = "";
-      let usedProvider: string = primaryProvider ?? "unknown";
       providerLoop: for (const prov of providers) {
         usedProvider = prov.id;
+        usedModel = prov.model;
         console.log(`[extract] Trying provider ${prov.id} model ${prov.model}`);
         const maxAttempts = prov.id.startsWith("groq") ? 1 : 2;
         for (let attempt = 0; attempt < maxAttempts; attempt++) {
@@ -463,6 +472,7 @@ VALIDATION: Respond with raw JSON only. No markdown, no code fences, no extra te
                 process.env.SITE_URL ?? "http://localhost:3000";
               headers["X-Title"] = "SubZero";
             }
+            const startedAt = Date.now();
             const r = await fetch(prov.endpoint, {
               method: "POST",
               headers,
@@ -474,13 +484,22 @@ VALIDATION: Respond with raw JSON only. No markdown, no code fences, no extra te
                   { role: "system", content: system },
                   { role: "user", content: userContent },
                 ],
+                max_tokens: 500,
               }),
             });
             if (r.ok) {
+              successfulLatencyMs = Date.now() - startedAt;
               res = r;
               break providerLoop;
             }
             lastErrText = await r.text();
+            await recordAiUsage(ctx, {
+              operation: "extraction",
+              provider: prov.id,
+              model: prov.model,
+              latencyMs: Date.now() - startedAt,
+              success: false,
+            });
             console.error(
               `[extract] LLM API error ${prov.id}: ${r.status} ${lastErrText.slice(0, 200)} attempt ${attempt + 1}/${maxAttempts}`,
             );
@@ -550,7 +569,16 @@ VALIDATION: Respond with raw JSON only. No markdown, no code fences, no extra te
 
       const json = (await res.json()) as {
         choices?: { message?: { content?: string } }[];
+        usage?: ProviderUsage;
       };
+      await recordAiUsage(ctx, {
+        operation: "extraction",
+        provider: usedProvider,
+        model: usedModel,
+        usage: json.usage,
+        latencyMs: successfulLatencyMs,
+        success: true,
+      });
       const content = json.choices?.[0]?.message?.content ?? "{}";
       console.log(`[extract] LLM raw response: ${content.slice(0, 300)}`);
       const parsed = JSON.parse(content) as Record<string, unknown>;
@@ -668,9 +696,7 @@ VALIDATION: Respond with raw JSON only. No markdown, no code fences, no extra te
         parsed.nextRenewalAt as string | null,
       );
       const trialEndsAt = parseDateToMs(parsed.trialEndsAt as string | null);
-      const lastChargeAt = parseDateToMs(
-        parsed.lastChargeAt as string | null,
-      );
+      const lastChargeAt = parseDateToMs(parsed.lastChargeAt as string | null);
 
       console.log(
         `[extract] Final LLM result: merchant="${merchant ?? "null"}", price=${price ?? "null"}, currency="${currency}", isConfirmation=${isConfirmation}, confidence=${confidence}`,
