@@ -30,6 +30,18 @@ crons.interval(
 );
 
 crons.interval(
+  "cleanup old AI usage",
+  { hours: 24 },
+  internal.aiUsage.cleanupOld,
+);
+
+crons.interval(
+  "cleanup cancellation research cache",
+  { hours: 24 },
+  internal.researchCache.cleanupExpired,
+);
+
+crons.interval(
   "cleanup expired gmail oauth states",
   { hours: 24 },
   internal.gmailOAuth.cleanupExpiredStates,
