@@ -2,7 +2,9 @@ import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import { env, internalAction } from "./_generated/server";
 import { GROQ_EXTRACTION_MODEL, groqApiKeysFrom } from "./lib/aiModels";
+import { type ProviderUsage, recordAiUsage } from "./lib/aiUsage";
 import { firecrawlScrape, firecrawlSearch } from "./lib/firecrawl";
+import { researchCacheKey } from "./lib/researchCache";
 
 export const researchCancellationRoute = internalAction({
   args: { subscriptionId: v.id("subscriptions") },
@@ -11,11 +13,42 @@ export const researchCancellationRoute = internalAction({
       id: args.subscriptionId,
     });
     if (!sub) throw new Error("Subscription not found");
+    const cacheKey = researchCacheKey({
+      merchant: sub.merchant,
+      product: sub.product,
+      billingProvider: sub.billingProvider,
+    });
+    const cached = await ctx.runQuery(internal.researchCache.getFresh, {
+      cacheKey,
+    });
+    if (cached) {
+      await ctx.runMutation(internal.subscriptions.saveResearchResult, {
+        subscriptionId: args.subscriptionId,
+        cancellationMethod: cached.cancellationMethod,
+        cancellationUrl: cached.cancellationUrl,
+        instructions: cached.instructions,
+        evidenceUrl: cached.evidenceUrl,
+        evidenceExcerpt: cached.evidenceExcerpt,
+        websiteDomain: cached.websiteDomain ?? null,
+      });
+      return { success: true, cached: true };
+    }
+
+    const attempt = await ctx.runMutation(
+      internal.subscriptions.beginResearchAttempt,
+      { id: args.subscriptionId },
+    );
+    if (!attempt.allowed) {
+      return { success: false, reason: "research_attempts_exhausted" };
+    }
 
     const firecrawlKey = (env as unknown as { FIRECRAWL_API_KEY?: string })
       .FIRECRAWL_API_KEY;
     const deploymentEnv = env as unknown as Record<string, string | undefined>;
-    const localEnv = process.env as unknown as Record<string, string | undefined>;
+    const localEnv = process.env as unknown as Record<
+      string,
+      string | undefined
+    >;
     const groqKeys = groqApiKeysFrom({ ...localEnv, ...deploymentEnv });
     const openrouterKey =
       (env as unknown as { OPENROUTER_API_KEY?: string }).OPENROUTER_API_KEY ??
@@ -25,7 +58,10 @@ export const researchCancellationRoute = internalAction({
       .OPENAI_API_KEY;
 
     // No keys → never invent. Persist as unknown, let UI show "No verified route".
-    if (!firecrawlKey || (groqKeys.length === 0 && !openrouterKey && !openaiKey)) {
+    if (
+      !firecrawlKey ||
+      (groqKeys.length === 0 && !openrouterKey && !openaiKey)
+    ) {
       await ctx.runMutation(internal.subscriptions.saveResearchResult, {
         subscriptionId: args.subscriptionId,
         cancellationMethod: "unknown",
@@ -86,16 +122,10 @@ export const researchCancellationRoute = internalAction({
     }
     function merchantHostMatch(host: string): boolean {
       const labels = host.split(".");
-      if (
-        !!merchantSlug &&
-        labels.some((l) => l === merchantSlug)
-      )
-        return true;
+      if (!!merchantSlug && labels.some((l) => l === merchantSlug)) return true;
       return merchantTokens.some((tok) => labels.includes(tok));
     }
-    function matchWebsiteDomain(
-      hits: { url?: string }[],
-    ): string | undefined {
+    function matchWebsiteDomain(hits: { url?: string }[]): string | undefined {
       for (const h of hits) {
         let host: string | null = null;
         try {
@@ -219,8 +249,7 @@ export const researchCancellationRoute = internalAction({
         s += 4;
       if (providerLower.includes("apple") && path.includes("apple")) s += 4;
       // For store-billed, demote merchant portal account pages generically (not snap-specific)
-      if (providerLower && hostIsMerchant && path.includes("accounts."))
-        s -= 4;
+      if (providerLower && hostIsMerchant && path.includes("accounts.")) s -= 4;
       // For store-billed, slightly prefer provider help over merchant cancel page when both exist
       if (
         providerLower &&
@@ -412,14 +441,14 @@ ${markdownContent.slice(0, 8000)}`;
       model: string;
     };
     const providers: ProviderCfg[] = [];
-    groqKeys.forEach((key, i) =>
+    groqKeys.forEach((key, i) => {
       providers.push({
         id: i === 0 ? "groq" : `groq-${i + 1}`,
         key,
         endpoint: "https://api.groq.com/openai/v1/chat/completions",
         model: GROQ_EXTRACTION_MODEL,
-      }),
-    );
+      });
+    });
     if (openrouterKey)
       providers.push({
         id: "openrouter",
@@ -439,6 +468,9 @@ ${markdownContent.slice(0, 8000)}`;
         model: "gpt-4o-mini",
       });
     const primaryProvider = providers[0]?.id ?? "none";
+    let usedProvider = primaryProvider;
+    let usedModel = providers[0]?.model ?? "unknown";
+    let successfulLatencyMs = 0;
 
     type LLMOutput = {
       cancellationMethod: string | null;
@@ -451,9 +483,9 @@ ${markdownContent.slice(0, 8000)}`;
       // Try providers Groq -> OpenRouter -> OpenAI with 429 backoff and fallback
       let res: Response | null = null;
       let lastErr: unknown = null;
-      let usedProvider = primaryProvider;
       providerLoop: for (const prov of providers) {
         usedProvider = prov.id;
+        usedModel = prov.model;
         console.log(
           `[research] Trying provider ${prov.id} model ${prov.model}`,
         );
@@ -473,6 +505,7 @@ ${markdownContent.slice(0, 8000)}`;
                 process.env.SITE_URL ?? "http://localhost:3000";
               headers["X-Title"] = "SubZero";
             }
+            const startedAt = Date.now();
             const r = await fetch(prov.endpoint, {
               method: "POST",
               headers,
@@ -484,14 +517,23 @@ ${markdownContent.slice(0, 8000)}`;
                   { role: "user", content: userContent },
                 ],
                 temperature: 0,
+                max_tokens: 600,
               }),
               signal: controller.signal,
             });
             clearTimeout(t);
             if (r.ok) {
+              successfulLatencyMs = Date.now() - startedAt;
               res = r;
               break providerLoop;
             }
+            await recordAiUsage(ctx, {
+              operation: "research",
+              provider: prov.id,
+              model: prov.model,
+              latencyMs: Date.now() - startedAt,
+              success: false,
+            });
             lastErr = new Error(
               `AI extraction failed: ${r.status} ${r.statusText}`,
             );
@@ -553,7 +595,16 @@ ${markdownContent.slice(0, 8000)}`;
 
       const data = (await res.json()) as unknown as {
         choices?: Array<{ message?: { content?: string } }>;
+        usage?: ProviderUsage;
       };
+      await recordAiUsage(ctx, {
+        operation: "research",
+        provider: usedProvider,
+        model: usedModel,
+        usage: data.usage,
+        latencyMs: successfulLatencyMs,
+        success: true,
+      });
       const content = data.choices?.[0]?.message?.content ?? "{}";
       const raw = JSON.parse(content) as unknown;
       if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
@@ -706,6 +757,17 @@ ${markdownContent.slice(0, 8000)}`;
       evidenceExcerpt,
       websiteDomain: websiteDomain ?? null,
     });
+    if (cancellationMethod !== "unknown" && instructions.length > 0) {
+      await ctx.runMutation(internal.researchCache.put, {
+        cacheKey,
+        cancellationMethod,
+        cancellationUrl,
+        instructions,
+        evidenceUrl: sourceUrl,
+        evidenceExcerpt,
+        websiteDomain,
+      });
+    }
 
     return { success: true, mock: false };
   },
