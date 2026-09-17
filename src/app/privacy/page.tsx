@@ -376,12 +376,14 @@ export default function PrivacyPage() {
               Continued use after the change means you accept the updated
               policy.
             </p>
+            {/* TODO: Re-enable when support inbox exists
             <p>
               Questions or requests:{" "}
               <a href="mailto:support@subzero.app">support@subzero.app</a>. For
               Gmail-scope questions, include the address you connected so we can
               locate the right connection — and nothing else sensitive.
             </p>
+            */}
           </LegalSection>
         </LegalBody>
       </LegalLayout>

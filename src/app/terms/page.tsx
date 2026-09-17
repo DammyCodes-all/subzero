@@ -82,9 +82,8 @@ export default function TermsPage() {
               </li>
               <li>
                 <strong>Responsibility.</strong> You are responsible for
-                activity under your account. Tell us promptly at{" "}
-                <a href="mailto:support@subzero.app">support@subzero.app</a> if
-                you suspect unauthorized access.
+                activity under your account.
+                {/* TODO: Re-enable when support inbox exists — tell us promptly at <a href="mailto:support@subzero.app">support@subzero.app</a> if you suspect unauthorized access. */}
               </li>
             </LegalList>
           </LegalSection>
@@ -296,12 +295,14 @@ export default function TermsPage() {
               by in-product or email notice. Continued use after the update
               means you accept the new terms.
             </p>
+            {/* TODO: Re-enable when support inbox exists
             <p>
               Contact:{" "}
               <a href="mailto:support@subzero.app">support@subzero.app</a>. Our{" "}
               <Link href="/privacy">Privacy Policy</Link> explains how we handle
               your data.
             </p>
+            */}
           </LegalSection>
         </LegalBody>
       </LegalLayout>
