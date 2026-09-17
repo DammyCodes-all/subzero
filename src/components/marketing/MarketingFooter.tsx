@@ -10,7 +10,6 @@ const PRODUCT_LINKS = [
 const COMPANY_LINKS = [
   { label: "Privacy", href: "/privacy" },
   { label: "Terms", href: "/terms" },
-  { label: "Contact", href: "/contact" },
 ];
 
 export function MarketingFooter() {
