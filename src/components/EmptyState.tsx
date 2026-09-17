@@ -122,10 +122,17 @@ function AuthenticatedEmptyState() {
     setScanning(true);
     try {
       const r = await scan({ force: true });
-      const res = r as { scanned: number; created: number; reason?: string };
+      const res = r as {
+        scanned: number;
+        created: number;
+        reason?: string;
+        remaining?: boolean;
+      };
       const copy = scanResultCopy(res);
       if (copy.kind === "error") {
         sileo.error({ title: copy.title, description: copy.description });
+      } else if (copy.kind === "progress") {
+        sileo.info({ title: copy.title, description: copy.description });
       } else {
         sileo.success({ title: copy.title, description: copy.description });
       }

@@ -42,8 +42,32 @@ export interface InboxHealth {
 }
 
 export type ScanResult =
-  | { ok: true; scanned: number; created: number; remaining?: boolean }
+  | {
+      ok: true;
+      scanned: number;
+      created: number;
+      merged?: number;
+      skipped?: number;
+      unparsed?: number;
+      duplicate?: number;
+      cancelled?: number;
+      failed?: number;
+      remaining?: boolean;
+    }
   | { ok: false; message: string };
+
+function breakdownLine(r: Extract<ScanResult, { ok: true }>): string {
+  const parts: string[] = [];
+  if (r.created) parts.push(`${r.created} new`);
+  if (r.merged) parts.push(`${r.merged} updated`);
+  if (r.cancelled) parts.push(`${r.cancelled} cancelled`);
+  if (r.duplicate) parts.push(`${r.duplicate} dupes`);
+  if (r.skipped) parts.push(`${r.skipped} skipped`);
+  if (r.unparsed) parts.push(`${r.unparsed} unclear`);
+  if (r.failed) parts.push(`${r.failed} failed`);
+  if (parts.length === 0) return `Synced ${r.scanned} emails, nothing new`;
+  return `Synced ${r.scanned} emails: ${parts.join(", ")}`;
+}
 
 export function GmailInboxRow({
   conn,
@@ -92,17 +116,8 @@ export function GmailInboxRow({
     lastScanAt: conn.lastGmailScanAt,
     watchExpiration: conn.gmailWatchExpiration,
   });
-  const cooldownLeft =
-    !isDisconnected && conn.lastGmailScanAt
-      ? conn.lastGmailScanAt + SCAN_COOLDOWN_MS - now
-      : 0;
-  const onCooldown = cooldownLeft > 0 && !scanning;
-  const cooldownLabel =
-    onCooldown && cooldownLeft > 60_000
-      ? `${Math.ceil(cooldownLeft / 60_000)}m`
-      : onCooldown
-        ? `${Math.ceil(cooldownLeft / 1000)}s`
-        : null;
+  // Explicit Rescans pass force:true, so the backend cooldown doesn't apply.
+  // The button stays enabled — progress/backfill state is the guard, not a timer.
 
   const arm = () => {
     setArmDisconnect(true);
@@ -159,7 +174,9 @@ export function GmailInboxRow({
                 }`}
               >
                 {lastResult.ok
-                  ? `Synced ${lastResult.scanned} emails, ${lastResult.created} new${lastResult.remaining ? " · deep scan continues" : ""}`
+                  ? lastResult.remaining || syncHealth?.backfillActive
+                    ? `First pass: ${breakdownLine(lastResult)} · deep scan continues`
+                    : breakdownLine(lastResult)
                   : lastResult.message}
               </p>
             ) : null}
@@ -217,13 +234,9 @@ export function GmailInboxRow({
               <Button
                 variant="secondary"
                 size="sm"
-                disabled={scanning || scanBusy || onCooldown || disconnecting}
+                disabled={scanning || scanBusy || disconnecting}
                 onClick={onScan}
-                title={
-                  onCooldown
-                    ? `Try again in ${cooldownLabel}`
-                    : "Scan this inbox now"
-                }
+                title="Scan this inbox now"
                 className="h-8 flex-none gap-1.5 px-3 text-xs font-medium"
               >
                 {scanning ? (
@@ -251,16 +264,7 @@ export function GmailInboxRow({
                       size={14}
                       color="currentColor"
                     />
-                    {onCooldown ? (
-                      <>
-                        <span className="sm:hidden">In {cooldownLabel}</span>
-                        <span className="hidden sm:inline">
-                          Try again in {cooldownLabel}
-                        </span>
-                      </>
-                    ) : (
-                      "Scan now"
-                    )}
+                    "Scan now"
                   </>
                 )}
               </Button>
