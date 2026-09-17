@@ -122,11 +122,29 @@ export function DashboardView() {
             s.status !== "cancelled" && s.hidden !== true && s.nextRenewalAt,
         )
         .sort((a, b) => (a.nextRenewalAt ?? 0) - (b.nextRenewalAt ?? 0))
-        .slice(0, 3);
+        .slice(0, 4);
 
   const displaySubs = hasUrgent ? urgentSubs : fallbackSubs;
   const hero = displaySubs[0];
   const rest = displaySubs.slice(1);
+
+  // Next renewals regardless of attention state. Below the hero card the
+  // dashboard shows max 3 rows: urgent leftovers first, closest renewals
+  // fill the remainder.
+  const shownIds = new Set(displaySubs.map((s) => s._id));
+  const belowHeroBudget = Math.max(0, 3 - rest.length);
+  const upcomingSubs = hasUrgent
+    ? [...(all ?? [])]
+        .filter(
+          (s) =>
+            s.status !== "cancelled" &&
+            s.hidden !== true &&
+            s.nextRenewalAt &&
+            !shownIds.has(s._id),
+        )
+        .sort((a, b) => (a.nextRenewalAt ?? 0) - (b.nextRenewalAt ?? 0))
+        .slice(0, belowHeroBudget)
+    : [];
 
   const activeCount = (all ?? []).filter(
     (s) => s.status !== "cancelled" && s.hidden !== true,
@@ -304,16 +322,58 @@ export function DashboardView() {
               >
                 <ActionCard sub={hero} quiet={!hasUrgent} />
               </Link>
+              {hasUrgent && rest.length > 0 && (
+                <div className="divide-y divide-border/40 border-t border-border/40">
+                  {rest.map((sub: Doc<"subscriptions">) => (
+                    <Link
+                      key={sub._id}
+                      href={`/dashboard/subscriptions?sub=${sub._id}`}
+                      className="relative block focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+                    >
+                      <span className="relative block">
+                        <PendingWrap>
+                          <CompactAttentionRow sub={sub} />
+                        </PendingWrap>
+                        <LinkPendingOverlay variant="row" />
+                      </span>
+                    </Link>
+                  ))}
+                </div>
+              )}
             </section>
           )}
 
-          {rest.length > 0 && (
+          {!hasUrgent && rest.length > 0 && (
             <section className="space-y-4">
               <p className="font-mono text-[11px] uppercase tracking-widest text-muted-foreground">
-                {hasUrgent ? "Upcoming" : "Also upcoming"}
+                Also upcoming
               </p>
               <div className="divide-y divide-border/40 border-t border-border/40">
                 {rest.map((sub: Doc<"subscriptions">) => (
+                  <Link
+                    key={sub._id}
+                    href={`/dashboard/subscriptions?sub=${sub._id}`}
+                    className="relative block focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+                  >
+                    <span className="relative block">
+                      <PendingWrap>
+                        <CompactAttentionRow sub={sub} />
+                      </PendingWrap>
+                      <LinkPendingOverlay variant="row" />
+                    </span>
+                  </Link>
+                ))}
+              </div>
+            </section>
+          )}
+
+          {hasUrgent && upcomingSubs.length > 0 && (
+            <section className="space-y-4">
+              <p className="font-mono text-[11px] uppercase tracking-widest text-muted-foreground">
+                Upcoming
+              </p>
+              <div className="divide-y divide-border/40 border-t border-border/40">
+                {upcomingSubs.map((sub: Doc<"subscriptions">) => (
                   <Link
                     key={sub._id}
                     href={`/dashboard/subscriptions?sub=${sub._id}`}
