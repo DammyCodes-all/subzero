@@ -7,11 +7,15 @@ import { action, internalAction } from "./_generated/server";
 import {
   buildGmailQuery,
   getAccessToken,
-  getMessage,
   getProfileHistoryId,
   isAuthError,
   listMessages,
 } from "./lib/gmail";
+import {
+  fetchAndHandle,
+  mapWithConcurrency,
+  newScanCounters,
+} from "./lib/gmailProcess";
 import { processOneEmail } from "./lib/processEmail";
 
 const COOLDOWN_MS = 10 * 60 * 1000;
@@ -76,24 +80,14 @@ export const scanForUser = internalAction({
         const tok = await getAccessToken(conn.gmailRefreshToken);
         const q = buildGmailQuery(60);
         const { messages } = await listMessages(tok.accessToken, q, 15);
-        for (const m of messages.slice(0, 5)) {
-          const msg = await getMessage(tok.accessToken, m.id).catch(() => null);
-          if (!msg) continue;
-          scanned++;
-          const r = await processOneEmail(
-            ctx,
-            args.userId,
-            msg.subject,
-            msg.text,
-            msg.html,
-            msg.id,
-            conn.accountEmail,
-            conn._id,
-            msg.from,
-          ).catch(() => ({ status: "unparsed" }));
-          if (r.status === "created") created++;
-          await new Promise((rr) => setTimeout(rr, 450));
-        }
+        // Shared path: fetchAndHandle brings dedup-before-LLM, token-bucket
+        // pacing, and retry-queue enqueue — same as manual/incremental scans.
+        const c = newScanCounters();
+        await mapWithConcurrency(messages.slice(0, 5), (m) =>
+          fetchAndHandle(ctx, args.userId, conn, tok.accessToken, m.id, c),
+        );
+        scanned += c.scanned;
+        created += c.created;
         if (conn?._id) {
           await ctx.runMutation(internal.gmailConnectionState.touchScan, { connId: conn._id });
           try {
