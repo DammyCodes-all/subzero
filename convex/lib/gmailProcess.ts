@@ -39,12 +39,9 @@ type FetchedMsg = {
   from: string;
 };
 
-// 3-wide extracts with a start-gap so Groq 8000 TPM isn't burst-tripped.
-// Replaces the old serial + fixed 450ms sleep (505s manual scans).
-// The starter chain serializes read-wait-write so concurrent workers actually
-// space MIN_START_GAP apart (a plain read-then-write races under concurrency
-// and both workers pass with zero wait). Module-level = per-isolate throttle,
-// which is what TPM wants: concurrent scans share the same budget.
+// Three-wide extraction with a small per-isolate start gap to avoid a single
+// scan bursting requests simultaneously. Provider usage is recorded separately
+// so deployment-level TPM limits can be tuned from real traffic.
 const EXTRACT_CONCURRENCY = 3;
 const MIN_START_GAP_MS = 350;
 let lastExtractStart = 0;
@@ -114,26 +111,29 @@ export async function handleFetchedMessage(
   conn: ConnRef,
   msg: FetchedMsg,
   counters: ScanCounters,
+  dedupeChecked = false,
 ): Promise<void> {
   counters.scanned++;
-  // Dedup before LLM: re-scans must not re-extract seen mails.
   // persist stores gmail:${id} as svixId, so one indexed check skips the
-  // ~1-60s LLM call entirely. Suppressed/deleted stays suppressed.
-  try {
-    const seen = await ctx.runQuery(internal.ingestion.persist.checkSvixId, {
-      svixId: `gmail:${msg.id}`,
-    });
-    if (seen) {
-      counters.duplicate++;
-      try {
-        await ctx.runMutation(internal.gmailRetries.resolveForMessage, {
-          connId: conn._id,
-          gmailMessageId: msg.id,
-        });
-      } catch {}
-      return;
-    }
-  } catch {}
+  // ~1-60s LLM call entirely. fetchAndHandle performs this check before the
+  // Gmail body download; callers with an existing body check here.
+  if (!dedupeChecked) {
+    try {
+      const seen = await ctx.runQuery(internal.ingestion.persist.checkSvixId, {
+        svixId: `gmail:${msg.id}`,
+      });
+      if (seen) {
+        counters.duplicate++;
+        try {
+          await ctx.runMutation(internal.gmailRetries.resolveForMessage, {
+            connId: conn._id,
+            gmailMessageId: msg.id,
+          });
+        } catch {}
+        return;
+      }
+    } catch {}
+  }
   await paceExtract();
   try {
     const r = await processOneEmail(
@@ -155,7 +155,15 @@ export async function handleFetchedMessage(
     else if (r.status === "unparsed") {
       // Low-confidence AI result — worth a short-leash retry, not a drop.
       counters.unparsed++;
-      await queueFailure(ctx, userId, conn, msg.id, "weak", "ai_unparsed", counters);
+      await queueFailure(
+        ctx,
+        userId,
+        conn,
+        msg.id,
+        "weak",
+        "ai_unparsed",
+        counters,
+      );
       return;
     }
     try {
@@ -188,6 +196,25 @@ export async function fetchAndHandle(
   gmailId: string,
   counters: ScanCounters,
 ): Promise<void> {
+  // Re-scans and broad fallback frequently list already-ingested IDs. Check
+  // the indexed evidence key before paying for a full Gmail body download.
+  try {
+    const seen = await ctx.runQuery(internal.ingestion.persist.checkSvixId, {
+      svixId: `gmail:${gmailId}`,
+    });
+    if (seen) {
+      counters.scanned++;
+      counters.duplicate++;
+      try {
+        await ctx.runMutation(internal.gmailRetries.resolveForMessage, {
+          connId: conn._id,
+          gmailMessageId: gmailId,
+        });
+      } catch {}
+      return;
+    }
+  } catch {}
+
   let msg: any = null;
   try {
     msg = await getMessage(accessToken, gmailId);
@@ -204,10 +231,18 @@ export async function fetchAndHandle(
     return;
   }
   if (!msg) {
-    await queueFailure(ctx, userId, conn, gmailId, "fetch", "empty_response", counters);
+    await queueFailure(
+      ctx,
+      userId,
+      conn,
+      gmailId,
+      "fetch",
+      "empty_response",
+      counters,
+    );
     return;
   }
-  await handleFetchedMessage(ctx, userId, conn, msg, counters);
+  await handleFetchedMessage(ctx, userId, conn, msg, counters, true);
 }
 
 // Reprocess due retry-queue rows for one connection (live mail first —
@@ -232,6 +267,13 @@ export async function runDueRetries(
     return;
   }
   await mapWithConcurrency(due, (row) =>
-    fetchAndHandle(ctx, userId, conn, accessToken, row.gmailMessageId, counters),
+    fetchAndHandle(
+      ctx,
+      userId,
+      conn,
+      accessToken,
+      row.gmailMessageId,
+      counters,
+    ),
   );
 }
