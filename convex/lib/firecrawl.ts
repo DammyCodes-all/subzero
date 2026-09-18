@@ -1,6 +1,26 @@
 import { FirecrawlClient } from "@firecrawl/firecrawl-convex";
 import { components } from "../_generated/api";
 
+// Free-tier Firecrawl allows ~25-30 req/min: five parallel researches firing
+// 1 search + 3 scrapes each blow straight past it. Enforce a per-isolate
+// start gap so one worker never bursts; cross-isolate spread comes from
+// scheduling jitter (see researchSchedule.ts). Best-effort, same pattern
+// as the LLM pacing in gmailProcess.ts.
+const MIN_START_GAP_MS = 2500;
+let lastFirecrawlStart = 0;
+let startChain: Promise<void> = Promise.resolve();
+
+async function paceFirecrawl(): Promise<void> {
+  const run = startChain.then(async () => {
+    const now = Date.now();
+    const wait = MIN_START_GAP_MS - (now - lastFirecrawlStart);
+    if (wait > 0) await new Promise((r) => setTimeout(r, wait));
+    lastFirecrawlStart = Date.now();
+  });
+  startChain = run.catch(() => {});
+  await run;
+}
+
 export interface ResearchHit {
   url?: string;
   title?: string;
@@ -18,6 +38,7 @@ export async function firecrawlSearch(
   query: string,
   limit = 10,
 ): Promise<ResearchHit[]> {
+  await paceFirecrawl();
   const client = new FirecrawlClient(components.firecrawl);
   const res = await client.search(ctx, query, { limit });
   const raw: unknown[] = [
@@ -51,6 +72,7 @@ export async function firecrawlScrape(
   ctx: any,
   url: string,
 ): Promise<ScrapedPage | null> {
+  await paceFirecrawl();
   try {
     const client = new FirecrawlClient(components.firecrawl);
     const controller = new AbortController();
