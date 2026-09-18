@@ -1,12 +1,15 @@
 export const GROQ_EXTRACTION_MODEL = "openai/gpt-oss-120b";
 
 // One model per key layer: Groq buckets are per-org-PER-MODEL, so spreading
-// layers across models multiplies the effective budget instead of hammering
-// a single 8K TPM bucket. Index i uses GROQ_MODEL_BY_KEY[i].
+// layers across models multiplies the effective budget. NOTE (Sep 2026):
+// Groq retired the Llama instruct models (3.1/3.3 404) — the only live
+// free chat models are gpt-oss + qwen. Same model on different org keys is
+// still a separate bucket (per-ORG-per-model), so key 2/3 share the 20b
+// model across different accounts for consistent extraction behavior.
 export const GROQ_MODEL_BY_KEY = [
   "openai/gpt-oss-120b", // key 1: smartest, 8K TPM / 200K TPD
-  "meta-llama/llama-3.3-70b-versatile", // key 2: 12K TPM
-  "meta-llama/llama-3.1-8b-instant", // key 3: 6K TPM but 500K TPD daily buffer
+  "openai/gpt-oss-20b", // key 2: same family, own org bucket, 8K TPM
+  "openai/gpt-oss-20b", // key 3: same family, third org bucket, 8K TPM
 ];
 
 // Pinned OpenRouter fallback (verified live 2026-09-17): fastest free route

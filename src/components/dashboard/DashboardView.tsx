@@ -109,25 +109,27 @@ export function DashboardView() {
     }
   }, [gmailError, gmailConnected, gmailCancelled, router]);
 
-  // Determine what to show in the sub list:
+  // Determine what to show in the sub list (max 3 rows below the hero):
   // - Urgent items (renewing ≤7d) if any exist
-  // - Otherwise the 3 closest upcoming renewals
+  // - Otherwise the closest renewals, dateless subs as fillers at the end
+  //   (fresh extracts often have no renewal date yet — they still count).
   const urgentSubs = (attention ?? []).filter((s) => s.hidden !== true);
   const hasUrgent = urgentSubs.length > 0;
+
+  const byRenewal = (a: { nextRenewalAt?: number }, b: { nextRenewalAt?: number }) =>
+    (a.nextRenewalAt ?? Number.POSITIVE_INFINITY) -
+    (b.nextRenewalAt ?? Number.POSITIVE_INFINITY);
 
   const fallbackSubs = hasUrgent
     ? []
     : [...(all ?? [])]
-        .filter(
-          (s) =>
-            s.status !== "cancelled" && s.hidden !== true && s.nextRenewalAt,
-        )
-        .sort((a, b) => (a.nextRenewalAt ?? 0) - (b.nextRenewalAt ?? 0))
+        .filter((s) => s.status !== "cancelled" && s.hidden !== true)
+        .sort(byRenewal)
         .slice(0, 4);
 
   const displaySubs = hasUrgent ? urgentSubs : fallbackSubs;
   const hero = displaySubs[0];
-  const rest = displaySubs.slice(1);
+  const rest = displaySubs.slice(1, 4);
 
   // Next renewals regardless of attention state. Below the hero card the
   // dashboard shows max 3 rows: urgent leftovers first, closest renewals
@@ -140,10 +142,9 @@ export function DashboardView() {
           (s) =>
             s.status !== "cancelled" &&
             s.hidden !== true &&
-            s.nextRenewalAt &&
             !shownIds.has(s._id),
         )
-        .sort((a, b) => (a.nextRenewalAt ?? 0) - (b.nextRenewalAt ?? 0))
+        .sort(byRenewal)
         .slice(0, belowHeroBudget)
     : [];
 
