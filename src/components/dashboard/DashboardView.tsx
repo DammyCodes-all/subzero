@@ -152,6 +152,15 @@ export function DashboardView() {
     (s) => s.status !== "cancelled" && s.hidden !== true,
   ).length;
 
+  // Post-blackhole summary preview: always up to 3 cards (hero + leftovers +
+  // upcoming fill), so a single urgent sub can't starve it down to one card
+  // while "+N more" carries the rest.
+  const summarySubs = [
+    ...(hero ? [hero] : []),
+    ...rest,
+    ...upcomingSubs,
+  ].slice(0, 3);
+
   const now = Date.now();
   const trialCount = (all ?? []).filter(
     (s) =>
@@ -219,11 +228,8 @@ export function DashboardView() {
             <FirstScanSummary
               total={activeCount}
               needCount={urgentSubs.length}
-              topSubs={displaySubs.slice(0, 3)}
-              moreCount={Math.max(
-                0,
-                activeCount - Math.min(3, displaySubs.length),
-              )}
+              topSubs={summarySubs}
+              moreCount={Math.max(0, activeCount - summarySubs.length)}
               onShowMe={dismissSummary}
             />
           ) : (

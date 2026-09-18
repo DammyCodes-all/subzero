@@ -431,10 +431,34 @@ Document: Merchant UnknownService, Content: irrelevant / no cancel info
 
 VALIDATION: Raw JSON only. All keys present. No trailing commas. No single quotes.`;
 
+    // Help pages front-load nav/cookie boilerplate; the cancel steps live
+    // below the fold. Head-only truncation (was: first 8000 chars) starved
+    // the model — e.g. Adobe's renewals page judged "no route" on nav text.
+    // Keep the head plus windows around "cancel" mentions, same pattern as
+    // extraction's selectWindow.
+    const selectHelpWindow = (text: string): string => {
+      const CAP = 8000;
+      const HEAD = 3000;
+      const WINDOW = 2500;
+      if (text.length <= CAP) return text;
+      const head = text.slice(0, HEAD);
+      const lower = text.toLowerCase();
+      const windows: string[] = [];
+      let from = HEAD;
+      for (let i = 0; i < 2; i++) {
+        const idx = lower.indexOf("cancel", from);
+        if (idx === -1) break;
+        const start = Math.max(0, idx - 800);
+        windows.push(text.slice(start, start + WINDOW));
+        from = start + WINDOW;
+      }
+      if (windows.length === 0) return text.slice(0, CAP);
+      return `${head}\n…\n${windows.join("\n…\n")}`.slice(0, CAP);
+    };
     const userContent = `Merchant: ${sub.merchant}${sub.product ? ` | Product: ${sub.product}` : ""}${sub.billingProvider ? ` | Billed via: ${sub.billingProvider}` : ""}
 
 HELP CONTENT:
-${markdownContent.slice(0, 8000)}`;
+${selectHelpWindow(markdownContent)}`;
 
 
     type LLMOutput = {
