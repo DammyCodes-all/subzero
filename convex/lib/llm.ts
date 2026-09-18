@@ -171,7 +171,13 @@ async function postChat(
 
 export async function mergedEnvFrom(): Promise<Record<string, string | undefined>> {
   const deploymentEnv = env as unknown as Record<string, string | undefined>;
-  const localEnv = process.env as unknown as Record<string, string | undefined>;
+  // process is Node-only: V8-isolate callers have no process.env, so guard.
+  // (Research ran V8 without "use node" and died exactly here — scrape ok,
+  // zero provider attempts, instant failed save.)
+  const localEnv =
+    typeof process !== "undefined"
+      ? (process.env as unknown as Record<string, string | undefined>)
+      : {};
   // Deployment env wins locally (Convex dev loads .env.local into env).
   return { ...localEnv, ...deploymentEnv };
 }
