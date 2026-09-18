@@ -650,8 +650,12 @@ ${seenUrls.join("\n")}`;
 
     // If LLM said unknown or gave no steps, force unknown; for open_* require URL per plan
     if (cancellationMethod === "unknown" || instructions.length === 0) {
-      if (cancellationMethod !== "unknown" && instructions.length === 0)
+      if (cancellationMethod !== "unknown" && instructions.length === 0) {
+        console.log(
+          `[research] empty-instructions downgrade: method was ${cancellationMethod}, url=${(cancellationUrl ?? "").slice(0, 80)}`,
+        );
         cancellationMethod = "unknown";
+      }
       if (cancellationMethod === "unknown") cancellationUrl = undefined;
     }
     if (
