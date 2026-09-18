@@ -397,7 +397,7 @@ SCHEMA — return ONLY valid JSON matching this exact shape. Do not add keys. Do
 
 RULES:
 - Missing field → null (or [] for instructions). Do NOT guess, do NOT invent URLs.
-- cancellationUrl: exact URL found in HELP CONTENT, or mailto: if email. null if not explicitly present. Never synthesize https://www.<merchant>.com/... or any generic settings/billing URL.
+- cancellationUrl: exact URL found in HELP CONTENT, or mailto: if email. null if not explicitly present. Never synthesize https://www.<merchant>.com/... or any generic settings/billing URL. The URLS SEEN list below is authoritative: copy one entry EXACTLY (every character) or use null. Do not fix, finish, or normalize entries.
 - instructions: ordered steps as written in help content, plain text only, no URLs, no em dashes. If unknown → []. Do not put https:// links inside instructions. URL goes only in cancellationUrl.
 - evidenceExcerpt: exact quote from content backing the route, max 200 chars, or null. No em dashes. Minimal markdown (**bold**, *italic) wherever it aids clarity; never headings, lists, links, or images.
 - BILLING PROVIDER DISCOVERY: If Billed via is a store (Google Play / Apple App Store / Amazon), prefer provider-dashboard steps/URL (support.google.com / play.google.com / support.apple.com / amazon.com/gp/help) found in HELP CONTENT. Ignore merchant portal URLs (e.g., accounts.snapchat.com, snapchat.com/plus) for store-billed. If no provider dashboard URL is present in content, return unknown/null. Do not invent.
@@ -455,10 +455,14 @@ VALIDATION: Raw JSON only. All keys present. No trailing commas. No single quote
       if (windows.length === 0) return text.slice(0, CAP);
       return `${head}\n…\n${windows.join("\n…\n")}`.slice(0, CAP);
     };
+    const seenUrls = [...new Set(allUrls.filter(Boolean))].slice(0, 15);
     const userContent = `Merchant: ${sub.merchant}${sub.product ? ` | Product: ${sub.product}` : ""}${sub.billingProvider ? ` | Billed via: ${sub.billingProvider}` : ""}
 
 HELP CONTENT:
-${selectHelpWindow(markdownContent)}`;
+${selectHelpWindow(markdownContent)}
+
+URLS SEEN (copy cancellationUrl character-for-character from THIS list or return null — never compose, complete, or pluralize a URL):
+${seenUrls.join("\n")}`;
 
 
     type LLMOutput = {
@@ -548,11 +552,52 @@ ${selectHelpWindow(markdownContent)}`;
       const inAllUrls = allUrls.some((u) => u === cancellationUrl);
       const inAllLinks = allLinks.some((l) => l === cancellationUrl);
       if (!inMarkdown && !inAllUrls && !inAllLinks) {
+        // Hallucinated URL (e.g. Adobe's renewals-and-cancellation vs the
+        // real renewals-and-payments): one correction shot with ONLY the
+        // seen list before giving up. Same provider rotation applies.
         console.log(
-          `[research] verbatim fail: url=${cancellationUrl} not in markdown/links`,
+          `[research] verbatim fail, correction retry: url=${cancellationUrl.slice(0, 80)}`,
         );
-        cancellationUrl = undefined;
-        if (cancellationMethod !== "unknown") cancellationMethod = "unknown";
+        try {
+          const fix: LlmResult = await chatJson({
+            ctx,
+            operation: "research",
+            logTag: "[research]",
+            system:
+              "You output valid JSON only with keys cancellationMethod, cancellationUrl, instructions, evidenceExcerpt. No markdown, no explanation.",
+            user: `The URL "${cancellationUrl}" is NOT real — it appears nowhere. Reply with the SAME JSON shape, but cancellationUrl must be copied EXACTLY from this list or null. Merchant: ${sub.merchant}${sub.product ? ` | Product: ${sub.product}` : ""}\n\nREAL URLS:\n${seenUrls.join("\n")}`,
+            maxTokens: 600,
+            timeoutMs: 15_000,
+          });
+          const fixed = fix.parsed as LLMOutput;
+          if (
+            typeof fixed.cancellationUrl === "string" &&
+            fixed.cancellationUrl.trim() &&
+            (appearsVerbatim(markdownContent, fixed.cancellationUrl.trim()) ||
+              allUrls.some((u) => u === fixed.cancellationUrl!.trim()) ||
+              allLinks.some((l) => l === fixed.cancellationUrl!.trim()))
+          ) {
+            cancellationUrl = fixed.cancellationUrl.trim();
+            if (
+              typeof fixed.cancellationMethod === "string" &&
+              fixed.cancellationMethod
+            ) {
+              cancellationMethod = fixed.cancellationMethod;
+            }
+            if (Array.isArray(fixed.instructions)) {
+              parsed!.instructions = fixed.instructions;
+            }
+            if (typeof fixed.evidenceExcerpt === "string") {
+              parsed!.evidenceExcerpt = fixed.evidenceExcerpt;
+            }
+          } else {
+            throw new Error("correction still not verbatim");
+          }
+        } catch {
+          console.log(`[research] correction failed, downgrading to unknown`);
+          cancellationUrl = undefined;
+          if (cancellationMethod !== "unknown") cancellationMethod = "unknown";
+        }
       }
     }
 
