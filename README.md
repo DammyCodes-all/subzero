@@ -4,7 +4,7 @@
 > Built for the **Convex All Gas Hackathon** (OpenAI + Firecrawl + AgentMail).
 
 - **Live app:** https://elated-oriole-157.convex.site
-- **Demo video (<3 min):** PASTE_YOUTUBE_URL_HERE
+- **Demo video (<3 min):** https://youtu.be/xTY-RJFeHZA
 - **Repo:** https://github.com/DammyCodes-all/subzero
 - **Build log:** [hackathon.md](./hackathon.md)
 
