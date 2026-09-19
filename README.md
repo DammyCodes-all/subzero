@@ -1,128 +1,94 @@
-# SubZero 🧊
+# SubZero
 
-> **Finds your subscriptions before they charge you, and figures out how to get out.**  
-> Built for the **Convex All Gas Hackathon**.
+> Finds your subscriptions before they charge you, and shows the verified way out.
+> Built for the **Convex All Gas Hackathon** (OpenAI + Firecrawl + AgentMail).
 
----
+- **Live app:** https://elated-oriole-157.convex.site
+- **Demo video (<3 min):** PASTE_YOUTUBE_URL_HERE
+- **Repo:** https://github.com/DammyCodes-all/subzero
+- **Build log:** [hackathon.md](./hackathon.md)
 
-## 💡 The Problem
+## The problem
 
-People don’t lose money because they love subscription services. They lose money because **trials turn into charges while they aren’t looking**.
+Trials turn into charges while you aren't looking. Receipts hide in Gmail, renewals sneak up, and cancelling is rarely one click. Sometimes it's seven screens deep in a merchant portal. Sometimes you're billed through Google Play and standing in the wrong settings page entirely.
 
-Subscriptions live everywhere — inbox receipts, Apple App Store, Google Play — renewals sneak up, and canceling is rarely a single click. Sometimes it’s seven screens deep in a merchant portal. Sometimes it’s hidden in an obscure help doc. Sometimes you’re on the wrong site entirely because you’re billed through a third-party provider.
+SubZero finds the subscriptions, watches every renewal and trial date, and hands you the cancellation steps with quotes from the merchant's own help docs.
 
-**SubZero isn't just a tracker.** It's an active protection assistant that highlights what needs your attention this week and provides verified step-by-step instructions to cancel before you are charged.
+## What it does
 
----
+Connect Gmail and SubZero scans for receipts with a backfill that drains in seconds, not hours. Prefer not to connect anything? Forward receipts to your AgentMail inbox, or paste one in manually and check the AI's extraction before saving.
 
-## ✨ Features
+From there it watches the dates. Renewal and trial warnings go out at 7 days, 3 days, and 24 hours, with a daily sweep catching anything the scheduler missed.
 
-- **🤖 AI Extraction Engine (`convex/ai.ts` & `convex/ingestion/`):** Processes incoming raw receipts or trial emails using OpenAI/Groq to extract structured fields (merchant, price, renewal dates, billing provider, trial end) with verifiable evidence quotes.
-- **🔍 Cancellation Research Engine (`convex/research.ts`):** Automatically triggers **Firecrawl** web scraping on merchant help centers to discover verified cancellation routes, calculate friction levels (`low`, `medium`, `high`, `very_high`), and extract step-by-step instructions.
-- **⚡ Action Engine UI (`src/app/subscriptions/[id]`):** Context-aware cancellation CTAs:
-  - `open_web` / `open_provider`: Direct 1-click links to the merchant's billing settings page.
-  - `send_email`: Interactive draft & send modal via AgentMail outbound.
-  - `contact_support` / `manual`: Clear, scannable step-by-step guides.
-- **🔔 The Nudge Engine (`convex/notifications.ts` & `convex/crons.ts`):** Calculates renewal lead times and schedules automated warnings (`7d`, `3d`, `24h` out) via `ctx.scheduler` and daily cron jobs.
-- **📥 Multi-Channel Ingestion:**
-  - **Email Forwarding:** Forward receipts to your personal `subzero-agent@agentmail.to` address.
-  - **Manual Scan UI:** Paste raw email text directly into the header dialog.
+Each subscription gets its cancellation route researched: help-center search and page scrapes through Firecrawl, steps and difficulty synthesized from the results, quotes stored with their source URLs. Depending on the merchant you get a direct link, a provider redirect, a drafted email you can send, or plain support steps. The status moves from `action_ready` to `user_started` to `cancellation_pending` to `cancelled`, so you can see where things stand.
 
----
+## Sponsor stack
 
-## 🏗️ Architecture & Flow
+| Sponsor | Role | Implementation |
+|---|---|---|
+| OpenAI | Receipt extraction and cancellation synthesis over the Chat Completions interface. Groq-first provider chain with OpenRouter and OpenAI `gpt-4o-mini` fallbacks, rotation across keys, backoff on rate limits, one JSON repair retry, usage logging. | `convex/lib/llm.ts`, `convex/lib/aiModels.ts`, `convex/ingestion/extract.ts`, `convex/research.ts` |
+| Firecrawl | Official `@firecrawl/firecrawl-convex` component. Help-center search plus page scrapes per subscription, paced with jitter, cached 30 days, refreshable from the UI. | `convex/lib/firecrawl.ts`, `convex/research.ts`, `convex/researchCache.ts` |
+| AgentMail | Official `@agentmail/convex` component. Per-user forwarding inbox with a verified inbound webhook. Outbound sends go through the component queue with retries, and delivery status is a live query. | `convex/lib/agentmail.ts`, `convex/agentmail.ts`, `convex/notifications.ts`, `convex/http.ts` |
 
-```
-                     ┌──────────────────┐
-                     │ Email Forwarding │ (AgentMail Webhook)
-                     └────────┬─────────┘
-                              │
-┌──────────────┐     ┌────────▼─────────┐     ┌──────────────────────┐
-│ Manual Paste ├────►│ Ingestion Engine ├────►│ AI Extraction Engine │
-└──────────────┘     └──────────────────┘     └──────────┬───────────┘
-                                                         │
-                                              ┌──────────▼───────────┐
-                                              │ Convex Database      │
-                                              └──────────┬───────────┘
-                                                         │
-                     ┌──────────────────┐     ┌──────────▼───────────┐
-                     │ Nudge Engine     │◄────┤ Firecrawl Research   │
-                     │ (Scheduler/Cron) │     │ Engine               │
-                     └──────────────────┘     └──────────────────────┘
-```
+## Convex depth
 
----
+Thirteen tables with per-user, dedup, renewal, and trial indexes (`convex/schema.ts`). Realtime queries, mutations, and actions across `src/`. Nudges run on the scheduler with cron sweeps behind them (`convex/notifications.ts`, `convex/crons.ts`). Webhooks and OAuth over HTTP (`convex/http.ts`), Google sign-in through Convex Auth, three registered components (`convex/convex.config.ts`).
 
-## 🛠️ Tech Stack
+The boring reliability parts are there too. Ingestion is idempotent, Gmail backfill resumes where it stopped, research retries into a cache, and deleted subscriptions leave tombstones so the next scan can't resurrect them.
 
-- **Backend:** [Convex](https://convex.dev) (Database, Reactive Queries, Actions, Mutations, HTTP Endpoints, Scheduler, Crons, Auth)
-- **Frontend:** Next.js 15 (App Router), React 19, Tailwind CSS, Lucide React
-- **AI / LLM:** Groq (`llama3-8b-8192`) & OpenAI (`gpt-4o-mini`)
-- **Web Scraping:** [Firecrawl API](https://firecrawl.dev)
-- **Email Pipeline:** [AgentMail API](https://agentmail.to) (Inbound webhooks & outbound nudges)
-- **Auth:** Convex Auth (Google Provider)
+## Tech stack
 
----
+- Backend: Convex 1.45 (database, functions, sync, scheduler, crons, auth, components)
+- Frontend: Next.js 16 static export, React 19, Tailwind CSS 4, Hugeicons only
+- Auth: Convex Auth (`@convex-dev/auth`) with Google
+- Email rendering: react-email
+- Tests: Vitest — 29 passing across 9 files
 
-## ⚙️ Environment Variables Setup
+## Getting started
 
-### 1. Convex Backend Environment
-Set these in your Convex Deployment via the CLI (`npx convex env set <KEY> "<VALUE>"`) or Convex Dashboard:
+Judges: use the live app above. Local dev:
 
-```bash
-OPENAI_API_KEY="sk-..."              # Optional (or use GROQ_API_KEY)
-GROQ_API_KEY="gsk_..."               # Optional (or use OPENAI_API_KEY)
-FIRECRAWL_API_KEY="fc-..."           # Firecrawl API key for cancellation research
-AGENTMAIL_API_KEY="am_..."           # AgentMail API key for inbound/outbound emails
-AGENTMAIL_WEBHOOK_SECRET="whsec_..." # Svix webhook verification secret
-SITE_URL="https://elated-oriole-157.convex.site"
-CONVEX_SITE_URL="https://elated-oriole-157.convex.site"
-JWT_PRIVATE_KEY="..."                # Generated by npx @convex-dev/auth
-```
-
-### 2. Local Frontend `.env.local`
-```env
-NEXT_PUBLIC_CONVEX_URL="https://<your-deployment>.convex.cloud"
-NEXT_PUBLIC_CONVEX_SITE_URL="https://<your-deployment>.convex.site"
-GOOGLE_CLIENT_ID="..."
-GOOGLE_CLIENT_SECRET="..."
-```
-
----
-
-## 🚀 Getting Started
-
-### 1. Install Dependencies
 ```bash
 pnpm install
+npx convex dev      # terminal 1
+pnpm dev            # terminal 2
 ```
 
-### 2. Run Convex Dev Backend
-In Terminal 1:
+### Convex env (deployment dashboard or `npx convex env set`)
+
 ```bash
-npx convex dev
+GROQ_API_KEY="gsk_..."               # primary extraction/research
+GROQ_API_KEY_2="gsk_..."             # optional extra org bucket
+GROQ_API_KEY_3="gsk_..."             # optional extra org bucket
+OPENROUTER_API_KEY="..."             # fallback
+OPENAI_API_KEY="sk-..."              # OpenAI gpt-4o-mini fallback
+FIRECRAWL_API_KEY="fc-..."
+AGENTMAIL_API_KEY="am_..."
+AGENTMAIL_WEBHOOK_SECRET="whsec_..."
+SITE_URL="https://elated-oriole-157.convex.site"
+CONVEX_SITE_URL="https://elated-oriole-157.convex.site"
 ```
 
-### 3. Run Next.js Frontend
-In Terminal 2:
-```bash
-pnpm dev
+### Local `.env.local`
+
+```env
+NEXT_PUBLIC_CONVEX_URL="https://<deployment>.convex.cloud"
+NEXT_PUBLIC_CONVEX_SITE_URL="https://<deployment>.convex.site"
 ```
 
-Open [http://localhost:3000](http://localhost:3000) in your browser.
+## Testing the flows
 
----
+- **Manual paste:** Subscriptions header → manual add → Extract → editable preview → Save. Fastest way to see the full loop without connecting Gmail.
+- **Gmail:** Connect Gmail → watch per-connection progress drain fast.
+- **Forwarding:** forward any receipt to your AgentMail inbox → ingested with evidence.
+- **Research:** open any subscription → Firecrawl quotes, difficulty, steps, Refresh research (10-min cooldown).
+- **Send:** `send_email` subscriptions → Review & send → real AgentMail delivery.
+- **Checks:** `pnpm check` (typecheck + biome + vitest).
 
-## 🧪 Testing the Flows
+## Project structure
 
-- **Seed Mock Data:** Click the **"Seed 8 mocks (dev)"** button on an empty dashboard to test pre-loaded subscriptions (Adobe, Canva, ChatGPT, etc.).
-- **Test AI Extraction:** Click **"Scan email / paste receipt"** in the header and paste a billing notification email.
-- **Test Cancellation Research:** View any subscription card to inspect the step-by-step instructions and evidence gathered by Firecrawl.
-- **Test Outbound Cancellation:** For email-cancellation subscriptions, click **"Review & send"** to draft and send a cancellation email via AgentMail.
-
----
-
-## 📄 Documentation & Build Logs
-
-- [ROADMAP.md](file:///C:/Users/turah/Desktop/codes/2026/subzero/ROADMAP.md) — Core build status, completed phases, and remaining hackathon tasks.
-- [hackathon.md](file:///C:/Users/turah/Desktop/codes/2026/subzero/hackathon.md) — Detailed evidence-backed build log.
+- `convex/` — schema, ingestion, extraction, research, notifications, gmail, agentmail, http, crons
+- `convex/lib/` — llm chain, firecrawl, agentmail, dedup, difficulty, email templates
+- `src/` — Next.js app, dashboard, subscriptions, emails, hooks
+- `tests/` — 9 vitest suites
+- `hackathon.md` — evidence-backed build log judges read
