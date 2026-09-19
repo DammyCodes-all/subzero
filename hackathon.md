@@ -9,6 +9,7 @@
 - **Live app:** https://elated-oriole-157.convex.site
 - **Repo:** https://github.com/DammyCodes-all/subzero (public)
 - **Demo video (<3 min):** https://youtu.be/xTY-RJFeHZA
+- **Judge demo account:** judges@subzero.app with 6 live subscriptions, evidence, and cancel paths. Password is in the vibeapps submission notes, kept out of this public repo. Judges should sign in with email and password, not Google, since Gmail OAuth is unverified and limited to test users.
 - **Frontend:** Next.js 16 static export served from the Convex deployment via `@convex-dev/static-hosting` (registered). Gmail OAuth runs on Convex HTTP (`GET /gmail/oauth/callback`), so no Next.js API routes remain.
 - **Convex deployment:** prod site https://elated-oriole-157.convex.site / api https://elated-oriole-157.convex.cloud. Prod `SITE_URL` points at the live site so outbound mail links land there. Dev: https://aromatic-quail-684.convex.cloud
 - **Components:** `@firecrawl/firecrawl-convex 0.1.1` (research search/scrape), `@agentmail/convex 0.1.0` (durable outbound sends), `@convex-dev/static-hosting 0.2.1` (registered, serves the static export)
@@ -57,6 +58,9 @@ The loop is short enough to feel in a week. A trial ending tomorrow triggers a w
 6. Renewal and trial warnings (7 days, 3 days, 24 hours) arrive as plain-spoken emails with links back to the live site.
 
 ## Log
+
+### 2026-09-19 - working tree
+Judge demo account ready: judges@subzero.app holds 6 copied subscriptions with evidence and cancel actions (copied server-side from the owner's data, source emails stripped, connections never touched). Password lives in the vibeapps submission notes only. Temp copy script deleted and prod redeployed without it.
 
 ### 2026-09-19 - working tree
 Demo video link added to the header and README: https://youtu.be/xTY-RJFeHZA. Still open before submit: publish the X/LinkedIn post with all 4 tags.
