@@ -57,17 +57,20 @@ pnpm dev            # terminal 2
 ### Convex env (deployment dashboard or `npx convex env set`)
 
 ```bash
+FIRECRAWL_API_KEY="fc-..."           # required by config; cancellation research
+GOOGLE_CLIENT_ID="..."               # Convex Auth + Gmail OAuth
+GOOGLE_CLIENT_SECRET="..."
 GROQ_API_KEY="gsk_..."               # primary extraction/research
-GROQ_API_KEY_2="gsk_..."             # optional extra org bucket
-GROQ_API_KEY_3="gsk_..."             # optional extra org bucket
-OPENROUTER_API_KEY="..."             # fallback
+OPENROUTER_API_KEY="..."             # fallback (read by convex/lib/llm.ts)
 OPENAI_API_KEY="sk-..."              # OpenAI gpt-4o-mini fallback
-FIRECRAWL_API_KEY="fc-..."
 AGENTMAIL_API_KEY="am_..."
-AGENTMAIL_WEBHOOK_SECRET="whsec_..."
+AGENTMAIL_INBOX="..."                # your AgentMail inbox id
+AGENTMAIL_WEBHOOK_SECRET="whsec_..." # Svix webhook verification
 SITE_URL="https://elated-oriole-157.convex.site"
 CONVEX_SITE_URL="https://elated-oriole-157.convex.site"
 ```
+
+Extra capacity keys (`GROQ_API_KEY_2`, `GROQ_API_KEY_3`, `OPENROUTER_MODEL`) are read by `convex/lib/llm.ts` but aren't declared in `convex/convex.config.ts` — declare them there first if you want them live on a deployment.
 
 ### Local `.env.local`
 
