@@ -9,7 +9,7 @@
 - **Live app:** https://elated-oriole-157.convex.site
 - **Repo:** https://github.com/DammyCodes-all/subzero (public)
 - **Demo video (<3 min):** https://youtu.be/xTY-RJFeHZA
-- **Judge demo account:** judges@subzero.app with 6 live subscriptions, evidence, and cancel paths. Password is in the vibeapps submission notes, kept out of this public repo. Judges should sign in with email and password, not Google, since Gmail OAuth is unverified and limited to test users.
+- **Judge demo account:** Email `judges@subzero.app`, password `Judge-e7e78ec0d18d-Sub0`. Holds 6 live subscriptions with evidence and cancel paths. Sign in with email and password, not Google, since Gmail OAuth is unverified and limited to test users.
 - **Frontend:** Next.js 16 static export served from the Convex deployment via `@convex-dev/static-hosting` (registered). Gmail OAuth runs on Convex HTTP (`GET /gmail/oauth/callback`), so no Next.js API routes remain.
 - **Convex deployment:** prod site https://elated-oriole-157.convex.site / api https://elated-oriole-157.convex.cloud. Prod `SITE_URL` points at the live site so outbound mail links land there. Dev: https://aromatic-quail-684.convex.cloud
 - **Components:** `@firecrawl/firecrawl-convex 0.1.1` (research search/scrape), `@agentmail/convex 0.1.0` (durable outbound sends), `@convex-dev/static-hosting 0.2.1` (registered, serves the static export)
